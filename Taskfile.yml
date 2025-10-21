@@ -1,0 +1,16 @@
+version: 3
+
+tasks:
+  docker:build:
+    cmds:
+      - docker build -t tauri-build .
+      - mkdir -p dist
+
+  docker:run:dev:
+    cmds:
+      - task: docker:build
+
+  docker:release:
+    cmds:
+      - task: docker:build
+      - docker cp tauri-build:/app/src-tauri/target/release/bundle/appimage/. dist/
