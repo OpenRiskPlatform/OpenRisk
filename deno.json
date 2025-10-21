@@ -1,0 +1,17 @@
+{
+  "lock": "deno.lock",
+  "nodeModulesDir": "none",
+  "tasks": {
+    "dev": "deno run -A npm:vite dev -- --host 0.0.0.0 --port 1420",
+    "build": "deno run -A npm:vite build",
+    "preview": "deno run -A npm:vite preview",
+    "tauri": "deno run -A npm:@tauri-apps/cli"
+  },
+  "compilerOptions": {
+    "lib": [
+      "DOM",
+      "DOM.Iterable",
+      "ES2021"
+    ]
+  }
+}
