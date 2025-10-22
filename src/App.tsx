@@ -12,6 +12,24 @@ function App() {
     setGreetMsg(await invoke("greet", { name }));
   }
 
+  async function adversea_media_scan() {
+    try {
+      const result = await invoke("social_media_scan", { name });
+      console.log("Scan result:", result);
+    } catch (err) {
+      console.error("Scan failed:", err);
+    }
+  }
+
+  async function adversea_screeing_rpo() {
+    try {
+      const result = await invoke("screening_rpo", { name });
+      console.log("Scan result:", result);
+    } catch (err) {
+      console.error("Scan failed:", err);
+    }
+  }
+
   return (
     <main className="container">
       <h1>Welcome to Tauri + React</h1>
@@ -34,6 +52,7 @@ function App() {
         onSubmit={(e) => {
           e.preventDefault();
           greet();
+          adversea_screeing_rpo();
         }}
       >
         <input
