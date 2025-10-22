@@ -3,6 +3,23 @@ import reactLogo from "./assets/react.svg";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
+async function loadPlugin(pluginPath: string) {
+  // Dynamically import the plugin
+  const pluginModule = await import(pluginPath);
+
+  // Initialize the plugin and get its DOM element
+  const pluginElement = await pluginModule.initPlugin();
+
+  // Append to a container in your app
+  const container = document.getElementById("plugins-container");
+  if (container) {
+    container.appendChild(pluginElement);
+  }
+}
+
+// Example usage
+loadPlugin("../plugins/test_plugin/frontend/dist/openrisk.js");
+
 function App() {
   const [greetMsg, setGreetMsg] = useState("");
   const [name, setName] = useState("");
@@ -63,6 +80,9 @@ function App() {
         <button type="submit">Greet</button>
       </form>
       <p>{greetMsg}</p>
+
+      <div id="plugins-container"></div>
+
     </main>
   );
 }
