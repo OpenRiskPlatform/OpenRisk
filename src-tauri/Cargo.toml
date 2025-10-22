@@ -12,7 +12,8 @@ edition = "2021"
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "openrisk_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = ["staticlib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -22,6 +23,15 @@ tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-deno_core = "0.362.0"
-deno_runtime = "0.227.0"
+deno_core = "0.311"
+# deno_runtime = "0.227.0"
+tokio = { version = "1.48.0", features = ["full"] }
 
+# deno_core = "0.314.2"
+# deno_fs = "0.84.0"
+# deno_runtime = "0.183.0"
+# anyhow = "1"
+# tokio = { version = "1.41.0", features = ["full"] }
+# ureq = "2.10.1"
+# deno_ast = { version = "0.43.1", features = ["transpiling"] }
+# colored = "2.1.0"
