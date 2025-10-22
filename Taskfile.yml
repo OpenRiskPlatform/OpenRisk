@@ -1,0 +1,15 @@
+version: '3'
+
+tasks:
+  release:
+    desc: Build release binary for Linux
+    cmds:
+      - docker run -v ".:/app" tauri-test:latest deno task tauri build
+  dev:
+    desc: Serve frontend to debug build
+    cmds:
+      - docker compose up -d
+  build:
+    desc: Build debug binary (this should fail at the last stage)
+    cmds:
+      - docker run -v ".:/app" tauri-test:latest deno task tauri dev --no-dev-server-wait --no-watch --no-dev-server

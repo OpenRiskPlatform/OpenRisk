@@ -1,0 +1,13 @@
+services:
+  tauri-builder:
+    image: tauri-test:latest
+    container_name: tauri-test
+    working_dir: /app
+    user: "${UID}:${GID}"
+    volumes:
+      - .:/app
+    ports:
+      - "1420:1420"
+      - "1421:1421"
+    command: deno task dev
+
