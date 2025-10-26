@@ -33,6 +33,7 @@
     {
       devShells.${system}.default = pkgs.mkShell rec {
         nativeBuildInputs = with pkgs; [
+          rustup
           pkg-config
           gobject-introspection
           cargo
@@ -64,6 +65,10 @@
         packages =
           with pkgs;
           [
+            llvmPackages_21.libllvm
+            lld_21
+            nsis
+            deno
             xdg-utils
             go-task
             appimage-run
@@ -71,6 +76,7 @@
             libglvnd
             gsettings-desktop-schemas
             rustc
+            cargo-xwin
           ]
           ++ [ tauriAppimageEnv ];
 

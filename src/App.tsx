@@ -13,7 +13,7 @@ function App() {
   }
 
   async function executeJsCode(code: string) {
-    const result = await invoke("execute_js", { code });
+    const result = await invoke("execute", { code });
     return result;
   }
 
@@ -56,11 +56,13 @@ function App() {
           id="js-code-input"
           placeholder="Enter JavaScript code..."
           rows={5}
-          style={{ width: '100%', marginBottom: '10px' }}
+          style={{ width: "100%", marginBottom: "10px" }}
         />
         <button
           onClick={async () => {
-            const codeInput = document.getElementById('js-code-input') as HTMLTextAreaElement;
+            const codeInput = document.getElementById(
+              "js-code-input"
+            ) as HTMLTextAreaElement;
             const code = codeInput.value;
             if (code) {
               const result = await executeJsCode(code);
