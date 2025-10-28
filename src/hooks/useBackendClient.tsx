@@ -4,6 +4,7 @@
 
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { MockBackendClient } from "@/core/backend/MockBackendClient";
+import { TauriBackendClient } from "@/core/backend/TauriBackendClient";
 import type { BackendClient } from "@/core/backend/types";
 
 interface BackendClientContextValue {
@@ -23,9 +24,16 @@ export function BackendClientProvider({
   children,
   client: customClient,
 }: BackendClientProviderProps) {
-  const [client] = useState<BackendClient>(
-    () => customClient || new MockBackendClient()
-  );
+  const [client] = useState<BackendClient>(() => {
+    if (customClient) {
+      return customClient;
+    }
+
+    // Always use TauriBackendClient - it will fail if invoke doesn't work
+    // This ensures we're always testing the real backend integration
+    console.log("Using TauriBackendClient");
+    return new TauriBackendClient();
+  });
 
   return (
     <BackendClientContext.Provider value={{ client }}>

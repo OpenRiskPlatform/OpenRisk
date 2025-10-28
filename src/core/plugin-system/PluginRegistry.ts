@@ -4,11 +4,54 @@
  */
 
 import type { InstalledPlugin, PluginManifest } from "./types";
-import { MOCK_PLUGINS } from "./mock-plugins";
 
 export class PluginRegistry {
   private installedPlugins: Map<string, InstalledPlugin> = new Map();
-  private availablePlugins: PluginManifest[] = MOCK_PLUGINS;
+  private availablePlugins: PluginManifest[] = [];
+
+  /**
+   * Load plugins from Tauri backend
+   * Always reloads to ensure fresh plugin list
+   */
+  async loadPluginsFromBackend(): Promise<void> {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      console.log("[PluginRegistry] Calling list_plugins...");
+      const pluginsJson = await invoke<string>("list_plugins");
+      console.log("[PluginRegistry] Got plugins JSON:", pluginsJson);
+
+      const plugins = JSON.parse(pluginsJson) as Array<
+        PluginManifest & { id: string }
+      >;
+
+      console.log("[PluginRegistry] Parsed plugins:", plugins);
+
+      // Clear any existing plugins
+      this.installedPlugins.clear();
+
+      // Add all plugins from backend as "installed"
+      plugins.forEach((pluginData) => {
+        const { id, ...manifest } = pluginData;
+        const installedPlugin: InstalledPlugin = {
+          ...manifest,
+          id,
+          enabled: true,
+          installedAt: new Date(),
+        };
+        this.installedPlugins.set(id, installedPlugin);
+        console.log(`[PluginRegistry] Registered plugin: ${id}`);
+      });
+
+      console.log(
+        `[PluginRegistry] Loaded ${plugins.length} plugins from backend`
+      );
+    } catch (error) {
+      console.error(
+        "[PluginRegistry] Failed to load plugins from backend:",
+        error
+      );
+    }
+  }
 
   /**
    * Get all available plugins (not yet installed)

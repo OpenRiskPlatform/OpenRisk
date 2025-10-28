@@ -1,8 +1,9 @@
 /**
- * Tauri Backend Client (Future Implementation)
- * Will use Tauri IPC for communication with backend
+ * Tauri Backend Client
+ * Uses Tauri IPC for communication with Rust backend
  */
 
+import { invoke } from "@tauri-apps/api/core";
 import { BackendClient } from "./types";
 import type {
   BackendEvent,
@@ -11,34 +12,63 @@ import type {
 } from "./types";
 
 export class TauriBackendClient extends BackendClient {
-  // TODO: Implement Tauri IPC integration
+  private eventCallbacks: Array<(event: BackendEvent) => void> = [];
 
-  executePlugin(
+  async executePlugin(
     pluginId: string,
-    inputs: Record<string, unknown>
+    inputs: Record<string, unknown>,
+    settings?: Record<string, unknown>
   ): Promise<PluginExecutionResponse> {
-    console.log("TauriBackendClient.executePlugin not yet implemented", {
-      pluginId,
-      inputs,
-    });
-    throw new Error("TauriBackendClient not yet implemented");
+    try {
+      console.log("[TauriBackendClient] Executing plugin:", pluginId);
+      console.log("[TauriBackendClient] Inputs:", inputs);
+      console.log("[TauriBackendClient] Settings:", settings);
+
+      const inputsJson = JSON.stringify(inputs);
+      const settingsJson = JSON.stringify(settings || {});
+
+      console.log("[TauriBackendClient] Invoking Tauri command...");
+
+      const result = await invoke<string>("execute_plugin", {
+        pluginId,
+        inputsJson,
+        settingsJson,
+      });
+
+      console.log("[TauriBackendClient] Raw result from Rust:", result);
+
+      // Parse the result
+      const data = JSON.parse(result);
+
+      console.log("[TauriBackendClient] Parsed result:", data);
+
+      return {
+        success: true,
+        data,
+      };
+    } catch (error: any) {
+      console.error("[TauriBackendClient] Error:", error);
+      return {
+        success: false,
+        error: error.toString(),
+      };
+    }
   }
 
   subscribeToEvents(callback: (event: BackendEvent) => void): void {
-    console.log("TauriBackendClient.subscribeToEvents not yet implemented", {
-      callback,
-    });
-    throw new Error("TauriBackendClient not yet implemented");
+    this.eventCallbacks.push(callback);
+    // TODO: Set up Tauri event listeners when needed
   }
 
   async getPluginStatus(pluginId: string): Promise<PluginStatusResponse> {
-    console.log("TauriBackendClient.getPluginStatus not yet implemented", {
+    // TODO: Implement plugin status tracking
+    return {
       pluginId,
-    });
-    throw new Error("TauriBackendClient not yet implemented");
+      status: "idle",
+    };
   }
 
   unsubscribe(): void {
-    throw new Error("TauriBackendClient not yet implemented");
+    this.eventCallbacks = [];
   }
 }

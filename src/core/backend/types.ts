@@ -50,11 +50,12 @@ export interface PluginStatusResponse {
  */
 export abstract class BackendClient {
   /**
-   * Execute a plugin with given inputs
+   * Execute a plugin with given inputs and settings
    */
   abstract executePlugin(
     pluginId: string,
-    inputs: Record<string, unknown>
+    inputs: Record<string, unknown>,
+    settings?: Record<string, unknown>
   ): Promise<PluginExecutionResponse>;
 
   /**

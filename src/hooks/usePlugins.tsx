@@ -7,6 +7,7 @@ import {
   useContext,
   useState,
   useCallback,
+  useEffect,
   type ReactNode,
 } from "react";
 import { PluginRegistry } from "@/core/plugin-system/PluginRegistry";
@@ -23,6 +24,7 @@ interface PluginContextValue {
   removePlugin: (pluginId: string) => void;
   togglePlugin: (pluginId: string) => void;
   refreshPlugins: () => void;
+  loading: boolean;
 }
 
 const PluginContext = createContext<PluginContextValue | null>(null);
@@ -33,6 +35,7 @@ interface PluginProviderProps {
 
 export function PluginProvider({ children }: PluginProviderProps) {
   const [registry] = useState(() => new PluginRegistry());
+  const [loading, setLoading] = useState(true);
   const [installedPlugins, setInstalledPlugins] = useState<InstalledPlugin[]>(
     []
   );
@@ -44,6 +47,18 @@ export function PluginProvider({ children }: PluginProviderProps) {
     setInstalledPlugins(registry.getInstalledPlugins());
     setAvailablePlugins(registry.getAvailablePlugins());
   }, [registry]);
+
+  // Load plugins from backend on mount
+  useEffect(() => {
+    const loadPlugins = async () => {
+      setLoading(true);
+      await registry.loadPluginsFromBackend();
+      refreshPlugins();
+      setLoading(false);
+    };
+
+    loadPlugins();
+  }, [registry, refreshPlugins]);
 
   const addPlugin = useCallback(
     (manifest: PluginManifest) => {
@@ -78,6 +93,7 @@ export function PluginProvider({ children }: PluginProviderProps) {
     removePlugin,
     togglePlugin,
     refreshPlugins,
+    loading,
   };
 
   return (

@@ -8,18 +8,24 @@ import {
   useContext,
   useState,
   useCallback,
+  useEffect,
   type ReactNode,
 } from "react";
 import { InMemorySettingsStore } from "./InMemorySettingsStore";
+import { TauriSettingsStore } from "./TauriSettingsStore";
 import type { GlobalSettings, PluginSettings, SettingsStore } from "./types";
 
 interface SettingsContextValue {
   store: SettingsStore;
   globalSettings: GlobalSettings;
-  updateGlobalSettings: (settings: Partial<GlobalSettings>) => void;
+  updateGlobalSettings: (settings: Partial<GlobalSettings>) => Promise<void>;
   getPluginSettings: (pluginId: string) => PluginSettings;
-  updatePluginSettings: (pluginId: string, settings: PluginSettings) => void;
-  resetSettings: () => void;
+  updatePluginSettings: (
+    pluginId: string,
+    settings: PluginSettings
+  ) => Promise<void>;
+  resetSettings: () => Promise<void>;
+  loading: boolean;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -29,20 +35,60 @@ interface SettingsProviderProps {
   store?: SettingsStore;
 }
 
+// Check if running in Tauri
+const isTauri = () => {
+  return typeof window !== "undefined" && "__TAURI__" in window;
+};
+
 export function SettingsProvider({
   children,
   store: customStore,
 }: SettingsProviderProps) {
-  const [store] = useState(() => customStore || new InMemorySettingsStore());
+  const [store] = useState<SettingsStore>(() => {
+    if (customStore) return customStore;
+    if (isTauri()) {
+      console.log("[SettingsProvider] Using TauriSettingsStore (persistent)");
+      return new TauriSettingsStore();
+    }
+    console.log(
+      "[SettingsProvider] Using InMemorySettingsStore (not in Tauri)"
+    );
+    return new InMemorySettingsStore();
+  });
+
+  const [loading, setLoading] = useState(true);
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(
     store.getGlobalSettings()
   );
   // Version counter to trigger re-renders when plugin settings change
   const [pluginSettingsVersion, setPluginSettingsVersion] = useState(0);
 
+  // Initialize store on mount (for TauriSettingsStore)
+  useEffect(() => {
+    const init = async () => {
+      if ("initialize" in store && typeof store.initialize === "function") {
+        await (store as any).initialize();
+        setGlobalSettings(store.getGlobalSettings());
+      }
+      setLoading(false);
+    };
+    init();
+  }, [store]);
+
   const updateGlobalSettings = useCallback(
-    (settings: Partial<GlobalSettings>) => {
-      store.setGlobalSettings(settings);
+    async (settings: Partial<GlobalSettings>) => {
+      // Check if it's a TauriSettingsStore with async methods
+      const hasAsyncMethod =
+        "setGlobalSettings" in store &&
+        (store as any).setGlobalSettings &&
+        (store as any).setGlobalSettings.constructor &&
+        (store as any).setGlobalSettings.constructor.name === "AsyncFunction";
+
+      if (hasAsyncMethod) {
+        await (store as any).setGlobalSettings(settings);
+      } else {
+        store.setGlobalSettings(settings);
+      }
       setGlobalSettings(store.getGlobalSettings());
     },
     [store]
@@ -56,15 +102,35 @@ export function SettingsProvider({
   );
 
   const updatePluginSettings = useCallback(
-    (pluginId: string, settings: PluginSettings) => {
-      store.setPluginSettings(pluginId, settings);
+    async (pluginId: string, settings: PluginSettings) => {
+      const hasAsyncMethod =
+        "setPluginSettings" in store &&
+        (store as any).setPluginSettings &&
+        (store as any).setPluginSettings.constructor &&
+        (store as any).setPluginSettings.constructor.name === "AsyncFunction";
+
+      if (hasAsyncMethod) {
+        await (store as any).setPluginSettings(pluginId, settings);
+      } else {
+        store.setPluginSettings(pluginId, settings);
+      }
       setPluginSettingsVersion((v) => v + 1); // Trigger re-render
     },
     [store]
   );
 
-  const resetSettings = useCallback(() => {
-    store.resetToDefaults();
+  const resetSettings = useCallback(async () => {
+    const hasAsyncMethod =
+      "resetToDefaults" in store &&
+      (store as any).resetToDefaults &&
+      (store as any).resetToDefaults.constructor &&
+      (store as any).resetToDefaults.constructor.name === "AsyncFunction";
+
+    if (hasAsyncMethod) {
+      await (store as any).resetToDefaults();
+    } else {
+      store.resetToDefaults();
+    }
     setGlobalSettings(store.getGlobalSettings());
   }, [store]);
 
@@ -75,6 +141,7 @@ export function SettingsProvider({
     getPluginSettings,
     updatePluginSettings,
     resetSettings,
+    loading,
   };
 
   return (

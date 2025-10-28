@@ -16,7 +16,8 @@ export class MockBackendClient extends BackendClient {
 
   executePlugin(
     pluginId: string,
-    inputs: Record<string, unknown>
+    inputs: Record<string, unknown>,
+    settings?: Record<string, unknown>
   ): Promise<PluginExecutionResponse> {
     // Simulate async execution
     return new Promise((resolve) => {
@@ -26,7 +27,7 @@ export class MockBackendClient extends BackendClient {
       this.emitEvent({
         type: "plugin.execution.started",
         timestamp: new Date(),
-        payload: { pluginId, inputs },
+        payload: { pluginId, inputs, settings },
       });
 
       // Simulate processing delay
