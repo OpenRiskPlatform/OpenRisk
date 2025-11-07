@@ -50,6 +50,7 @@ export class PluginRegistry {
         "[PluginRegistry] Failed to load plugins from backend:",
         error
       );
+      // Don't throw - just log the error and continue with empty plugin list
     }
   }
 

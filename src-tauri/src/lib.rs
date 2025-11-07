@@ -2,6 +2,12 @@ pub mod plugins;
 use plugins::{
     execute, execute_plugin, list_plugins
 };
+use std::fs;
+use std::path::PathBuf;
+use serde_json::Value;
+
+mod plugin_manifest;
+use plugin_manifest::parse_manifest;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

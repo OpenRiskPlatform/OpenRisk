@@ -10,25 +10,6 @@
     let
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; };
-      tauriAppimageEnv = pkgs.buildFHSEnv {
-        name = "tauri-appimage-env";
-        targetPkgs =
-          pkgs: with pkgs; [
-            at-spi2-atk
-            atkmm
-            cairo
-            gdk-pixbuf
-            glib
-            gtk3
-            harfbuzz
-            librsvg
-            libsoup_3
-            pango
-            webkitgtk_4_1
-            openssl
-            xdg-utils
-          ];
-      };
     in
     {
       devShells.${system}.default = pkgs.mkShell rec {
@@ -76,14 +57,16 @@
             libglvnd
             gsettings-desktop-schemas
             rustc
+            rust-analyzer
+            cargo
             cargo-xwin
-          ]
-          ++ [ tauriAppimageEnv ];
+            gcc
+            clippy
+            rustfmt
+            cargo-typify
+          ];
 
-        shellHook = ''
-          export TAURI_FHS="${tauriAppimageEnv}/bin/tauri-appimage-env"
-          echo "Tauri AppImage builds: run \"$TAURI_FHS -- npx tauri build --bundles appimage\" to bundle inside an FHS sandbox with /usr/bin/xdg-open."
-        '';
+        shellHook = ''fish'';
       };
     };
 }

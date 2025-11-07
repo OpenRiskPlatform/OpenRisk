@@ -1,4 +1,5 @@
 {
+    "$schema": "../../schemas/plugin-manifest.schema.json",
     "version": "0.1.0",
     "name": "Open Sanctions by OpenRiskPlatform",
     "description": "Some description",
