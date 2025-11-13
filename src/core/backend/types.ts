@@ -44,6 +44,35 @@ export interface PluginStatusResponse {
   lastResult?: PluginExecutionResponse;
 }
 
+export interface ProjectSummary {
+  id: string;
+  name: string;
+  audit?: string | null;
+  directory: string;
+}
+
+export interface ProjectSettingsRecord {
+  id: string;
+  description: string;
+  locale: string;
+}
+
+export interface PluginSettingsDescriptor {
+  id: string;
+  name: string;
+  version: string;
+  manifest: Record<string, unknown> | null;
+  input_schema: unknown;
+  settings_schema: unknown;
+  settings: Record<string, unknown> | null;
+}
+
+export interface ProjectSettingsPayload {
+  project: ProjectSummary;
+  project_settings: ProjectSettingsRecord;
+  plugins: PluginSettingsDescriptor[];
+}
+
 /**
  * Abstract base class for backend communication
  * Implementations: MockBackendClient, TauriBackendClient, HttpBackendClient
@@ -72,4 +101,22 @@ export abstract class BackendClient {
    * Unsubscribe from events and cleanup
    */
   abstract unsubscribe(): void;
+
+  /**
+   * Create a new project at the given directory
+   */
+  abstract createProject(
+    name: string,
+    directory: string
+  ): Promise<ProjectSummary>;
+
+  /**
+   * Open an existing project
+   */
+  abstract openProject(directory: string): Promise<ProjectSummary>;
+
+  /**
+   * Load project/global settings and plugin configurations
+   */
+  abstract loadSettings(directory: string): Promise<ProjectSettingsPayload>;
 }

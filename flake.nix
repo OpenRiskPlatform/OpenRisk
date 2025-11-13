@@ -24,6 +24,27 @@
         ];
 
         buildInputs = with pkgs; [
+        ];
+
+        packages = with pkgs; [
+          llvmPackages_21.libllvm
+          lld_21
+          nsis
+          deno
+          xdg-utils
+          go-task
+          appimage-run
+          mesa
+          libglvnd
+          gsettings-desktop-schemas
+          rustc
+          rust-analyzer
+          cargo
+          cargo-xwin
+          gcc
+          clippy
+          rustfmt
+          cargo-typify
           at-spi2-atk
           atkmm
           cairo
@@ -41,32 +62,14 @@
           glib.dev
           gtk3.dev
           libffi.dev
+          gsettings-desktop-schemas
         ];
 
-        packages =
-          with pkgs;
-          [
-            llvmPackages_21.libllvm
-            lld_21
-            nsis
-            deno
-            xdg-utils
-            go-task
-            appimage-run
-            mesa
-            libglvnd
-            gsettings-desktop-schemas
-            rustc
-            rust-analyzer
-            cargo
-            cargo-xwin
-            gcc
-            clippy
-            rustfmt
-            cargo-typify
-          ];
-
-        shellHook = ''fish'';
+          # export GSETTINGS_SCHEMA_DIR=${gsettingsSchemas}
+          # export XDG_DATA_DIRS=${pkgs.gsettings-desktop-schemas}/share:$XDG_DATA_DIRS
+        shellHook = ''
+          fish
+        '';
       };
     };
 }

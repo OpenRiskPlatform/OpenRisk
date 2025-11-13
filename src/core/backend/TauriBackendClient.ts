@@ -9,6 +9,8 @@ import type {
   BackendEvent,
   PluginExecutionResponse,
   PluginStatusResponse,
+  ProjectSummary,
+  ProjectSettingsPayload,
 } from "./types";
 
 export class TauriBackendClient extends BackendClient {
@@ -70,5 +72,42 @@ export class TauriBackendClient extends BackendClient {
 
   unsubscribe(): void {
     this.eventCallbacks = [];
+  }
+
+  async createProject(name: string, directory: string): Promise<ProjectSummary> {
+    try {
+      const result = await invoke<string>("create_project", {
+        name,
+        dirPath: directory,
+      });
+      return JSON.parse(result) as ProjectSummary;
+    } catch (error: any) {
+      console.error("[TauriBackendClient] createProject error:", error);
+      throw new Error(error?.message ?? error?.toString() ?? "Failed to create project");
+    }
+  }
+
+  async openProject(directory: string): Promise<ProjectSummary> {
+    try {
+      const result = await invoke<string>("open_project", {
+        dirPath: directory,
+      });
+      return JSON.parse(result) as ProjectSummary;
+    } catch (error: any) {
+      console.error("[TauriBackendClient] openProject error:", error);
+      throw new Error(error?.message ?? error?.toString() ?? "Failed to open project");
+    }
+  }
+
+  async loadSettings(directory: string): Promise<ProjectSettingsPayload> {
+    try {
+      const result = await invoke<string>("load_settings", {
+        dirPath: directory,
+      });
+      return JSON.parse(result) as ProjectSettingsPayload;
+    } catch (error: any) {
+      console.error("[TauriBackendClient] loadSettings error:", error);
+      throw new Error(error?.message ?? error?.toString() ?? "Failed to load settings");
+    }
   }
 }

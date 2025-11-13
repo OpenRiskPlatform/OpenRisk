@@ -10,9 +10,10 @@ import { Link } from "@tanstack/react-router";
 
 interface MainLayoutProps {
   children: ReactNode;
+  projectDir?: string;
 }
 
-export function MainLayout({ children }: MainLayoutProps) {
+export function MainLayout({ children, projectDir }: MainLayoutProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
@@ -57,7 +58,11 @@ export function MainLayout({ children }: MainLayoutProps) {
       <main className="flex-1">{children}</main>
 
       {/* Settings Dialog */}
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        projectDir={projectDir}
+      />
     </div>
   );
 }

@@ -8,6 +8,8 @@ import type {
   BackendEvent,
   PluginExecutionResponse,
   PluginStatusResponse,
+  ProjectSettingsPayload,
+  ProjectSummary,
 } from "./types";
 
 export class MockBackendClient extends BackendClient {
@@ -79,6 +81,49 @@ export class MockBackendClient extends BackendClient {
   unsubscribe(): void {
     this.eventCallbacks = [];
     this.pluginStatuses.clear();
+  }
+
+  async createProject(name: string, directory: string): Promise<ProjectSummary> {
+    const normalizedBase = directory.replace(/[\\/]+$/, "");
+    const projectDirectory = `${normalizedBase}/${name}`;
+    return {
+      id: `mock-${Date.now()}`,
+      name,
+      audit: null,
+      directory: projectDirectory,
+    };
+  }
+
+  async openProject(directory: string): Promise<ProjectSummary> {
+    return {
+      id: `mock-${Math.floor(Math.random() * 1000)}`,
+      name: directory.split(/[\\/]/).pop() || "Mock Project",
+      audit: null,
+      directory,
+    };
+  }
+
+  async loadSettings(directory: string): Promise<ProjectSettingsPayload> {
+    const project = await this.openProject(directory);
+    return {
+      project,
+      project_settings: {
+        id: "mock-settings",
+        description: "Mock settings",
+        locale: "en-US",
+      },
+      plugins: [
+        {
+          id: "mock-plugin",
+          name: "Mock Plugin",
+          version: "0.1.0",
+          manifest: {},
+          input_schema: null,
+          settings_schema: [],
+          settings: {},
+        },
+      ],
+    };
   }
 
   private emitEvent(event: BackendEvent): void {
