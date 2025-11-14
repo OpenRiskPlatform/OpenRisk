@@ -1,6 +1,4 @@
-/**
- * Report Page - Main analysis page with form and results
- */
+// FULL ReportPage file with plugin cards
 
 import { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -27,19 +25,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 
+import { usePlugins } from "@/hooks/usePlugins";
+import { InstalledPlugin } from "@/core/plugin-system/types";
+
 interface OpenSanctionsEntity {
   id: string;
   schema: string;
   caption?: string;
-  properties: {
-    name?: string[];
-    alias?: string[];
-    birthDate?: string[];
-    nationality?: string[];
-    country?: string[];
-    topics?: string[];
-    [key: string]: any;
-  };
+  properties: any;
   datasets?: string[];
   target?: boolean;
 }
@@ -59,15 +52,25 @@ interface PluginResult {
 export function ReportPage() {
   const backendClient = useBackendClient();
   const { getPluginSettings } = useSettings();
+  const { installedPlugins } = usePlugins();
 
   const [name, setName] = useState("");
+  const [selectedPlugin, setSelectedPlugin] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PluginResult | null>(null);
-  const [viewMode, setViewMode] = useState<"table" | "json" | "logs">("table");
+  const [viewMode, setViewMode] = useState<"table" | "json" | "logs">(
+    "table"
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!selectedPlugin) {
+      setError("Please select a plugin first.");
+      return;
+    }
 
     if (!name.trim()) {
       setError("Please enter a name to search");
@@ -79,20 +82,13 @@ export function ReportPage() {
     setResult(null);
 
     try {
-      // Get plugin settings (api_key, open_sanctions_url, etc.)
-      const settings = getPluginSettings("opensanctions");
+      const settings = getPluginSettings(selectedPlugin);
 
-      console.log("Plugin settings:", settings);
-      console.log("Executing plugin with name:", name);
-
-      // Execute plugin
       const response = await backendClient.executePlugin(
-        "opensanctions",
+        selectedPlugin,
         { name },
         settings
       );
-
-      console.log("Plugin response:", response);
 
       if (response.success) {
         setResult(response.data as PluginResult);
@@ -101,7 +97,6 @@ export function ReportPage() {
       }
     } catch (err: any) {
       setError(err.message || "An error occurred");
-      console.error("Error executing plugin:", err);
     } finally {
       setLoading(false);
     }
@@ -112,35 +107,96 @@ export function ReportPage() {
       <div className="container mx-auto py-8 px-4 max-w-6xl">
         <h1 className="text-3xl font-bold mb-6">Risk Analysis Report</h1>
 
-        {/* Search Form */}
+        {/* Plugin List */}
         <Card className="mb-8">
           <CardHeader>
-            <CardTitle>OpenSanctions Search</CardTitle>
+            <CardTitle>Installed Plugins</CardTitle>
             <CardDescription>
-              Search for entities in sanctions lists, PEP databases, and
-              criminal watchlists
+              Choose a plugin to run a risk or sanctions analysis.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input
-                  id="name"
-                  type="text"
-                  placeholder="Enter name to search..."
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  disabled={loading}
-                />
-              </div>
-              <Button type="submit" disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {loading ? "Searching..." : "Run Analysis"}
-              </Button>
-            </form>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {installedPlugins.map((plugin: InstalledPlugin) => (
+                <Card
+                  key={plugin.name}
+                  className={`border shadow-sm cursor-pointer transition ${
+                    selectedPlugin === plugin.id ? "ring-2 ring-primary" : ""
+                  }`}
+                  onClick={() => setSelectedPlugin(plugin.id)}
+                >
+                  <CardHeader>
+                    <div className="flex items-center gap-3">
+                      {plugin.icon && (
+                        <img
+                          src={plugin.icon}
+                          alt={`${plugin.name} icon`}
+                          className="w-10 h-10 rounded"
+                        />
+                      )}
+                      <div>
+                        <CardTitle className="text-lg">{plugin.name}</CardTitle>
+                        <CardDescription className="text-xs">
+                          v{plugin.version}
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+
+                  <CardContent>
+                    <p className="text-sm mb-3">{plugin.description}</p>
+
+                    {plugin.authors?.length > 0 && (
+                      <div className="text-xs text-muted-foreground mb-3">
+                        By: {plugin.authors.map((a: any) => a.name).join(", ")}
+                      </div>
+                    )}
+
+                    <Button
+                      variant={
+                        selectedPlugin === plugin.name ? "default" : "outline"
+                      }
+                      size="sm"
+                    >
+                      {selectedPlugin === plugin.name ? "Selected" : "Select"}
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </CardContent>
         </Card>
+
+        {/* Search Form */}
+        {selectedPlugin && (
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle>Run Plugin: {selectedPlugin}</CardTitle>
+              <CardDescription>
+                Enter parameters required by this plugin (demo: name search)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Name</Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    placeholder="Enter name..."
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    disabled={loading}
+                  />
+                </div>
+                <Button type="submit" disabled={loading}>
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {loading ? "Running..." : "Run Analysis"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Error Display */}
         {error && (
@@ -159,8 +215,7 @@ export function ReportPage() {
                 <div>
                   <CardTitle>Results</CardTitle>
                   <CardDescription>
-                    Found {result.total?.value || 0} matches for "{result.query}
-                    "
+                    Found {result.total?.value || 0} matches for "{result.query}"
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
@@ -238,7 +293,6 @@ function EntityTable({ entities }: { entities: OpenSanctionsEntity[] }) {
         </TableHeader>
         <TableBody>
           {entities.map((entity) => {
-            // Defensive checks for properties
             const properties = entity?.properties || {};
             const name = entity?.caption || properties.name?.[0] || "Unknown";
             const alias = properties.alias || [];
@@ -261,7 +315,7 @@ function EntityTable({ entities }: { entities: OpenSanctionsEntity[] }) {
                 </TableCell>
                 <TableCell>{entity.schema || "Unknown"}</TableCell>
                 <TableCell>
-                  {countries.map((c) => (
+                  {countries.map((c: any) => (
                     <Badge key={c} variant="outline" className="mr-1">
                       {c.toUpperCase()}
                     </Badge>
@@ -269,15 +323,9 @@ function EntityTable({ entities }: { entities: OpenSanctionsEntity[] }) {
                 </TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1">
-                    {topics.slice(0, 3).map((topic) => (
-                      <Badge
-                        key={topic}
-                        variant="secondary"
-                        className="text-xs"
-                      >
-                        {topic
-                          .replace("role.", "")
-                          .replace("sanction", "sanctioned")}
+                    {topics.slice(0, 3).map((topic: string) => (
+                      <Badge key={topic} variant="secondary" className="text-xs">
+                        {topic.replace("role.", "").replace("sanction", "sanctioned")}
                       </Badge>
                     ))}
                   </div>
