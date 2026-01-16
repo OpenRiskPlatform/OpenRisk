@@ -45,3 +45,5 @@ sqlx = { version = "0.8.6", default-features = false, features = [
   "macros",
   "derive",
 ] }
+ts-rs = { version = "11.1", features = ["serde-json-impl", "uuid-impl"] }
+diesel = { version = "2.2.0", features = ["sqlite", "returning_clauses_for_sqlite_3_35"] }

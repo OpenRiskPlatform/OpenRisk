@@ -9,9 +9,9 @@ import type {
   BackendEvent,
   PluginExecutionResponse,
   PluginStatusResponse,
-  ProjectSummary,
-  ProjectSettingsPayload,
 } from "./types";
+import { Project } from "src-tauri/bindings/Project";
+import { ProjectSettings } from "src-tauri/bindings/ProjectSettings";
 
 export class TauriBackendClient extends BackendClient {
   private eventCallbacks: Array<(event: BackendEvent) => void> = [];
@@ -74,37 +74,35 @@ export class TauriBackendClient extends BackendClient {
     this.eventCallbacks = [];
   }
 
-  async createProject(name: string, directory: string): Promise<ProjectSummary> {
+  async createProject(name: string, directory: string): Promise<Project> {
     try {
-      const result = await invoke<string>("create_project", {
+      const result = await invoke<Project>("create_project", {
         name,
         dirPath: directory,
       });
-      return JSON.parse(result) as ProjectSummary;
+      return result;
     } catch (error: any) {
       console.error("[TauriBackendClient] createProject error:", error);
       throw new Error(error?.message ?? error?.toString() ?? "Failed to create project");
     }
   }
 
-  async openProject(directory: string): Promise<ProjectSummary> {
+  async openProject(directory: string): Promise<Project> {
     try {
-      const result = await invoke<string>("open_project", {
+      const result = await invoke<Project>("load_project", {
         dirPath: directory,
       });
-      return JSON.parse(result) as ProjectSummary;
+      return result;
     } catch (error: any) {
       console.error("[TauriBackendClient] openProject error:", error);
       throw new Error(error?.message ?? error?.toString() ?? "Failed to open project");
     }
   }
 
-  async loadSettings(directory: string): Promise<ProjectSettingsPayload> {
+  async getActiveProject(): Promise<Project> {
     try {
-      const result = await invoke<string>("load_settings", {
-        dirPath: directory,
-      });
-      return JSON.parse(result) as ProjectSettingsPayload;
+      const result = await invoke<Project>("get_active_project");
+      return result;
     } catch (error: any) {
       console.error("[TauriBackendClient] loadSettings error:", error);
       throw new Error(error?.message ?? error?.toString() ?? "Failed to load settings");

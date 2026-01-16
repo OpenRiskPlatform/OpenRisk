@@ -87,7 +87,7 @@ export function EntryPage() {
         projectName.trim(),
         projectDir
       );
-      await navigate({ to: "/project", search: { dir: project.directory } });
+      await navigate({ to: "/project", search: { dir: project } });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);

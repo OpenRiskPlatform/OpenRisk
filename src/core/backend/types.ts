@@ -2,6 +2,9 @@
  * Backend Communication Type Definitions
  */
 
+import { Project } from "@/bindings/Project";
+import { ProjectSettings } from "src-tauri/bindings/ProjectSettings";
+
 export type BackendEventType =
   | "plugin.execution.started"
   | "plugin.execution.progress"
@@ -44,35 +47,6 @@ export interface PluginStatusResponse {
   lastResult?: PluginExecutionResponse;
 }
 
-export interface ProjectSummary {
-  id: string;
-  name: string;
-  audit?: string | null;
-  directory: string;
-}
-
-export interface ProjectSettingsRecord {
-  id: string;
-  description: string;
-  locale: string;
-}
-
-export interface PluginSettingsDescriptor {
-  id: string;
-  name: string;
-  version: string;
-  manifest: Record<string, unknown> | null;
-  input_schema: unknown;
-  settings_schema: unknown;
-  settings: Record<string, unknown> | null;
-}
-
-export interface ProjectSettingsPayload {
-  project: ProjectSummary;
-  project_settings: ProjectSettingsRecord;
-  plugins: PluginSettingsDescriptor[];
-}
-
 /**
  * Abstract base class for backend communication
  * Implementations: MockBackendClient, TauriBackendClient, HttpBackendClient
@@ -108,15 +82,15 @@ export abstract class BackendClient {
   abstract createProject(
     name: string,
     directory: string
-  ): Promise<ProjectSummary>;
+  ): Promise<Project>;
 
   /**
    * Open an existing project
    */
-  abstract openProject(directory: string): Promise<ProjectSummary>;
+  abstract openProject(directory: string): Promise<Project>;
 
   /**
-   * Load project/global settings and plugin configurations
+   * Return current active project
    */
-  abstract loadSettings(directory: string): Promise<ProjectSettingsPayload>;
+  abstract getActiveProject(): Promise<Project>;
 }

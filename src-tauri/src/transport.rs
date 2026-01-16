@@ -1,7 +1,10 @@
 use crate::app::plugin as app;
-use crate::app::project as app_project;
+use crate::models::project::Project;
+use crate::ActiveProject;
 use serde_json::Value;
 use std::path::PathBuf;
+use std::sync::Mutex;
+use tauri::State;
 
 #[tauri::command]
 pub fn list_plugins() -> Result<String, String> {
@@ -43,39 +46,15 @@ pub fn execute_plugin(
     serde_json::to_string(&result).map_err(|e| e.to_string())
 }
 
-// plugins
-
-// Project
-// pub fn change_plugin_settings(project_name: String, settings_json: String) -> Result<(), String> {
-//     crate::app::plugin::configure_plugin(&plugin_id, settings)
-// }
-
 #[tauri::command]
-pub async fn create_project(name: String, dir_path: String) -> Result<String, String> {
-    let dir = std::path::PathBuf::from(dir_path);
-    if dir.exists() && !dir.is_dir() {
-        return Err(format!("Path exists and is not a directory: {:?}", dir));
-    }
-    let project = app_project::create_project(name, dir).await?;
-    serde_json::to_string(&project).map_err(|e| e.to_string())
-}
+pub async fn get_active_project(
+    project: State<'_, Mutex<ActiveProject>>,
+) -> Result<Project, String> {
+    let ap = project.lock().unwrap();
 
-#[tauri::command]
-pub async fn open_project(dir_path: String) -> Result<String, String> {
-    let dir = std::path::PathBuf::from(dir_path);
-    if !dir.exists() || !dir.is_dir() {
-        return Err(format!("Project directory does not exist: {:?}", dir));
-    }
-    let project = app_project::open_project(dir).await?;
-    serde_json::to_string(&project).map_err(|e| e.to_string())
-}
+    let Some(project_clone) = ap.project.clone() else {
+        return Err("No active project".to_string());
+    };
 
-#[tauri::command]
-pub async fn load_settings(dir_path: String) -> Result<String, String> {
-    let dir = std::path::PathBuf::from(dir_path);
-    if !dir.exists() || !dir.is_dir() {
-        return Err(format!("Project directory does not exist: {:?}", dir));
-    }
-    let snapshot = app_project::load_settings(dir).await?;
-    serde_json::to_string(&snapshot).map_err(|e| e.to_string())
+    Ok(project_clone)
 }
