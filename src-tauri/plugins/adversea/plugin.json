@@ -1,0 +1,60 @@
+{
+    "version": "0.1.0",
+    "name": "Adversea",
+    "description": "Some description",
+    "authors": [
+        {
+            "name": "Adversea",
+            "email": "example@gmail.com"
+        }
+    ],
+    "icon": "icon.png",
+    "license": "MIT",
+    "entrypoint": "index.ts",
+    "settings": [
+        {
+            "name": "adversea_url",
+            "type": "string",
+            "title": "Adversea URL",
+            "description": "The URL of the Adversea instance to connect to.",
+            "default": "https://api.opensanctions.org/"
+        },
+        {
+            "name": "api_key",
+            "type": "string",
+            "title": "API Key",
+            "description": "The API key for accessing the Adversea instance.",
+            "default": null
+        }
+    ],
+    "inputs": [
+        {
+            "name": "target",
+            "type": "string",
+            "optional": false,
+            "title": "Name of the target",
+            "description": "The name of the entity to search for."
+        },
+        {
+            "name": "age",
+            "type": "number",
+            "optional": true,
+            "title": "Age",
+            "description": "The age of the entity to search for."
+        },
+        {
+            "name": "*args",
+            "type": "list[string]",
+            "optional": true,
+            "title": "Additional Arguments",
+            "description": "Additional arguments for the search."
+        },
+        {
+            "name": "**kwargs",
+            "type": "map[string, string]",
+            "optional": true,
+            "title": "Keyword Arguments",
+            "description": "Keyword arguments for the search."
+        }
+    ]
+}

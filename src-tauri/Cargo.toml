@@ -2,26 +2,46 @@
 name = "openrisk"
 version = "0.1.0"
 description = "A Tauri App"
-authors = ["you"]
+authors = ["Tim 14"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-# The `_lib` suffix may seem redundant but it is necessary
-# to make the lib name unique and wouldn't conflict with the bin name.
-# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "openrisk_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = [
+  "staticlib",
+  # "cdylib",
+  "rlib",
+]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
-tauri-plugin-opener = "2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-deno_core = "0.362.0"
-deno_runtime = "0.227.0"
-
+tauri = { version = "2.9.1", features = [] }
+tauri-plugin-shell = "2.3.1"
+tauri-plugin-store = "2"
+rustyscript = { version = "0.12.3", features = [
+  "safe_extensions",
+  "http",
+  "fs_import"
+] }
+serde = "=1.0.219"
+serde_json = "=1.0.120"
+serde_bytes = "=0.11.15"
+jsonschema = "0.18"
+regress = "0.9"
+uuid = { version = "1", features = ["v4"] }
+async-trait = "0.1"
+# For ubuntu -> aarch64-unknown-linux-gnu cross-compilation.
+# If you feel the compilation is too slow, you can remove this dependency,
+# and build aarch64-unknown-linux-gnu target on the matched machine (don't cross-compile)
+openssl = { version = "0.10", features = ["vendored"] }
+tauri-plugin-dialog = "2"
+sqlx = { version = "0.8.6", default-features = false, features = [
+  "runtime-tokio-rustls",
+  "sqlite",
+  "macros",
+  "derive",
+] }

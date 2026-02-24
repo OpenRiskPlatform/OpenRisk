@@ -1,0 +1,266 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://openrisk.platform/schemas/plugin-manifest/0.0.1.json",
+    "title": "OpenRisk Plugin Manifest",
+    "description": "Schema for OpenRisk plugin manifest (plugin.json)",
+    "type": "object",
+    "required": [
+        "version",
+        "name",
+        "description",
+        "authors",
+        "license",
+        "entrypoint"
+    ],
+    "properties": {
+        "$schema": {
+            "type": "string",
+            "description": "JSON Schema reference for IDE support"
+        },
+        "version": {
+            "type": "string",
+            "description": "Plugin version in semver format (e.g., 0.1.0)",
+            "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+        },
+        "name": {
+            "type": "string",
+            "description": "Human-readable plugin name",
+            "minLength": 1,
+            "maxLength": 255
+        },
+        "description": {
+            "type": "string",
+            "description": "Brief description of plugin functionality",
+            "minLength": 1,
+            "maxLength": 1000
+        },
+        "authors": {
+            "type": "array",
+            "description": "List of plugin authors",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "required": [
+                    "name"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Author name"
+                    },
+                    "email": {
+                        "type": "string",
+                        "description": "Author email address",
+                        "format": "email"
+                    },
+                    "url": {
+                        "type": "string",
+                        "description": "Author website",
+                        "format": "uri"
+                    }
+                },
+                "additionalProperties": false
+            }
+        },
+        "icon": {
+            "type": "string",
+            "description": "Path to plugin icon (relative to plugin directory)",
+            "pattern": "^[^/].*\\.(png|svg|jpg|jpeg)$"
+        },
+        "license": {
+            "type": "string",
+            "description": "SPDX license identifier (e.g., MIT, Apache-2.0, GPL-3.0)",
+            "minLength": 1
+        },
+        "entrypoint": {
+            "type": "string",
+            "description": "Main TypeScript/JavaScript file (relative to plugin directory)",
+            "pattern": "^[^/].*\\.(ts|js)$"
+        },
+        "settings": {
+            "type": "array",
+            "description": "Plugin configuration settings",
+            "items": {
+                "type": "object",
+                "required": [
+                    "name",
+                    "type",
+                    "title"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Setting identifier (snake_case)",
+                        "pattern": "^[a-z][a-z0-9_]*$"
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "Setting data type",
+                        "enum": [
+                            "string",
+                            "number",
+                            "boolean",
+                            "array",
+                            "object"
+                        ]
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Human-readable setting name"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Detailed setting description"
+                    },
+                    "default": {
+                        "description": "Default value for the setting (null allowed)"
+                    },
+                    "required": {
+                        "type": "boolean",
+                        "description": "Whether this setting is required",
+                        "default": false
+                    },
+                    "validation": {
+                        "type": "object",
+                        "description": "Additional validation rules",
+                        "properties": {
+                            "min": {
+                                "type": "number",
+                                "description": "Minimum value (for numbers)"
+                            },
+                            "max": {
+                                "type": "number",
+                                "description": "Maximum value (for numbers)"
+                            },
+                            "minLength": {
+                                "type": "integer",
+                                "description": "Minimum length (for strings)"
+                            },
+                            "maxLength": {
+                                "type": "integer",
+                                "description": "Maximum length (for strings)"
+                            },
+                            "pattern": {
+                                "type": "string",
+                                "description": "Regex pattern (for strings)"
+                            },
+                            "enum": {
+                                "type": "array",
+                                "description": "Allowed values"
+                            }
+                        },
+                        "additionalProperties": false
+                    }
+                },
+                "additionalProperties": false
+            }
+        },
+        "inputs": {
+            "type": "array",
+            "description": "Plugin input parameters",
+            "items": {
+                "type": "object",
+                "required": [
+                    "name",
+                    "type",
+                    "title"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Input parameter name (can use *args or **kwargs syntax)",
+                        "pattern": "^(\\*{0,2}[a-z][a-z0-9_]*)$"
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "Input data type (supports list[T] and map[K,V] syntax)",
+                        "pattern": "^(string|number|boolean|list\\[\\w+\\]|map\\[\\w+,\\s*\\w+\\])$"
+                    },
+                    "optional": {
+                        "type": "boolean",
+                        "description": "Whether this input is optional",
+                        "default": false
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Human-readable input name"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Detailed input description"
+                    },
+                    "default": {
+                        "description": "Default value for optional inputs"
+                    }
+                },
+                "additionalProperties": false
+            }
+        },
+        "outputs": {
+            "type": "array",
+            "description": "Plugin output schema",
+            "items": {
+                "type": "object",
+                "required": [
+                    "name",
+                    "type"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Output field name"
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "Output data type"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Output field description"
+                    }
+                },
+                "additionalProperties": false
+            }
+        },
+        "permissions": {
+            "type": "object",
+            "description": "Plugin permission requirements",
+            "properties": {
+                "network": {
+                    "type": "boolean",
+                    "description": "Requires network access",
+                    "default": false
+                },
+                "filesystem": {
+                    "type": "boolean",
+                    "description": "Requires filesystem access",
+                    "default": false
+                },
+                "env": {
+                    "type": "boolean",
+                    "description": "Requires environment variable access",
+                    "default": false
+                }
+            },
+            "additionalProperties": false
+        },
+        "repository": {
+            "type": "string",
+            "description": "Plugin source code repository URL",
+            "format": "uri"
+        },
+        "homepage": {
+            "type": "string",
+            "description": "Plugin homepage URL",
+            "format": "uri"
+        },
+        "keywords": {
+            "type": "array",
+            "description": "Plugin keywords for searchability",
+            "items": {
+                "type": "string"
+            }
+        }
+    },
+    "additionalProperties": false
+}
