@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Settings } from "lucide-react";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { Link } from "@tanstack/react-router";
+import { Sidebar } from "@/components/ui/Sidebar";
+
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -17,10 +19,10 @@ export function MainLayout({ children, projectDir }: MainLayoutProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
       {/* Header */}
-      <header className="border-b">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+      <header className="border-b bg-white flex-shrink-0">
+        <div className="px-6 h-16 flex items-center justify-between">
           <Link
             to="/"
             className="flex items-center gap-2 hover:opacity-80 transition-opacity"
@@ -42,20 +44,25 @@ export function MainLayout({ children, projectDir }: MainLayoutProps) {
             </div>
             <span className="font-semibold text-lg">OpenRisk</span>
           </Link>
-
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setSettingsOpen(true)}
+            className="h-10 w-10"
           >
-            <Settings className="h-5 w-5" />
+            <Settings className="h-6 w-6" />
             <span className="sr-only">Settings</span>
           </Button>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1">{children}</main>
+      {/* Sidebar + Main Content */}
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar />
+        <main className="flex-1 overflow-auto">
+          {children}
+        </main>
+      </div>
 
       {/* Settings Dialog */}
       <SettingsDialog

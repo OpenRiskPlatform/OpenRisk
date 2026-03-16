@@ -218,6 +218,16 @@ export function EntryPage() {
               </Button>
             </form>
           </div>
+                <Button
+        variant="outline"
+        size="sm"
+        onClick={async () => {
+          const project = await backendClient.createProject("Demo", "/home/user/demo");
+          console.log('Test project:', project);
+        }}
+      >
+        Test Create
+      </Button>
 
           <Button
             variant="ghost"
