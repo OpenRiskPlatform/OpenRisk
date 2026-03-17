@@ -81,17 +81,7 @@ export function MainLayout({ children, projectDir }: MainLayoutProps) {
               <span className="sr-only">Forward</span>
             </Button>
 
-            {projectDir ? (
-              <>
-                <Button
-                  variant={location.pathname === "/project" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => navigate({ to: "/project", search: { dir: projectDir } })}
-                >
-                  Project
-                </Button>
-              </>
-            ) : null}
+            {projectDir ? null : null}
           </div>
 
           <Button

@@ -44,6 +44,14 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
         [scans, selectedScanId]
     );
 
+    const pluginNameById = useMemo(() => {
+        const map: Record<string, string> = {};
+        for (const plugin of settingsData?.plugins ?? []) {
+            map[plugin.id] = plugin.name;
+        }
+        return map;
+    }, [settingsData?.plugins]);
+
     useEffect(() => {
         let cancelled = false;
         if (!projectDir) {
@@ -306,7 +314,12 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                                             {scanDetail.results.map((result) => (
                                                 <Card key={result.pluginId}>
                                                     <CardHeader>
-                                                        <CardTitle className="text-base">{result.pluginId}</CardTitle>
+                                                        <CardTitle className="text-lg">
+                                                            {pluginNameById[result.pluginId] ?? result.pluginId}
+                                                        </CardTitle>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {result.pluginId}
+                                                        </p>
                                                     </CardHeader>
                                                     <CardContent>
                                                         {isDataModelResult(result.output) ? (
