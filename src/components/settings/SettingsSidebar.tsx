@@ -2,7 +2,7 @@
  * Settings Sidebar - Category navigation
  */
 
-import { Settings, Puzzle, Palette } from "lucide-react";
+import { Settings, Puzzle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SettingsCategory } from "./SettingsDialog";
 
@@ -14,7 +14,6 @@ interface SettingsSidebarProps {
 const categories = [
   { id: "general" as const, label: "General", icon: Settings },
   { id: "plugins" as const, label: "Plugins", icon: Puzzle },
-  { id: "appearance" as const, label: "Appearance", icon: Palette },
 ];
 
 export function SettingsSidebar({

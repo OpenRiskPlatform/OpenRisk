@@ -8,6 +8,7 @@
   "permissions": [
     "shell:allow-open",
     "core:default",
-    "dialog:default"
+    "dialog:default",
+    "mcp-bridge:default"
   ]
 }

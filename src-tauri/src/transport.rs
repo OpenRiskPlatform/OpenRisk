@@ -79,3 +79,17 @@ pub async fn load_settings(dir_path: String) -> Result<String, String> {
     let snapshot = app_project::load_settings(dir).await?;
     serde_json::to_string(&snapshot).map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn update_project_settings(
+    dir_path: String,
+    theme: Option<String>,
+) -> Result<String, String> {
+    let dir = std::path::PathBuf::from(dir_path);
+    if !dir.exists() || !dir.is_dir() {
+        return Err(format!("Project directory does not exist: {:?}", dir));
+    }
+
+    let settings = app_project::update_project_settings(dir, theme).await?;
+    serde_json::to_string(&settings).map_err(|e| e.to_string())
+}

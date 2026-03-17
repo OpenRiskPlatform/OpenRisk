@@ -15,10 +15,17 @@ mod transport;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_store::Builder::new().build());
+
+    #[cfg(debug_assertions)]
+    {
+        builder = builder.plugin(tauri_plugin_mcp_bridge::init());
+    }
+
+    builder
         .invoke_handler(tauri::generate_handler![
             transport::list_plugins,
             transport::get_plugin,
@@ -28,6 +35,7 @@ pub fn run() {
             transport::create_project,
             transport::open_project,
             transport::load_settings,
+            transport::update_project_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

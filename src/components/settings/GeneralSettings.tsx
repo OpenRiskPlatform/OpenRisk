@@ -2,8 +2,9 @@
  * General Settings Panel
  */
 
+import { useState } from "react";
+import type { ProjectSettingsRecord } from "@/core/backend/types";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -11,78 +12,100 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useBackendClient } from "@/hooks/useBackendClient";
 import { useSettings } from "@/core/settings/SettingsContext";
 
-export function GeneralSettings() {
-  const { globalSettings, updateGlobalSettings } = useSettings();
+interface GeneralSettingsProps {
+  projectDir?: string;
+  projectSettings: ProjectSettingsRecord | null;
+  loading: boolean;
+  error?: string | null;
+  onProjectSettingsUpdated: (settings: ProjectSettingsRecord) => void;
+}
+
+export function GeneralSettings({
+  projectDir,
+  projectSettings,
+  loading,
+  error,
+  onProjectSettingsUpdated,
+}: GeneralSettingsProps) {
+  const backendClient = useBackendClient();
+  const { updateGlobalSettings } = useSettings();
+  const [savingTheme, setSavingTheme] = useState(false);
+
+  const theme = projectSettings?.theme ?? "system";
+
+  const handleThemeChange = async (value: "light" | "dark" | "system") => {
+    if (!projectDir) {
+      return;
+    }
+
+    setSavingTheme(true);
+    try {
+      const updated = await backendClient.updateProjectSettings(projectDir, {
+        theme: value,
+      });
+      onProjectSettingsUpdated(updated);
+      await updateGlobalSettings({ theme: updated.theme });
+    } finally {
+      setSavingTheme(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-semibold mb-1">General Settings</h2>
         <p className="text-sm text-muted-foreground">
-          Manage your application preferences
+          Manage project-level preferences
         </p>
       </div>
 
-      <div className="space-y-4">
-        {/* Theme */}
-        <div className="flex items-center justify-between">
-          <div className="space-y-0.5">
-            <Label>Theme</Label>
-            <p className="text-sm text-muted-foreground">
-              Select your preferred color scheme
-            </p>
-          </div>
-          <Select
-            value={globalSettings.theme}
-            onValueChange={(value: "light" | "dark" | "system") =>
-              updateGlobalSettings({ theme: value })
-            }
-          >
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="light">Light</SelectItem>
-              <SelectItem value="dark">Dark</SelectItem>
-              <SelectItem value="system">System</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      {!projectDir && (
+        <p className="text-sm text-muted-foreground">
+          Open or create a project to edit settings.
+        </p>
+      )}
 
-        {/* Auto Save */}
-        <div className="flex items-center justify-between">
-          <div className="space-y-0.5">
-            <Label>Auto Save</Label>
-            <p className="text-sm text-muted-foreground">
-              Automatically save your work
-            </p>
-          </div>
-          <Switch
-            checked={globalSettings.autoSave}
-            onCheckedChange={(checked) =>
-              updateGlobalSettings({ autoSave: checked })
-            }
-          />
-        </div>
+      {projectDir && loading && (
+        <p className="text-sm text-muted-foreground">Loading project settings…</p>
+      )}
 
-        {/* Compact Mode */}
-        <div className="flex items-center justify-between">
-          <div className="space-y-0.5">
-            <Label>Compact Mode</Label>
-            <p className="text-sm text-muted-foreground">
-              Use a more compact interface
-            </p>
+      {projectDir && !loading && error && (
+        <p className="text-sm text-red-600">{error}</p>
+      )}
+
+      {projectDir && !loading && !error && projectSettings && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Theme</Label>
+              <p className="text-sm text-muted-foreground">
+                Stored in project settings and applied immediately.
+              </p>
+            </div>
+            <Select
+              value={theme}
+              onValueChange={handleThemeChange}
+              disabled={savingTheme}
+            >
+              <SelectTrigger className="w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="light">Light</SelectItem>
+                <SelectItem value="dark">Dark</SelectItem>
+                <SelectItem value="system">System</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <Switch
-            checked={globalSettings.compactMode}
-            onCheckedChange={(checked) =>
-              updateGlobalSettings({ compactMode: checked })
-            }
-          />
+
+          <p className="text-xs text-muted-foreground">
+            Locale: {projectSettings.locale} • Settings ID: {projectSettings.id}
+          </p>
         </div>
-      </div>
+      )}
     </div>
   );
 }

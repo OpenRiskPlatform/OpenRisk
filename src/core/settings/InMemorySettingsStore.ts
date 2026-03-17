@@ -7,9 +7,6 @@ import type { GlobalSettings, PluginSettings, SettingsStore } from "./types";
 
 const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   theme: "system",
-  language: "en",
-  autoSave: true,
-  compactMode: false,
 };
 
 export class InMemorySettingsStore implements SettingsStore {

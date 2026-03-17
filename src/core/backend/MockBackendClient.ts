@@ -9,6 +9,7 @@ import type {
   PluginExecutionResponse,
   PluginStatusResponse,
   ProjectSettingsPayload,
+  ProjectSettingsRecord,
   ProjectSummary,
 } from "./types";
 
@@ -107,10 +108,11 @@ export class MockBackendClient extends BackendClient {
     const project = await this.openProject(directory);
     return {
       project,
-      project_settings: {
+      projectSettings: {
         id: "mock-settings",
         description: "Mock settings",
         locale: "en-US",
+        theme: "system",
       },
       plugins: [
         {
@@ -118,11 +120,23 @@ export class MockBackendClient extends BackendClient {
           name: "Mock Plugin",
           version: "0.1.0",
           manifest: {},
-          input_schema: null,
-          settings_schema: [],
+          inputSchema: null,
+          settingsSchema: [],
           settings: {},
         },
       ],
+    };
+  }
+
+  async updateProjectSettings(
+    _directory: string,
+    patch: { theme?: "light" | "dark" | "system" }
+  ): Promise<ProjectSettingsRecord> {
+    return {
+      id: "mock-settings",
+      description: "Mock settings",
+      locale: "en-US",
+      theme: patch.theme ?? "system",
     };
   }
 

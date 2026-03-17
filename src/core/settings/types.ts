@@ -4,9 +4,6 @@
 
 export interface GlobalSettings {
   theme: "light" | "dark" | "system";
-  language: string;
-  autoSave: boolean;
-  compactMode: boolean;
 }
 
 export type PluginSettings = Record<string, string | number | boolean | null>;

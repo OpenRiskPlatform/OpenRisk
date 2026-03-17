@@ -9,8 +9,9 @@ import { GeneralSettings } from "./GeneralSettings";
 import { PluginSettings } from "./PluginSettings";
 import { useBackendClient } from "@/hooks/useBackendClient";
 import type { ProjectSettingsPayload } from "@/core/backend/types";
+import { useSettings } from "@/core/settings/SettingsContext";
 
-export type SettingsCategory = "general" | "plugins" | "appearance";
+export type SettingsCategory = "general" | "plugins";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -22,6 +23,7 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
   const [activeCategory, setActiveCategory] =
     useState<SettingsCategory>("general");
   const backendClient = useBackendClient();
+  const { updateGlobalSettings } = useSettings();
   const [settingsData, setSettingsData] = useState<ProjectSettingsPayload | null>(
     null
   );
@@ -49,6 +51,7 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
       .then((payload) => {
         if (!cancelled) {
           setSettingsData(payload);
+          updateGlobalSettings({ theme: payload.projectSettings?.theme ?? "system" });
         }
       })
       .catch((err) => {
@@ -66,7 +69,21 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
     return () => {
       cancelled = true;
     };
-  }, [open, projectDir, backendClient]);
+  }, [open, projectDir, backendClient, updateGlobalSettings]);
+
+  const handleProjectSettingsUpdated = (
+    settings: ProjectSettingsPayload["projectSettings"]
+  ) => {
+    setSettingsData((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return {
+        ...prev,
+        projectSettings: settings,
+      };
+    });
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -80,11 +97,23 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
 
           {/* Content Area */}
           <div className="flex-1 flex flex-col min-h-0 p-6">
-            {activeCategory === "general" && <GeneralSettings />}
+            {activeCategory === "general" && (
+              <GeneralSettings
+                projectDir={projectDir}
+                projectSettings={settingsData?.projectSettings ?? null}
+                loading={settingsLoading}
+                error={
+                  projectDir
+                    ? settingsError
+                    : "Open or create a project to edit settings."
+                }
+                onProjectSettingsUpdated={handleProjectSettingsUpdated}
+              />
+            )}
             {activeCategory === "plugins" && (
               <PluginSettings
                 projectDir={projectDir}
-                projectSettings={settingsData?.project_settings ?? null}
+                projectSettings={settingsData?.projectSettings ?? null}
                 plugins={settingsData?.plugins ?? []}
                 loading={settingsLoading}
                 error={
@@ -93,14 +122,6 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
                     : "Open or create a project to view plugin settings."
                 }
               />
-            )}
-            {activeCategory === "appearance" && (
-              <div>
-                <h2 className="text-2xl font-semibold mb-4">Appearance</h2>
-                <p className="text-muted-foreground">
-                  Appearance settings coming soon...
-                </p>
-              </div>
             )}
           </div>
         </div>

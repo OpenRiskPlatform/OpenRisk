@@ -55,6 +55,7 @@ export interface ProjectSettingsRecord {
   id: string;
   description: string;
   locale: string;
+  theme: "light" | "dark" | "system";
 }
 
 export interface PluginSettingsDescriptor {
@@ -62,14 +63,14 @@ export interface PluginSettingsDescriptor {
   name: string;
   version: string;
   manifest: Record<string, unknown> | null;
-  input_schema: unknown;
-  settings_schema: unknown;
+  inputSchema: unknown;
+  settingsSchema: unknown;
   settings: Record<string, unknown> | null;
 }
 
 export interface ProjectSettingsPayload {
   project: ProjectSummary;
-  project_settings: ProjectSettingsRecord;
+  projectSettings: ProjectSettingsRecord;
   plugins: PluginSettingsDescriptor[];
 }
 
@@ -119,4 +120,12 @@ export abstract class BackendClient {
    * Load project/global settings and plugin configurations
    */
   abstract loadSettings(directory: string): Promise<ProjectSettingsPayload>;
+
+  /**
+   * Update project settings fields persisted in project database
+   */
+  abstract updateProjectSettings(
+    directory: string,
+    patch: { theme?: "light" | "dark" | "system" }
+  ): Promise<ProjectSettingsRecord>;
 }

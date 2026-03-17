@@ -2,7 +2,7 @@
  * Entry Page - Landing/Home screen
  */
 
-import { Settings } from "lucide-react";
+import { ArrowLeft, FolderOpen, FolderPlus, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,10 +19,11 @@ import {
 } from "@/components/ui/card";
 import { useBackendClient } from "@/hooks/useBackendClient";
 
-const RECENT_PROJECT_DIR = "/home/ms/Downloads/test/";
+const RECENT_PROJECT_DIR = "/home/ronis/tmp/openrisk-test-project";
 
 export function EntryPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mode, setMode] = useState<"choose" | "create" | "open">("choose");
   const [projectName, setProjectName] = useState("");
   const [projectDir, setProjectDir] = useState("");
   const [openProjectDir, setOpenProjectDir] = useState("");
@@ -115,8 +116,16 @@ export function EntryPage() {
     }
   };
 
+  const switchMode = (nextMode: "choose" | "create" | "open") => {
+    setError(null);
+    setOpenError(null);
+    setMode(nextMode);
+  };
+
+  const isChooseStep = mode === "choose";
+
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
+    <div className="min-h-screen flex flex-col bg-background">
       {/* Header with Settings */}
       <header className="absolute top-0 right-0 p-6">
         <Button
@@ -132,140 +141,154 @@ export function EntryPage() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col items-center justify-center px-4">
-        <div className="text-center space-y-8 max-w-2xl">
-          {/* Logo/Icon placeholder */}
-          <div className="flex justify-center">
-            <div className="w-32 h-32 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <svg
-                className="w-20 h-20 text-primary"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-                />
-              </svg>
-            </div>
-          </div>
-
-          {/* Title & Description */}
+        <div className="text-center space-y-8 max-w-3xl w-full">
           <div className="space-y-3">
-            <h1 className="text-5xl font-bold text-slate-900 dark:text-slate-50">
-              OpenRisk
-            </h1>
-            <p className="text-xl text-slate-600 dark:text-slate-400">
-              Modular Risk Analysis Platform
-            </p>
-            <p className="text-sm text-slate-500 dark:text-slate-500 max-w-md mx-auto">
-              Analyze risk profiles using extensible plugins. Configure your
-              workspace and start assessing entities.
+            <h1 className="text-4xl font-bold tracking-tight">OpenRisk</h1>
+            <p className="text-lg text-muted-foreground">
+              Start with two clear steps: choose action, then complete the form.
             </p>
           </div>
 
-          {/* Project creation form */}
-          <div className="max-w-xl mx-auto w-full">
-            <form
-              onSubmit={handleCreateProject}
-              className="bg-white dark:bg-slate-900/70 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 p-6 space-y-5"
-            >
-              <div className="space-y-2 text-left">
-                <Label htmlFor="projectName" className="text-slate-700 dark:text-slate-200">
-                  Project Name
-                </Label>
-                <Input
-                  id="projectName"
-                  value={projectName}
-                  onChange={(event) => setProjectName(event.target.value)}
-                  placeholder="ACME Risk Assessment"
-                />
+          <div className="max-w-2xl mx-auto w-full">
+            {isChooseStep ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                <Card className="text-left">
+                  <CardHeader className="space-y-3">
+                    <div className="inline-flex h-9 w-9 items-center justify-center rounded-md border">
+                      <FolderPlus className="h-4 w-4" />
+                    </div>
+                    <CardTitle>Create Project</CardTitle>
+                    <CardDescription>
+                      Start a new risk workspace with a project name and folder.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button className="w-full" onClick={() => switchMode("create")}>
+                      Continue
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                <Card className="text-left">
+                  <CardHeader className="space-y-3">
+                    <div className="inline-flex h-9 w-9 items-center justify-center rounded-md border">
+                      <FolderOpen className="h-4 w-4" />
+                    </div>
+                    <CardTitle>Open Project</CardTitle>
+                    <CardDescription>
+                      Open an existing project directory with project database.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button className="w-full" variant="outline" onClick={() => switchMode("open")}>
+                      Continue
+                    </Button>
+                  </CardContent>
+                </Card>
               </div>
+            ) : null}
 
-              <div className="space-y-2 text-left">
-                <Label htmlFor="projectDirectory" className="text-slate-700 dark:text-slate-200">
-                  Project Directory
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="projectDirectory"
-                    value={projectDir}
-                    placeholder="Select or create a folder"
-                    readOnly
-                  />
-                  <Button type="button" variant="outline" onClick={handlePickDirectory}>
-                    Browse
-                  </Button>
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Recently used:{" "}
-                  <button
-                    type="button"
-                    onClick={handleUseRecentProject}
-                    className="underline-offset-2 hover:underline font-medium"
-                  >
-                    {RECENT_PROJECT_DIR}
-                  </button>
-                </p>
-              </div>
-
-              {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-
-              <Button type="submit" size="lg" className="w-full" disabled={isCreating}>
-                {isCreating ? "Creating Project..." : "Create Project"}
-              </Button>
-            </form>
-          </div>
-
-          <Button
-            variant="ghost"
-            size="lg"
-            className="text-base"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <Settings className="mr-2 h-4 w-4" />
-            Configure platform settings
-          </Button>
-
-          <Card className="max-w-xl mx-auto w-full text-left">
-            <CardHeader>
-              <CardTitle>Open Existing Project</CardTitle>
-              <CardDescription>
-                Select a project directory that already contains a project database.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="openProjectDirectory">Project Directory</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="openProjectDirectory"
-                    value={openProjectDir}
-                    placeholder="Select a project folder"
-                    readOnly
-                  />
-                  <Button type="button" variant="outline" onClick={handlePickExistingProject}>
-                    Browse
-                  </Button>
-                </div>
-              </div>
-
-              {openError && (
-                <p className="text-sm text-red-600 dark:text-red-400">{openError}</p>
-              )}
-
-              <Button
-                type="button"
-                className="w-full"
-                onClick={handleOpenProject}
-                disabled={isOpeningProject}
+            {mode === "create" ? (
+              <form
+                onSubmit={handleCreateProject}
+                className="rounded-lg border bg-card p-6 space-y-5 text-left"
               >
-                {isOpeningProject ? "Opening Project..." : "Open Project"}
-              </Button>
-            </CardContent>
-          </Card>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold">Step 2: Create Project</h2>
+                  <Button type="button" variant="ghost" onClick={() => switchMode("choose")}>
+                    <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="projectName">Project Name</Label>
+                  <Input
+                    id="projectName"
+                    value={projectName}
+                    onChange={(event) => setProjectName(event.target.value)}
+                    placeholder="ACME Risk Assessment"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="projectDirectory">Project Directory</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="projectDirectory"
+                      value={projectDir}
+                      placeholder="Select or create a folder"
+                      readOnly
+                    />
+                    <Button type="button" variant="outline" onClick={handlePickDirectory}>
+                      Browse
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Recently used:{" "}
+                    <button
+                      type="button"
+                      onClick={handleUseRecentProject}
+                      className="underline-offset-2 hover:underline font-medium"
+                    >
+                      {RECENT_PROJECT_DIR}
+                    </button>
+                  </p>
+                </div>
+
+                {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+
+                <Button type="submit" size="lg" className="w-full" disabled={isCreating}>
+                  {isCreating ? "Creating Project..." : "Create Project"}
+                </Button>
+              </form>
+            ) : null}
+
+            {mode === "open" ? (
+              <Card className="mx-auto w-full text-left">
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle>Step 2: Open Existing Project</CardTitle>
+                    <Button type="button" variant="ghost" onClick={() => switchMode("choose")}>
+                      <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                    </Button>
+                  </div>
+                  <CardDescription>
+                    Select a project directory that already contains a project database.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="openProjectDirectory">Project Directory</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="openProjectDirectory"
+                        value={openProjectDir}
+                        placeholder="Select a project folder"
+                        readOnly
+                      />
+                      <Button type="button" variant="outline" onClick={handlePickExistingProject}>
+                        Browse
+                      </Button>
+                    </div>
+                  </div>
+
+                  {openError ? (
+                    <p className="text-sm text-red-600 dark:text-red-400">{openError}</p>
+                  ) : null}
+
+                  <Button
+                    type="button"
+                    className="w-full"
+                    onClick={handleOpenProject}
+                    disabled={isOpeningProject}
+                  >
+                    {isOpeningProject ? "Opening Project..." : "Open Project"}
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : null}
+          </div>
+
         </div>
       </main>
 

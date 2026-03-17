@@ -3,10 +3,13 @@
  */
 
 import { type ReactNode, useState } from "react";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Settings } from "lucide-react";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { Link } from "@tanstack/react-router";
+import { useBackendClient } from "@/hooks/useBackendClient";
+import { useSettings } from "@/core/settings/SettingsContext";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -15,6 +18,32 @@ interface MainLayoutProps {
 
 export function MainLayout({ children, projectDir }: MainLayoutProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const backendClient = useBackendClient();
+  const { updateGlobalSettings } = useSettings();
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!projectDir) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    backendClient
+      .loadSettings(projectDir)
+      .then((payload) => {
+        if (!cancelled) {
+          updateGlobalSettings({ theme: payload.projectSettings?.theme ?? "system" });
+        }
+      })
+      .catch(() => {
+        // Ignore theme sync failures to avoid blocking page rendering.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectDir, backendClient, updateGlobalSettings]);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">

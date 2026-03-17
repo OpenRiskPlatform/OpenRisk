@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 const DB_FILE_NAME: &str = "project.db";
 const PLUGINS_DIR_NAME: &str = "plugins";
+const CURRENT_SCHEMA_VERSION: i64 = 2;
 
 const SCHEMA_SQL: &str = r#"
 PRAGMA foreign_keys = ON;
@@ -21,7 +22,13 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS ProjectSettings (
     id TEXT PRIMARY KEY,
     description TEXT,
-    locale TEXT
+    locale TEXT,
+    theme TEXT
+);
+
+CREATE TABLE IF NOT EXISTS SchemaVersion (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    version INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS Project (
@@ -93,6 +100,7 @@ pub struct ProjectSettingsRecord {
     pub id: String,
     pub description: String,
     pub locale: String,
+    pub theme: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -198,7 +206,7 @@ fn load_plugin_bundle(dir: &Path) -> Result<LocalPluginBundle, PersistenceError>
     let manifest_raw = fs::read_to_string(&manifest_path)?;
     let manifest =
         parse_manifest(&manifest_raw).map_err(|e| PersistenceError::Validation(e.to_string()))?;
-        let manifest_json = serde_json::to_value(&manifest)?;
+    let manifest_json = serde_json::to_value(&manifest)?;
 
     let entrypoint: String = manifest.entrypoint.clone().into();
     let code_path = dir.join(entrypoint);
@@ -242,6 +250,12 @@ pub trait ProjectPersistence: Send + Sync {
         &self,
         project_dir: &Path,
     ) -> Result<ProjectSettingsPayload, PersistenceError>;
+
+    async fn update_project_settings(
+        &self,
+        project_dir: &Path,
+        theme: Option<String>,
+    ) -> Result<ProjectSettingsRecord, PersistenceError>;
 }
 
 pub struct SqliteProjectPersistence;
@@ -278,6 +292,88 @@ impl SqliteProjectPersistence {
         }
 
         Ok(())
+    }
+
+    async fn apply_migrations_to_latest(
+        conn: &mut SqliteConnection,
+    ) -> Result<(), PersistenceError> {
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS SchemaVersion (id INTEGER PRIMARY KEY CHECK (id = 1), version INTEGER NOT NULL)",
+        )
+        .execute(&mut *conn)
+        .await?;
+
+        let existing =
+            sqlx::query_scalar::<_, i64>("SELECT version FROM SchemaVersion WHERE id = 1")
+                .fetch_optional(&mut *conn)
+                .await?;
+
+        let mut current_version = match existing {
+            Some(version) => version,
+            None => {
+                let has_theme = Self::column_exists(conn, "ProjectSettings", "theme").await?;
+                let detected = if has_theme { 2 } else { 1 };
+                sqlx::query(
+                    "INSERT INTO SchemaVersion (id, version) VALUES (1, ?1) ON CONFLICT(id) DO UPDATE SET version = excluded.version",
+                )
+                .bind(detected)
+                .execute(&mut *conn)
+                .await?;
+                detected
+            }
+        };
+
+        while current_version < CURRENT_SCHEMA_VERSION {
+            let next = current_version + 1;
+            match next {
+                2 => Self::migrate_to_v2(conn).await?,
+                _ => {
+                    return Err(PersistenceError::Validation(format!(
+                        "Missing migration for schema version {}",
+                        next
+                    )))
+                }
+            }
+
+            sqlx::query("UPDATE SchemaVersion SET version = ?1 WHERE id = 1")
+                .bind(next)
+                .execute(&mut *conn)
+                .await?;
+            current_version = next;
+        }
+
+        Ok(())
+    }
+
+    async fn migrate_to_v2(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
+        let has_theme = Self::column_exists(conn, "ProjectSettings", "theme").await?;
+        if !has_theme {
+            sqlx::query("ALTER TABLE ProjectSettings ADD COLUMN theme TEXT")
+                .execute(&mut *conn)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn column_exists(
+        conn: &mut SqliteConnection,
+        table: &str,
+        column: &str,
+    ) -> Result<bool, PersistenceError> {
+        let query = format!("PRAGMA table_info({})", table);
+        let rows: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&query).fetch_all(&mut *conn).await?;
+        Ok(rows.iter().any(|(_, name, _, _, _, _)| name == column))
+    }
+
+    fn normalize_theme(value: Option<String>) -> String {
+        match value.as_deref() {
+            Some("light") => "light".to_string(),
+            Some("dark") => "dark".to_string(),
+            Some("system") => "system".to_string(),
+            _ => "system".to_string(),
+        }
     }
 
     fn project_dir(parent_dir: &Path, trimmed_name: &str) -> PathBuf {
@@ -364,14 +460,18 @@ impl ProjectPersistence for SqliteProjectPersistence {
         let db_path = Self::db_path(&project_dir);
         let mut conn = Self::connect(&db_path).await?;
         Self::apply_schema(&mut conn).await?;
+        Self::apply_migrations_to_latest(&mut conn).await?;
 
         let project_settings_id = Uuid::new_v4().to_string();
-        sqlx::query("INSERT INTO ProjectSettings (id, description, locale) VALUES (?1, ?2, ?3)")
-            .bind(&project_settings_id)
-            .bind("")
-            .bind("en-US")
-            .execute(&mut conn)
-            .await?;
+        sqlx::query(
+            "INSERT INTO ProjectSettings (id, description, locale, theme) VALUES (?1, ?2, ?3, ?4)",
+        )
+        .bind(&project_settings_id)
+        .bind("")
+        .bind("en-US")
+        .bind("system")
+        .execute(&mut conn)
+        .await?;
 
         let project_id = Uuid::new_v4().to_string();
         let audit: Option<String> = None;
@@ -405,6 +505,8 @@ impl ProjectPersistence for SqliteProjectPersistence {
         }
 
         let mut conn = Self::connect(&db_path).await?;
+        Self::apply_schema(&mut conn).await?;
+        Self::apply_migrations_to_latest(&mut conn).await?;
         let row = sqlx::query_as::<_, ProjectRow>(
             "SELECT id, name, audit, project_settings_id FROM Project LIMIT 1",
         )
@@ -432,6 +534,8 @@ impl ProjectPersistence for SqliteProjectPersistence {
         }
 
         let mut conn = Self::connect(&db_path).await?;
+        Self::apply_schema(&mut conn).await?;
+        Self::apply_migrations_to_latest(&mut conn).await?;
         let project_row = sqlx::query_as::<_, ProjectRow>(
             "SELECT id, name, audit, project_settings_id FROM Project LIMIT 1",
         )
@@ -446,7 +550,7 @@ impl ProjectPersistence for SqliteProjectPersistence {
         };
 
         let settings_row = sqlx::query_as::<_, ProjectSettingsRow>(
-            "SELECT id, description, locale FROM ProjectSettings WHERE id = ?1",
+            "SELECT id, description, locale, theme FROM ProjectSettings WHERE id = ?1",
         )
         .bind(&project_row.project_settings_id)
         .fetch_one(&mut conn)
@@ -481,6 +585,47 @@ impl ProjectPersistence for SqliteProjectPersistence {
             plugins,
         })
     }
+
+    async fn update_project_settings(
+        &self,
+        project_dir: &Path,
+        theme: Option<String>,
+    ) -> Result<ProjectSettingsRecord, PersistenceError> {
+        let db_path = Self::db_path(project_dir);
+        if !db_path.exists() {
+            return Err(PersistenceError::Validation(format!(
+                "There is no project in the directory {:?}",
+                db_path
+            )));
+        }
+
+        let mut conn = Self::connect(&db_path).await?;
+        Self::apply_schema(&mut conn).await?;
+        Self::apply_migrations_to_latest(&mut conn).await?;
+
+        let project_row = sqlx::query_as::<_, ProjectRow>(
+            "SELECT id, name, audit, project_settings_id FROM Project LIMIT 1",
+        )
+        .fetch_one(&mut conn)
+        .await?;
+
+        let normalized_theme = Self::normalize_theme(theme);
+
+        sqlx::query("UPDATE ProjectSettings SET theme = ?1 WHERE id = ?2")
+            .bind(normalized_theme)
+            .bind(&project_row.project_settings_id)
+            .execute(&mut conn)
+            .await?;
+
+        let settings_row = sqlx::query_as::<_, ProjectSettingsRow>(
+            "SELECT id, description, locale, theme FROM ProjectSettings WHERE id = ?1",
+        )
+        .bind(&project_row.project_settings_id)
+        .fetch_one(&mut conn)
+        .await?;
+
+        Ok(settings_row.into_record())
+    }
 }
 
 #[derive(sqlx::FromRow)]
@@ -496,6 +641,7 @@ struct ProjectSettingsRow {
     id: String,
     description: Option<String>,
     locale: Option<String>,
+    theme: Option<String>,
 }
 
 impl ProjectSettingsRow {
@@ -504,6 +650,7 @@ impl ProjectSettingsRow {
             id: self.id,
             description: self.description.unwrap_or_default(),
             locale: self.locale.unwrap_or_else(|| "en-US".to_string()),
+            theme: SqliteProjectPersistence::normalize_theme(self.theme),
         }
     }
 }
@@ -577,6 +724,22 @@ pub async fn load_settings(dir_path: PathBuf) -> Result<ProjectSettingsPayload, 
     let store = SqliteProjectPersistence::new();
     store
         .load_settings(&dir_path)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+pub async fn update_project_settings(
+    dir_path: PathBuf,
+    theme: Option<String>,
+) -> Result<ProjectSettingsRecord, String> {
+    let db_path = dir_path.join(DB_FILE_NAME);
+    if !db_path.exists() {
+        return Err(format!("No project found in directory {:?}", dir_path));
+    }
+
+    let store = SqliteProjectPersistence::new();
+    store
+        .update_project_settings(&dir_path, theme)
         .await
         .map_err(|e| e.to_string())
 }

@@ -9,6 +9,7 @@ import type {
   BackendEvent,
   PluginExecutionResponse,
   PluginStatusResponse,
+  ProjectSettingsRecord,
   ProjectSummary,
   ProjectSettingsPayload,
 } from "./types";
@@ -108,6 +109,24 @@ export class TauriBackendClient extends BackendClient {
     } catch (error: any) {
       console.error("[TauriBackendClient] loadSettings error:", error);
       throw new Error(error?.message ?? error?.toString() ?? "Failed to load settings");
+    }
+  }
+
+  async updateProjectSettings(
+    directory: string,
+    patch: { theme?: "light" | "dark" | "system" }
+  ): Promise<ProjectSettingsRecord> {
+    try {
+      const result = await invoke<string>("update_project_settings", {
+        dirPath: directory,
+        theme: patch.theme,
+      });
+      return JSON.parse(result) as ProjectSettingsRecord;
+    } catch (error: any) {
+      console.error("[TauriBackendClient] updateProjectSettings error:", error);
+      throw new Error(
+        error?.message ?? error?.toString() ?? "Failed to update project settings"
+      );
     }
   }
 }
