@@ -1,4 +1,5 @@
 {
+    "id": "persondemo",
     "version": "0.1.0",
     "name": "Person Demo",
     "description": "Returns DataModel person entities for UI testing",

@@ -1,4 +1,5 @@
 {
+    "id": "invalid",
     "version": "0.1.0",
     "name": "Invalid Test Plugin",
     "description": "Some description",
@@ -11,8 +12,6 @@
     "icon": "icon.png",
     "license": "MIT",
     "entrypoint": "index.ts",
-    "settings": [
-    ],
-    "inputs": [
-    ]
+    "settings": [],
+    "inputs": []
 }

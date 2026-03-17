@@ -55,7 +55,14 @@ pub fn parse_manifest(json_str: &str) -> Result<OpenRiskPluginManifest, Manifest
         )));
     }
 
+    // The generated Rust type currently doesn't include `id` yet.
+    // Keep `id` required at schema level, but strip it before deserialization.
+    let mut normalized = raw;
+    if let Some(obj) = normalized.as_object_mut() {
+        obj.remove("id");
+    }
+
     // Deserialize into strongly-typed structure
-    serde_json::from_value::<OpenRiskPluginManifest>(raw)
+    serde_json::from_value::<OpenRiskPluginManifest>(normalized)
         .map_err(|e| ManifestError::ParseError(e.to_string()))
 }

@@ -288,6 +288,28 @@ fn load_plugin_bundle_with_id(
     })
 }
 
+fn extract_manifest_id(dir: &Path) -> Result<String, PersistenceError> {
+    let manifest_path = dir.join("plugin.json");
+    if !manifest_path.exists() {
+        return Err(PersistenceError::Validation(format!(
+            "Missing plugin manifest: {:?}",
+            manifest_path
+        )));
+    }
+
+    let raw = fs::read_to_string(&manifest_path)?;
+    let value: Value = serde_json::from_str(&raw)?;
+    let id = value
+        .get("id")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| {
+            PersistenceError::Validation("Manifest must contain non-empty id".to_string())
+        })?;
+    Ok(id)
+}
+
 fn parse_manifest_relaxed(raw: &str) -> Result<OpenRiskPluginManifest, String> {
     if let Ok(parsed) = parse_manifest(raw) {
         return Ok(parsed);
@@ -1203,12 +1225,10 @@ pub async fn upsert_project_plugin_from_dir(
         return Err(format!("Plugin directory does not exist: {:?}", plugin_dir));
     }
 
+    let manifest_id = extract_manifest_id(&plugin_dir).map_err(|e| e.to_string())?;
     let plugin_id = match replace_plugin_id {
         Some(id) if !id.trim().is_empty() => id.trim().to_string(),
-        _ => plugin_dir
-            .file_name()
-            .map(|s| s.to_string_lossy().to_string())
-            .ok_or_else(|| "Invalid plugin directory name".to_string())?,
+        _ => manifest_id,
     };
 
     let bundle =
@@ -1516,14 +1536,21 @@ pub async fn run_scan(
             .cloned()
             .unwrap_or_else(|| Value::Object(Map::new()));
 
-        let settings_json: Option<String> = sqlx::query_scalar(
-            "SELECT settings_json FROM ProjectPluginSettings WHERE plugin_id = ?1 AND project_settings_id = ?2 LIMIT 1",
+        let runtime_row = sqlx::query_as::<_, (Option<String>, Option<String>)>(
+            "SELECT ProjectPluginSettings.settings_json, Plugin.code
+             FROM ProjectPluginSettings
+             INNER JOIN Plugin ON Plugin.id = ProjectPluginSettings.plugin_id
+             WHERE ProjectPluginSettings.plugin_id = ?1 AND ProjectPluginSettings.project_settings_id = ?2
+             LIMIT 1",
         )
         .bind(plugin_id)
         .bind(&project_settings_id)
         .fetch_optional(&mut conn)
         .await
         .map_err(|e| e.to_string())?;
+
+        let (settings_json, plugin_code) = runtime_row
+            .ok_or_else(|| format!("Plugin '{}' is not registered in project DB", plugin_id))?;
 
         let plugin_settings = match settings_json {
             Some(raw) if !raw.trim().is_empty() => {
@@ -1532,13 +1559,12 @@ pub async fn run_scan(
             _ => Value::Object(Map::new()),
         };
 
-        let plugin_id_owned = plugin_id.clone();
+        let code = plugin_code
+            .filter(|c| !c.trim().is_empty())
+            .ok_or_else(|| format!("Plugin '{}' has empty code in project DB", plugin_id))?;
+
         let execute_result = tauri::async_runtime::spawn_blocking(move || {
-            plugin_app::execute_plugin_with_settings(
-                &plugin_id_owned,
-                plugin_inputs,
-                Some(plugin_settings),
-            )
+            plugin_app::execute_plugin_code_with_settings(code, plugin_inputs, plugin_settings)
         })
         .await
         .map_err(|e| format!("Failed to join plugin execution task: {}", e))?;

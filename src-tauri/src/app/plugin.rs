@@ -193,6 +193,56 @@ impl ImportProvider for ScriptImportProvider {
     }
 }
 
+fn run_plugin_module(code: String, merged_inputs: Value) -> Result<Value, String> {
+    let wrapper_code = format!(
+        r#"
+        import mod from "script://main.ts";
+        export default async () => {{
+            if (typeof mod !== 'function') {{
+                throw new TypeError("The plugin must export a default function");
+            }}
+            const inputs = {};
+            const result = await mod(inputs);
+            return result;
+        }}
+        "#,
+        merged_inputs
+    );
+
+    let wrapper = Module::new("wrapper.js", &wrapper_code);
+    let import_provider = ScriptImportProvider::new(code);
+    let mut runtime = Runtime::new(RuntimeOptions {
+        import_provider: Some(Box::new(import_provider)),
+        ..Default::default()
+    })
+    .expect("Failed to create runtime");
+
+    match runtime.load_module(&wrapper) {
+        Ok(handle) => runtime
+            .call_entrypoint::<Value>(&handle, &())
+            .map_err(|e| e.to_string()),
+        Err(err) => Err(err.to_string()),
+    }
+}
+
+pub fn execute_plugin_code_with_settings(
+    code: String,
+    inputs: Value,
+    settings: Value,
+) -> Result<Value, String> {
+    let mut merged = match inputs {
+        Value::Object(m) => m,
+        _ => serde_json::Map::new(),
+    };
+    if let Value::Object(s) = settings {
+        for (k, v) in s {
+            merged.insert(k, v);
+        }
+    }
+
+    run_plugin_module(code, Value::Object(merged))
+}
+
 pub fn execute_plugin_with_settings(
     plugin_id: &str,
     inputs: Value,
@@ -221,34 +271,5 @@ pub fn execute_plugin_with_settings(
         }
     }
 
-    // Wrapper module code
-    let wrapper_code = format!(
-        r#"
-        import mod from "script://main.ts";
-        export default async () => {{
-            if (typeof mod !== 'function') {{
-                throw new TypeError("The plugin must export a default function");
-            }}
-            const inputs = {};
-            const result = await mod(inputs);
-            return result;
-        }}
-        "#,
-        Value::Object(merged)
-    );
-
-    let wrapper = Module::new("wrapper.js", &wrapper_code);
-    let import_provider = ScriptImportProvider::new(code);
-    let mut runtime = Runtime::new(RuntimeOptions {
-        import_provider: Some(Box::new(import_provider)),
-        ..Default::default()
-    })
-    .expect("Failed to create runtime");
-
-    match runtime.load_module(&wrapper) {
-        Ok(handle) => runtime
-            .call_entrypoint::<Value>(&handle, &())
-            .map_err(|e| e.to_string()),
-        Err(err) => Err(err.to_string()),
-    }
+    run_plugin_module(code, Value::Object(merged))
 }

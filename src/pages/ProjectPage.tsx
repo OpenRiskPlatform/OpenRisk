@@ -79,6 +79,26 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     }, [projectDir, backendClient]);
 
     useEffect(() => {
+        if (!projectDir) {
+            return;
+        }
+
+        const handler = () => {
+            backendClient
+                .loadSettings(projectDir)
+                .then((settings) => setSettingsData(settings))
+                .catch((err) => {
+                    setSettingsError(err instanceof Error ? err.message : String(err));
+                });
+        };
+
+        window.addEventListener("openrisk:plugins-updated", handler);
+        return () => {
+            window.removeEventListener("openrisk:plugins-updated", handler);
+        };
+    }, [projectDir, backendClient]);
+
+    useEffect(() => {
         let cancelled = false;
         if (!projectDir || !selectedScanId) {
             setScanDetail(null);

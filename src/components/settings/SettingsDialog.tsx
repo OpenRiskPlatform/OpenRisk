@@ -101,6 +101,12 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
           : [plugin, ...prev.plugins],
       };
     });
+
+    window.dispatchEvent(
+      new CustomEvent("openrisk:plugins-updated", {
+        detail: { pluginId: plugin.id },
+      })
+    );
   };
 
   return (

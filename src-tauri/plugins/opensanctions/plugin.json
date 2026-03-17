@@ -1,5 +1,6 @@
 {
   "$schema": "../../schemas/plugin-manifest.schema.json",
+  "id": "opensanctions",
   "version": "0.1.0",
   "name": "OpenSanctions by OpenRiskPlatform",
   "description": "Matches a person name against OpenSanctions and returns normalized person entities.",

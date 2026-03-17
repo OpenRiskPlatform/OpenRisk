@@ -5,6 +5,7 @@
     "description": "Schema for OpenRisk plugin manifest (plugin.json)",
     "type": "object",
     "required": [
+        "id",
         "version",
         "name",
         "description",
@@ -13,6 +14,11 @@
         "entrypoint"
     ],
     "properties": {
+        "id": {
+            "type": "string",
+            "description": "Stable plugin identifier used in project database",
+            "pattern": "^[a-z][a-z0-9_-]{1,63}$"
+        },
         "$schema": {
             "type": "string",
             "description": "JSON Schema reference for IDE support"
