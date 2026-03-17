@@ -111,7 +111,7 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl h-[80vh] p-0">
+      <DialogContent className="max-w-4xl h-[80vh] p-0 select-text">
         <div className="flex h-full min-h-0">
           {/* Sidebar */}
           <SettingsSidebar

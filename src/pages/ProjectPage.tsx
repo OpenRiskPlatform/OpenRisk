@@ -63,6 +63,11 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     const [renameDialogOpen, setRenameDialogOpen] = useState(false);
     const [renameProjectValue, setRenameProjectValue] = useState("");
     const [renameProjectSaving, setRenameProjectSaving] = useState(false);
+    const [leftPanelWidth, setLeftPanelWidth] = useState<number>(() => {
+        const stored = Number(localStorage.getItem("openrisk:left-panel-width") ?? "");
+        return Number.isFinite(stored) && stored >= 180 && stored <= 420 ? stored : 240;
+    });
+    const resizingRef = useRef(false);
 
     const selectedScan = useMemo(
         () => scans.find((scan) => scan.id === selectedScanId) ?? null,
@@ -132,6 +137,34 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
             // Keep document title update even if native call fails.
         });
     }, [projectName, projectDir]);
+
+    useEffect(() => {
+        const onMouseMove = (event: MouseEvent) => {
+            if (!resizingRef.current) {
+                return;
+            }
+            const next = Math.max(180, Math.min(420, event.clientX - 16));
+            setLeftPanelWidth(next);
+        };
+
+        const onMouseUp = () => {
+            if (!resizingRef.current) {
+                return;
+            }
+            resizingRef.current = false;
+            localStorage.setItem("openrisk:left-panel-width", String(leftPanelWidth));
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+        };
+
+        window.addEventListener("mousemove", onMouseMove);
+        window.addEventListener("mouseup", onMouseUp);
+
+        return () => {
+            window.removeEventListener("mousemove", onMouseMove);
+            window.removeEventListener("mouseup", onMouseUp);
+        };
+    }, [leftPanelWidth]);
 
     useEffect(() => {
         if (!projectDir) {
@@ -338,7 +371,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
 
     return (
         <MainLayout projectDir={projectDir}>
-            <div className="h-screen w-full overflow-hidden px-4 py-4">
+            <div className="h-screen w-full overflow-hidden select-none">
                 {!projectDir ? (
                     <Card>
                         <CardHeader>
@@ -351,9 +384,14 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                         </CardContent>
                     </Card>
                 ) : (
-                    <div className="grid h-full gap-4 lg:grid-cols-[240px_1fr]">
-                        <aside className="rounded-lg border bg-card overflow-hidden flex flex-col lg:grid lg:grid-cols-[42px_1fr]">
-                            <div className="border-b lg:border-b-0 lg:border-r bg-muted/20 flex items-center justify-between lg:flex-col lg:items-center gap-2 px-2 py-2">
+                    <div
+                        className="flex h-full flex-col lg:flex-row gap-0"
+                        style={{ ["--left-panel-width" as string]: `${leftPanelWidth}px` }}
+                    >
+                        <aside
+                            className="bg-card/70 overflow-hidden flex flex-col lg:grid lg:grid-cols-[42px_1fr] shrink-0 border-b lg:border-b-0 lg:border-r w-full lg:w-[var(--left-panel-width)] h-[46vh] lg:h-auto"
+                        >
+                            <div className="lg:border-r bg-muted/10 flex items-center justify-between lg:flex-col lg:items-center gap-2 px-2 py-2">
                                 <div className="flex items-center gap-2 lg:flex-col">
                                     <Button size="icon" variant="ghost" onClick={createScan} disabled={creatingScan} title="New scan">
                                         <Plus className="h-4 w-4" />
@@ -392,7 +430,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                                 </DropdownMenu>
                             </div>
 
-                            <div className="flex flex-col min-h-0 p-2 gap-2">
+                            <div className="flex flex-col min-h-0 p-2 gap-2 bg-card/80">
                                 <p className="text-sm font-semibold px-1">Queries</p>
                                 <Input
                                     ref={searchInputRef}
@@ -404,12 +442,12 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
 
                                 {scansError ? <p className="text-xs text-red-600 px-1">{scansError}</p> : null}
 
-                                <div className="min-h-0 flex-1 overflow-y-auto space-y-1">
+                                <div className="min-h-0 flex-1 overflow-y-auto space-y-0.5">
                                     {filteredScans.map((scan) => (
                                         <button
                                             key={scan.id}
                                             type="button"
-                                            className={`w-full text-left rounded-md border px-2.5 py-2 transition ${selectedScanId === scan.id ? "border-primary bg-primary/5" : "hover:bg-muted/30"
+                                            className={`w-full text-left rounded px-2.5 py-2 transition ${selectedScanId === scan.id ? "bg-primary/10" : "hover:bg-muted/30"
                                                 }`}
                                             onClick={() => {
                                                 if (selectedScanId === scan.id) {
@@ -455,7 +493,19 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                             </div>
                         </aside>
 
-                        <section className="rounded-lg border bg-card p-3 overflow-y-auto">
+                        <div className="block lg:hidden h-2 bg-border/90" />
+
+                        <div
+                            className="hidden lg:block w-1 bg-border/70 hover:bg-primary/40 cursor-col-resize"
+                            onMouseDown={() => {
+                                resizingRef.current = true;
+                                document.body.style.cursor = "col-resize";
+                                document.body.style.userSelect = "none";
+                            }}
+                            title="Resize panel"
+                        />
+
+                        <section className="bg-card p-2 overflow-y-auto flex-1 min-w-0">
                             {settingsError ? <p className="text-sm text-red-600">{settingsError}</p> : null}
                             {detailError ? <p className="text-sm text-red-600">{detailError}</p> : null}
 
@@ -465,7 +515,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                                 <div className="space-y-4">
                                     {scanDetail.status === "Draft" ? (
                                         <>
-                                            <div className="space-y-3">
+                                            <div className="space-y-2">
                                                 {(settingsData?.plugins ?? []).map((plugin) => (
                                                     <PluginRunCard
                                                         key={plugin.id}
@@ -478,8 +528,8 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                                                 ))}
                                             </div>
 
-                                            <div className="pt-2">
-                                                <Button onClick={runScan} disabled={running} className="w-full max-w-md">
+                                            <div className="pt-2 flex justify-center">
+                                                <Button onClick={runScan} disabled={running} className="w-full max-w-sm mx-auto">
                                                     {running ? "Running..." : "Run"}
                                                 </Button>
                                             </div>
@@ -491,18 +541,18 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                                     ) : null}
 
                                     {scanDetail.status === "Completed" && scanDetail.results.length > 0 ? (
-                                        <div className="space-y-4">
+                                        <div className="space-y-3 select-text">
                                             {scanDetail.results.map((result) => (
-                                                <Card key={result.pluginId}>
-                                                    <CardHeader>
-                                                        <CardTitle className="text-lg">
+                                                <div key={result.pluginId} className="rounded-lg bg-muted/10 p-3">
+                                                    <div className="mb-2">
+                                                        <h3 className="text-lg font-semibold">
                                                             {pluginNameById[result.pluginId] ?? result.pluginId}
-                                                        </CardTitle>
+                                                        </h3>
                                                         <p className="text-xs text-muted-foreground">
                                                             {result.pluginId}
                                                         </p>
-                                                    </CardHeader>
-                                                    <CardContent>
+                                                    </div>
+                                                    <div>
                                                         {isDataModelResult(result.output) ? (
                                                             <PluginResultView entities={result.output} />
                                                         ) : (
@@ -510,8 +560,8 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                                                                 {JSON.stringify(result.output, null, 2)}
                                                             </pre>
                                                         )}
-                                                    </CardContent>
-                                                </Card>
+                                                    </div>
+                                                </div>
                                             ))}
                                         </div>
                                     ) : null}
@@ -586,19 +636,17 @@ function PluginRunCard({
         : [];
 
     return (
-        <Card>
-            <CardHeader className="py-3">
-                <div className="flex items-center justify-between gap-3">
-                    <div>
-                        <CardTitle className="text-sm">{plugin.name}</CardTitle>
-                        <p className="text-xs text-muted-foreground">{plugin.id}</p>
-                    </div>
-                    <Switch checked={enabled} onCheckedChange={onEnabledChange} />
+        <div className="rounded-lg border bg-card p-3">
+            <div className="flex items-center justify-between gap-3 mb-2">
+                <div>
+                    <p className="text-sm font-semibold">{plugin.name}</p>
+                    <p className="text-xs text-muted-foreground">{plugin.id}</p>
                 </div>
-            </CardHeader>
+                <Switch checked={enabled} onCheckedChange={onEnabledChange} />
+            </div>
 
             {enabled ? (
-                <CardContent className="space-y-3">
+                <div className="space-y-3 pt-1">
                     {inputSchema.length === 0 ? (
                         <p className="text-sm text-muted-foreground">This plugin does not require inputs.</p>
                     ) : (
@@ -629,9 +677,9 @@ function PluginRunCard({
                             );
                         })
                     )}
-                </CardContent>
+                </div>
             ) : null}
-        </Card>
+        </div>
     );
 }
 
