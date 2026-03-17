@@ -35,11 +35,18 @@ pub fn configure_plugin(plugin_id: String, settings_json: String) -> Result<(), 
 pub fn execute_plugin(
     plugin_id: String,
     inputs_json: String,
-    _settings_json: Option<String>,
+    settings_json: Option<String>,
 ) -> Result<String, String> {
     let inputs: Value =
         serde_json::from_str(&inputs_json).map_err(|e| format!("Invalid inputs JSON: {}", e))?;
-    let result = app::execute_plugin(&plugin_id, inputs)?;
+    let settings_override = match settings_json {
+        Some(raw) => {
+            Some(serde_json::from_str(&raw).map_err(|e| format!("Invalid settings JSON: {}", e))?)
+        }
+        None => None,
+    };
+
+    let result = app::execute_plugin_with_settings(&plugin_id, inputs, settings_override)?;
     serde_json::to_string(&result).map_err(|e| e.to_string())
 }
 
@@ -92,4 +99,100 @@ pub async fn update_project_settings(
 
     let settings = app_project::update_project_settings(dir, theme).await?;
     serde_json::to_string(&settings).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn update_project_plugin_settings(
+    dir_path: String,
+    plugin_id: String,
+    settings_json: String,
+) -> Result<String, String> {
+    let dir = std::path::PathBuf::from(dir_path);
+    if !dir.exists() || !dir.is_dir() {
+        return Err(format!("Project directory does not exist: {:?}", dir));
+    }
+
+    let settings: Value = serde_json::from_str(&settings_json)
+        .map_err(|e| format!("Invalid settings JSON: {}", e))?;
+
+    let payload = app_project::update_project_plugin_settings(dir, plugin_id, settings).await?;
+    serde_json::to_string(&payload).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn create_scan(dir_path: String, preview: Option<String>) -> Result<String, String> {
+    let dir = std::path::PathBuf::from(dir_path);
+    if !dir.exists() || !dir.is_dir() {
+        return Err(format!("Project directory does not exist: {:?}", dir));
+    }
+
+    let scan = app_project::create_scan(dir, preview).await?;
+    serde_json::to_string(&scan).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_scans(dir_path: String) -> Result<String, String> {
+    let dir = std::path::PathBuf::from(dir_path);
+    if !dir.exists() || !dir.is_dir() {
+        return Err(format!("Project directory does not exist: {:?}", dir));
+    }
+
+    let scans = app_project::list_scans(dir).await?;
+    serde_json::to_string(&scans).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_scan(dir_path: String, scan_id: String) -> Result<String, String> {
+    let dir = std::path::PathBuf::from(dir_path);
+    if !dir.exists() || !dir.is_dir() {
+        return Err(format!("Project directory does not exist: {:?}", dir));
+    }
+
+    let scan = app_project::get_scan(dir, scan_id).await?;
+    serde_json::to_string(&scan).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn run_scan(
+    dir_path: String,
+    scan_id: String,
+    selected_plugins_json: String,
+    inputs_json: String,
+) -> Result<String, String> {
+    let dir = std::path::PathBuf::from(dir_path);
+    if !dir.exists() || !dir.is_dir() {
+        return Err(format!("Project directory does not exist: {:?}", dir));
+    }
+
+    let selected_plugins: Vec<String> = serde_json::from_str(&selected_plugins_json)
+        .map_err(|e| format!("Invalid selected plugins JSON: {}", e))?;
+    let inputs: Value =
+        serde_json::from_str(&inputs_json).map_err(|e| format!("Invalid inputs JSON: {}", e))?;
+
+    let scan = app_project::run_scan(dir, scan_id, selected_plugins, inputs).await?;
+    serde_json::to_string(&scan).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn upsert_project_plugin_from_dir(
+    dir_path: String,
+    plugin_dir: String,
+    replace_plugin_id: Option<String>,
+) -> Result<String, String> {
+    let dir = std::path::PathBuf::from(dir_path);
+    if !dir.exists() || !dir.is_dir() {
+        return Err(format!("Project directory does not exist: {:?}", dir));
+    }
+
+    let plugin_path = std::path::PathBuf::from(plugin_dir);
+    if !plugin_path.exists() || !plugin_path.is_dir() {
+        return Err(format!(
+            "Plugin directory does not exist: {:?}",
+            plugin_path
+        ));
+    }
+
+    let payload =
+        app_project::upsert_project_plugin_from_dir(dir, plugin_path, replace_plugin_id).await?;
+    serde_json::to_string(&payload).map_err(|e| e.to_string())
 }

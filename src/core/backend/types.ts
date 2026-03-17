@@ -74,6 +74,26 @@ export interface ProjectSettingsPayload {
   plugins: PluginSettingsDescriptor[];
 }
 
+export interface ScanSummary {
+  id: string;
+  status: "Draft" | "Running" | "Completed" | "Failed" | "Finished";
+  preview?: string | null;
+}
+
+export interface ScanPluginResult {
+  pluginId: string;
+  output: unknown;
+}
+
+export interface ScanDetail {
+  id: string;
+  status: "Draft" | "Running" | "Completed" | "Failed" | "Finished";
+  preview?: string | null;
+  selectedPlugins: string[];
+  inputs: Record<string, unknown>;
+  results: ScanPluginResult[];
+}
+
 /**
  * Abstract base class for backend communication
  * Implementations: MockBackendClient, TauriBackendClient, HttpBackendClient
@@ -128,4 +148,50 @@ export abstract class BackendClient {
     directory: string,
     patch: { theme?: "light" | "dark" | "system" }
   ): Promise<ProjectSettingsRecord>;
+
+  /**
+   * Update plugin settings persisted in current project database
+   */
+  abstract updateProjectPluginSettings(
+    directory: string,
+    pluginId: string,
+    settings: Record<string, unknown>
+  ): Promise<PluginSettingsDescriptor>;
+
+  /**
+   * Create a draft scan in the project
+   */
+  abstract createScan(
+    directory: string,
+    preview?: string
+  ): Promise<ScanSummary>;
+
+  /**
+   * Load all scans for the project
+   */
+  abstract listScans(directory: string): Promise<ScanSummary[]>;
+
+  /**
+   * Load full scan details including selected plugins and results
+   */
+  abstract getScan(directory: string, scanId: string): Promise<ScanDetail>;
+
+  /**
+   * Run a draft scan with selected plugins and plugin-specific inputs
+   */
+  abstract runScan(
+    directory: string,
+    scanId: string,
+    selectedPlugins: string[],
+    inputs: Record<string, unknown>
+  ): Promise<ScanSummary>;
+
+  /**
+   * Add a new plugin to project or replace an existing one from folder.
+   */
+  abstract upsertProjectPluginFromDir(
+    directory: string,
+    pluginDir: string,
+    replacePluginId?: string
+  ): Promise<PluginSettingsDescriptor>;
 }

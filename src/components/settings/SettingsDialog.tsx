@@ -7,11 +7,12 @@ import { useEffect, useState } from "react";
 import { SettingsSidebar } from "./SettingsSidebar";
 import { GeneralSettings } from "./GeneralSettings";
 import { PluginSettings } from "./PluginSettings";
+import { InfoSettings } from "./InfoSettings";
 import { useBackendClient } from "@/hooks/useBackendClient";
 import type { ProjectSettingsPayload } from "@/core/backend/types";
 import { useSettings } from "@/core/settings/SettingsContext";
 
-export type SettingsCategory = "general" | "plugins";
+export type SettingsCategory = "info" | "general" | "plugins";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -21,7 +22,7 @@ interface SettingsDialogProps {
 
 export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialogProps) {
   const [activeCategory, setActiveCategory] =
-    useState<SettingsCategory>("general");
+    useState<SettingsCategory>("info");
   const backendClient = useBackendClient();
   const { updateGlobalSettings } = useSettings();
   const [settingsData, setSettingsData] = useState<ProjectSettingsPayload | null>(
@@ -85,6 +86,23 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
     });
   };
 
+  const handlePluginUpdated = (plugin: ProjectSettingsPayload["plugins"][number]) => {
+    setSettingsData((prev) => {
+      if (!prev) {
+        return prev;
+      }
+
+      const exists = prev.plugins.some((item) => item.id === plugin.id);
+
+      return {
+        ...prev,
+        plugins: exists
+          ? prev.plugins.map((item) => (item.id === plugin.id ? plugin : item))
+          : [plugin, ...prev.plugins],
+      };
+    });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl h-[80vh] p-0">
@@ -97,6 +115,12 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
 
           {/* Content Area */}
           <div className="flex-1 flex flex-col min-h-0 p-6">
+            {activeCategory === "info" && (
+              <InfoSettings
+                projectDir={projectDir}
+                project={settingsData?.project ?? null}
+              />
+            )}
             {activeCategory === "general" && (
               <GeneralSettings
                 projectDir={projectDir}
@@ -121,6 +145,7 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
                     ? settingsError
                     : "Open or create a project to view plugin settings."
                 }
+                onPluginUpdated={handlePluginUpdated}
               />
             )}
           </div>

@@ -8,7 +8,10 @@ import { BackendClient } from "./types";
 import type {
   BackendEvent,
   PluginExecutionResponse,
+  ScanDetail,
+  ScanSummary,
   PluginStatusResponse,
+  PluginSettingsDescriptor,
   ProjectSettingsRecord,
   ProjectSummary,
   ProjectSettingsPayload,
@@ -126,6 +129,104 @@ export class TauriBackendClient extends BackendClient {
       console.error("[TauriBackendClient] updateProjectSettings error:", error);
       throw new Error(
         error?.message ?? error?.toString() ?? "Failed to update project settings"
+      );
+    }
+  }
+
+  async updateProjectPluginSettings(
+    directory: string,
+    pluginId: string,
+    settings: Record<string, unknown>
+  ): Promise<PluginSettingsDescriptor> {
+    try {
+      const result = await invoke<string>("update_project_plugin_settings", {
+        dirPath: directory,
+        pluginId,
+        settingsJson: JSON.stringify(settings),
+      });
+      return JSON.parse(result) as PluginSettingsDescriptor;
+    } catch (error: any) {
+      console.error("[TauriBackendClient] updateProjectPluginSettings error:", error);
+      throw new Error(
+        error?.message ?? error?.toString() ?? "Failed to update plugin settings"
+      );
+    }
+  }
+
+  async createScan(directory: string, preview?: string): Promise<ScanSummary> {
+    try {
+      const result = await invoke<string>("create_scan", {
+        dirPath: directory,
+        preview,
+      });
+      return JSON.parse(result) as ScanSummary;
+    } catch (error: any) {
+      console.error("[TauriBackendClient] createScan error:", error);
+      throw new Error(error?.message ?? error?.toString() ?? "Failed to create scan");
+    }
+  }
+
+  async listScans(directory: string): Promise<ScanSummary[]> {
+    try {
+      const result = await invoke<string>("list_scans", {
+        dirPath: directory,
+      });
+      return JSON.parse(result) as ScanSummary[];
+    } catch (error: any) {
+      console.error("[TauriBackendClient] listScans error:", error);
+      throw new Error(error?.message ?? error?.toString() ?? "Failed to list scans");
+    }
+  }
+
+  async getScan(directory: string, scanId: string): Promise<ScanDetail> {
+    try {
+      const result = await invoke<string>("get_scan", {
+        dirPath: directory,
+        scanId,
+      });
+      return JSON.parse(result) as ScanDetail;
+    } catch (error: any) {
+      console.error("[TauriBackendClient] getScan error:", error);
+      throw new Error(error?.message ?? error?.toString() ?? "Failed to get scan");
+    }
+  }
+
+  async runScan(
+    directory: string,
+    scanId: string,
+    selectedPlugins: string[],
+    inputs: Record<string, unknown>
+  ): Promise<ScanSummary> {
+    try {
+      const result = await invoke<string>("run_scan", {
+        dirPath: directory,
+        scanId,
+        selectedPluginsJson: JSON.stringify(selectedPlugins),
+        inputsJson: JSON.stringify(inputs),
+      });
+      return JSON.parse(result) as ScanSummary;
+    } catch (error: any) {
+      console.error("[TauriBackendClient] runScan error:", error);
+      throw new Error(error?.message ?? error?.toString() ?? "Failed to run scan");
+    }
+  }
+
+  async upsertProjectPluginFromDir(
+    directory: string,
+    pluginDir: string,
+    replacePluginId?: string
+  ): Promise<PluginSettingsDescriptor> {
+    try {
+      const result = await invoke<string>("upsert_project_plugin_from_dir", {
+        dirPath: directory,
+        pluginDir,
+        replacePluginId,
+      });
+      return JSON.parse(result) as PluginSettingsDescriptor;
+    } catch (error: any) {
+      console.error("[TauriBackendClient] upsertProjectPluginFromDir error:", error);
+      throw new Error(
+        error?.message ?? error?.toString() ?? "Failed to load plugin from folder"
       );
     }
   }

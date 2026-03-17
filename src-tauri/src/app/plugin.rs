@@ -5,7 +5,7 @@ use rustyscript::{
     Module, Runtime, RuntimeOptions,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -193,10 +193,18 @@ impl ImportProvider for ScriptImportProvider {
     }
 }
 
-pub fn execute_plugin(plugin_id: &str, inputs: Value) -> Result<Value, String> {
+pub fn execute_plugin_with_settings(
+    plugin_id: &str,
+    inputs: Value,
+    settings_override: Option<Value>,
+) -> Result<Value, String> {
     let dir = plugin_dir(plugin_id)?;
     let manifest = read_manifest(&dir)?;
-    let settings = read_settings(&dir, &manifest)?;
+    let settings = match settings_override {
+        Some(value) if value.is_object() => value,
+        Some(_) => return Err("Plugin settings must be a JSON object".to_string()),
+        None => read_settings(&dir, &manifest)?,
+    };
 
     let entry = manifest.entrypoint.to_string();
     let code_path = dir.join(entry);

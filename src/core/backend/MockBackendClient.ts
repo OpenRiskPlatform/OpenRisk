@@ -7,15 +7,19 @@ import { BackendClient, PluginStatus } from "./types";
 import type {
   BackendEvent,
   PluginExecutionResponse,
+  ScanDetail,
+  ScanSummary,
   PluginStatusResponse,
   ProjectSettingsPayload,
   ProjectSettingsRecord,
+  PluginSettingsDescriptor,
   ProjectSummary,
 } from "./types";
 
 export class MockBackendClient extends BackendClient {
   private eventCallbacks: Array<(event: BackendEvent) => void> = [];
   private pluginStatuses: Map<string, PluginStatus> = new Map();
+  private scans: ScanSummary[] = [];
 
   executePlugin(
     pluginId: string,
@@ -137,6 +141,81 @@ export class MockBackendClient extends BackendClient {
       description: "Mock settings",
       locale: "en-US",
       theme: patch.theme ?? "system",
+    };
+  }
+
+  async updateProjectPluginSettings(
+    _directory: string,
+    pluginId: string,
+    settings: Record<string, unknown>
+  ): Promise<PluginSettingsDescriptor> {
+    return {
+      id: pluginId,
+      name: "Mock Plugin",
+      version: "0.1.0",
+      manifest: {},
+      inputSchema: null,
+      settingsSchema: [],
+      settings,
+    };
+  }
+
+  async createScan(_directory: string, preview?: string): Promise<ScanSummary> {
+    const scan: ScanSummary = {
+      id: `mock-scan-${Date.now()}`,
+      status: "Draft",
+      preview: preview ?? null,
+    };
+    this.scans.unshift(scan);
+    return scan;
+  }
+
+  async listScans(_directory: string): Promise<ScanSummary[]> {
+    return [...this.scans];
+  }
+
+  async getScan(_directory: string, scanId: string): Promise<ScanDetail> {
+    const item = this.scans.find((scan) => scan.id === scanId);
+    return {
+      id: scanId,
+      status: item?.status ?? "Draft",
+      preview: item?.preview ?? null,
+      selectedPlugins: [],
+      inputs: {},
+      results: [],
+    };
+  }
+
+  async runScan(
+    _directory: string,
+    scanId: string,
+    _selectedPlugins: string[],
+    _inputs: Record<string, unknown>
+  ): Promise<ScanSummary> {
+    this.scans = this.scans.map((scan) =>
+      scan.id === scanId ? { ...scan, status: "Completed" } : scan
+    );
+    return this.scans.find((scan) => scan.id === scanId) ?? {
+      id: scanId,
+      status: "Completed",
+      preview: null,
+    };
+  }
+
+  async upsertProjectPluginFromDir(
+    _directory: string,
+    pluginDir: string,
+    replacePluginId?: string
+  ): Promise<PluginSettingsDescriptor> {
+    const id = replacePluginId || pluginDir.split(/[\\/]/).pop() || "plugin";
+    return {
+      id,
+      name: id,
+      version: "0.1.0",
+      manifest: {},
+      inputSchema: [],
+      settingsSchema: [],
+      settings: {},
     };
   }
 

@@ -5,9 +5,9 @@
 import { type ReactNode, useState } from "react";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Settings } from "lucide-react";
+import { ChevronLeft, ChevronRight, Settings } from "lucide-react";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
-import { Link } from "@tanstack/react-router";
+import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useBackendClient } from "@/hooks/useBackendClient";
 import { useSettings } from "@/core/settings/SettingsContext";
 
@@ -20,6 +20,8 @@ export function MainLayout({ children, projectDir }: MainLayoutProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const backendClient = useBackendClient();
   const { updateGlobalSettings } = useSettings();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     let cancelled = false;
@@ -48,12 +50,9 @@ export function MainLayout({ children, projectDir }: MainLayoutProps) {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Header */}
-      <header className="border-b">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link
-            to="/"
-            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-          >
+      <header className="border-b bg-card/90 backdrop-blur">
+        <div className="container mx-auto px-4 h-16 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+          <div className="flex items-center gap-3 justify-self-start">
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
               <svg
                 className="w-5 h-5 text-primary"
@@ -70,12 +69,36 @@ export function MainLayout({ children, projectDir }: MainLayoutProps) {
               </svg>
             </div>
             <span className="font-semibold text-lg">OpenRisk</span>
-          </Link>
+          </div>
+
+          <div className="flex items-center gap-2 justify-self-center">
+            <Button variant="ghost" size="icon" onClick={() => window.history.back()}>
+              <ChevronLeft className="h-4 w-4" />
+              <span className="sr-only">Back</span>
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => window.history.forward()}>
+              <ChevronRight className="h-4 w-4" />
+              <span className="sr-only">Forward</span>
+            </Button>
+
+            {projectDir ? (
+              <>
+                <Button
+                  variant={location.pathname === "/project" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => navigate({ to: "/project", search: { dir: projectDir } })}
+                >
+                  Project
+                </Button>
+              </>
+            ) : null}
+          </div>
 
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setSettingsOpen(true)}
+            className="justify-self-end"
           >
             <Settings className="h-5 w-5" />
             <span className="sr-only">Settings</span>

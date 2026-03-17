@@ -27,6 +27,8 @@ import { Loader2 } from "lucide-react";
 
 import { usePlugins } from "@/hooks/usePlugins";
 import { InstalledPlugin } from "@/core/plugin-system/types";
+import { PluginResultView } from "@/components/data-model/PluginResultView";
+import { isDataModelResult, type DataModelResult } from "@/core/data-model/types";
 
 interface OpenSanctionsEntity {
   id: string;
@@ -59,7 +61,7 @@ export function ReportPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<PluginResult | null>(null);
+  const [result, setResult] = useState<unknown>(null);
   const [viewMode, setViewMode] = useState<"table" | "json" | "logs">(
     "table"
   );
@@ -91,7 +93,7 @@ export function ReportPage() {
       );
 
       if (response.success) {
-        setResult(response.data as PluginResult);
+        setResult(response.data);
       } else {
         setError(response.error || "Plugin execution failed");
       }
@@ -120,9 +122,8 @@ export function ReportPage() {
               {installedPlugins.map((plugin: InstalledPlugin) => (
                 <Card
                   key={plugin.name}
-                  className={`border shadow-sm cursor-pointer transition ${
-                    selectedPlugin === plugin.id ? "ring-2 ring-primary" : ""
-                  }`}
+                  className={`border shadow-sm cursor-pointer transition ${selectedPlugin === plugin.id ? "ring-2 ring-primary" : ""
+                    }`}
                   onClick={() => setSelectedPlugin(plugin.id)}
                 >
                   <CardHeader>
@@ -214,18 +215,35 @@ export function ReportPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle>Results</CardTitle>
-                  <CardDescription>
-                    Found {result.total?.value || 0} matches for "{result.query}"
-                  </CardDescription>
+                  {isDataModelResult(result) ? (
+                    <CardDescription>
+                      DataModel entities: {result.length}
+                    </CardDescription>
+                  ) : (
+                    <CardDescription>
+                      Found {(result as PluginResult).total?.value || 0} matches for "
+                      {(result as PluginResult).query}"
+                    </CardDescription>
+                  )}
                 </div>
                 <div className="flex gap-2">
-                  <Button
-                    variant={viewMode === "table" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setViewMode("table")}
-                  >
-                    Table View
-                  </Button>
+                  {isDataModelResult(result) ? (
+                    <Button
+                      variant={viewMode === "table" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setViewMode("table")}
+                    >
+                      Model View
+                    </Button>
+                  ) : (
+                    <Button
+                      variant={viewMode === "table" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setViewMode("table")}
+                    >
+                      Table View
+                    </Button>
+                  )}
                   <Button
                     variant={viewMode === "json" ? "default" : "outline"}
                     size="sm"
@@ -233,25 +251,31 @@ export function ReportPage() {
                   >
                     JSON View
                   </Button>
-                  {result.logs && result.logs.length > 0 && (
-                    <Button
-                      variant={viewMode === "logs" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setViewMode("logs")}
-                    >
-                      Logs ({result.logs.length})
-                    </Button>
-                  )}
+                  {!isDataModelResult(result) &&
+                    (result as PluginResult).logs &&
+                    (result as PluginResult).logs!.length > 0 && (
+                      <Button
+                        variant={viewMode === "logs" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setViewMode("logs")}
+                      >
+                        Logs ({(result as PluginResult).logs!.length})
+                      </Button>
+                    )}
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               {viewMode === "table" ? (
-                <EntityTable entities={result.results || []} />
+                isDataModelResult(result) ? (
+                  <PluginResultView entities={result as DataModelResult} />
+                ) : (
+                  <EntityTable entities={(result as PluginResult).results || []} />
+                )
               ) : viewMode === "logs" ? (
                 <div className="bg-muted p-4 rounded-lg overflow-auto max-h-[600px]">
                   <div className="space-y-1 font-mono text-xs">
-                    {result.logs?.map((log, i) => (
+                    {(result as PluginResult).logs?.map((log, i) => (
                       <div key={i} className="text-foreground">
                         {log}
                       </div>
