@@ -7,7 +7,6 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Settings } from "lucide-react";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
-import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useBackendClient } from "@/hooks/useBackendClient";
 import { useSettings } from "@/core/settings/SettingsContext";
 
@@ -20,8 +19,6 @@ export function MainLayout({ children, projectDir }: MainLayoutProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const backendClient = useBackendClient();
   const { updateGlobalSettings } = useSettings();
-  const navigate = useNavigate();
-  const location = useLocation();
 
   useEffect(() => {
     let cancelled = false;
@@ -80,8 +77,6 @@ export function MainLayout({ children, projectDir }: MainLayoutProps) {
               <ChevronRight className="h-4 w-4" />
               <span className="sr-only">Forward</span>
             </Button>
-
-            {projectDir ? null : null}
           </div>
 
           <Button
