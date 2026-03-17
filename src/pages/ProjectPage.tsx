@@ -1,10 +1,27 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { FileText, Plus, Search, Settings } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useBackendClient } from "@/hooks/useBackendClient";
 import type {
     PluginSettingsDescriptor,
@@ -21,6 +38,7 @@ interface ProjectPageProps {
 
 export function ProjectPage({ projectDir }: ProjectPageProps) {
     const backendClient = useBackendClient();
+    const navigate = useNavigate();
 
     const [settingsData, setSettingsData] = useState<ProjectSettingsPayload | null>(null);
     const [settingsError, setSettingsError] = useState<string | null>(null);
@@ -32,17 +50,35 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     const [scanDetail, setScanDetail] = useState<ScanDetail | null>(null);
     const [detailError, setDetailError] = useState<string | null>(null);
 
-    const [previewDraft, setPreviewDraft] = useState("");
+    const [querySearch, setQuerySearch] = useState("");
     const [creatingScan, setCreatingScan] = useState(false);
     const [running, setRunning] = useState(false);
+    const [renamingScanId, setRenamingScanId] = useState<string | null>(null);
+    const [renamingValue, setRenamingValue] = useState("");
 
     const [enabledPlugins, setEnabledPlugins] = useState<Record<string, boolean>>({});
     const [pluginInputs, setPluginInputs] = useState<Record<string, Record<string, unknown>>>({});
+    const searchInputRef = useRef<HTMLInputElement | null>(null);
+    const [projectName, setProjectName] = useState("");
+    const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+    const [renameProjectValue, setRenameProjectValue] = useState("");
+    const [renameProjectSaving, setRenameProjectSaving] = useState(false);
 
     const selectedScan = useMemo(
         () => scans.find((scan) => scan.id === selectedScanId) ?? null,
         [scans, selectedScanId]
     );
+
+    const filteredScans = useMemo(() => {
+        const q = querySearch.trim().toLowerCase();
+        if (!q) {
+            return scans;
+        }
+        return scans.filter((scan) => {
+            const name = (scan.preview ?? "").toLowerCase();
+            return name.includes(q) || scan.id.toLowerCase().includes(q);
+        });
+    }, [scans, querySearch]);
 
     const pluginNameById = useMemo(() => {
         const map: Record<string, string> = {};
@@ -67,6 +103,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                     return;
                 }
                 setSettingsData(settings);
+                setProjectName(settings.project?.name ?? "");
                 setScans(scansList);
                 setSelectedScanId((prev) => prev ?? scansList[0]?.id ?? null);
                 setSettingsError(null);
@@ -85,6 +122,16 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
             cancelled = true;
         };
     }, [projectDir, backendClient]);
+
+    useEffect(() => {
+        const fallback = projectDir?.split(/[\\/]/).filter(Boolean).pop() || "Project";
+        const titleName = projectName.trim() || fallback;
+        const title = `OpenRisk - ${titleName}`;
+        document.title = title;
+        getCurrentWindow().setTitle(title).catch(() => {
+            // Keep document title update even if native call fails.
+        });
+    }, [projectName, projectDir]);
 
     useEffect(() => {
         if (!projectDir) {
@@ -155,14 +202,41 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
         setCreatingScan(true);
         setScansError(null);
         try {
-            const created = await backendClient.createScan(projectDir, previewDraft.trim() || undefined);
+            const created = await backendClient.createScan(projectDir);
             setScans((prev) => [created, ...prev]);
             setSelectedScanId(created.id);
-            setPreviewDraft("");
         } catch (err) {
             setScansError(err instanceof Error ? err.message : String(err));
         } finally {
             setCreatingScan(false);
+        }
+    };
+
+    const startRename = (scan: ScanSummary) => {
+        setRenamingScanId(scan.id);
+        setRenamingValue(scan.preview?.trim() || `New Scan ${scan.id.slice(0, 8)}`);
+    };
+
+    const commitRename = async () => {
+        if (!projectDir || !renamingScanId) {
+            return;
+        }
+
+        const value = renamingValue.trim();
+        if (!value) {
+            setRenamingScanId(null);
+            return;
+        }
+
+        try {
+            const updated = await backendClient.updateScanPreview(projectDir, renamingScanId, value);
+            setScans((prev) =>
+                prev.map((scan) => (scan.id === updated.id ? { ...scan, preview: updated.preview } : scan))
+            );
+        } catch (err) {
+            setScansError(err instanceof Error ? err.message : String(err));
+        } finally {
+            setRenamingScanId(null);
         }
     };
 
@@ -220,9 +294,51 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
         }
     };
 
+    const openRenameDialog = () => {
+        setRenameProjectValue(projectName || "");
+        setRenameDialogOpen(true);
+    };
+
+    const renameProject = async () => {
+        if (!projectDir) {
+            return;
+        }
+        const nextName = renameProjectValue.trim();
+        if (!nextName) {
+            setSettingsError("Project name must not be empty");
+            return;
+        }
+
+        setRenameProjectSaving(true);
+        try {
+            const updated = await backendClient.updateProjectName(projectDir, nextName);
+            setProjectName(updated.name);
+            setSettingsData((prev) =>
+                prev
+                    ? {
+                        ...prev,
+                        project: {
+                            ...prev.project,
+                            name: updated.name,
+                        },
+                    }
+                    : prev
+            );
+            setRenameDialogOpen(false);
+        } catch (err) {
+            setSettingsError(err instanceof Error ? err.message : String(err));
+        } finally {
+            setRenameProjectSaving(false);
+        }
+    };
+
+    const goBack = async () => {
+        await navigate({ to: "/", search: { mode: undefined } });
+    };
+
     return (
         <MainLayout projectDir={projectDir}>
-            <div className="h-[calc(100vh-64px)] w-full overflow-hidden px-4 py-4">
+            <div className="h-screen w-full overflow-hidden px-4 py-4">
                 {!projectDir ? (
                     <Card>
                         <CardHeader>
@@ -236,41 +352,106 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                     </Card>
                 ) : (
                     <div className="grid h-full gap-4 lg:grid-cols-[240px_1fr]">
-                        <aside className="rounded-lg border bg-card p-3 flex flex-col gap-3">
-                            <div className="space-y-2">
-                                <p className="text-sm font-semibold">Queries</p>
-                                <Input
-                                    placeholder="New query name (optional)"
-                                    value={previewDraft}
-                                    onChange={(e) => setPreviewDraft(e.target.value)}
-                                />
-                                <Button onClick={createScan} disabled={creatingScan} className="w-full">
-                                    {creatingScan ? "Creating..." : "Create Scan"}
-                                </Button>
+                        <aside className="rounded-lg border bg-card overflow-hidden flex flex-col lg:grid lg:grid-cols-[42px_1fr]">
+                            <div className="border-b lg:border-b-0 lg:border-r bg-muted/20 flex items-center justify-between lg:flex-col lg:items-center gap-2 px-2 py-2">
+                                <div className="flex items-center gap-2 lg:flex-col">
+                                    <Button size="icon" variant="ghost" onClick={createScan} disabled={creatingScan} title="New scan">
+                                        <Plus className="h-4 w-4" />
+                                    </Button>
+                                    <Button size="icon" variant="ghost" onClick={() => setSelectedScanId(scans[0]?.id ?? null)} title="Queries">
+                                        <FileText className="h-4 w-4" />
+                                    </Button>
+                                    <Button size="icon" variant="ghost" onClick={() => searchInputRef.current?.focus()} title="Search">
+                                        <Search className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            className="lg:mt-auto"
+                                            title="Settings"
+                                        >
+                                            <Settings className="h-4 w-4" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent side="right" align="end">
+                                        <DropdownMenuItem
+                                            onClick={() =>
+                                                window.dispatchEvent(new CustomEvent("openrisk:open-settings"))
+                                            }
+                                        >
+                                            Open Settings
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={openRenameDialog}>
+                                            Rename Project
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => void goBack()}>Back</DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </div>
 
-                            {scansError ? <p className="text-sm text-red-600">{scansError}</p> : null}
+                            <div className="flex flex-col min-h-0 p-2 gap-2">
+                                <p className="text-sm font-semibold px-1">Queries</p>
+                                <Input
+                                    ref={searchInputRef}
+                                    placeholder="Type to search..."
+                                    value={querySearch}
+                                    onChange={(e) => setQuerySearch(e.target.value)}
+                                    className="h-9"
+                                />
 
-                            <div className="min-h-0 flex-1 overflow-y-auto space-y-2 pr-1">
-                                {scans.map((scan) => (
-                                    <button
-                                        key={scan.id}
-                                        type="button"
-                                        className={`w-full text-left rounded-md border px-3 py-2 transition ${selectedScanId === scan.id ? "border-primary bg-primary/5" : "hover:bg-muted/30"
-                                            }`}
-                                        onClick={() => setSelectedScanId(scan.id)}
-                                    >
-                                        <p className="text-sm font-medium truncate">
-                                            {scan.preview?.trim() || `Query ${scan.id.slice(0, 8)}`}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground mt-1">
-                                            {scan.status === "Draft" ? "New" : scan.status}
-                                        </p>
-                                    </button>
-                                ))}
-                                {!scans.length ? (
-                                    <p className="text-xs text-muted-foreground">No queries yet</p>
-                                ) : null}
+                                {scansError ? <p className="text-xs text-red-600 px-1">{scansError}</p> : null}
+
+                                <div className="min-h-0 flex-1 overflow-y-auto space-y-1">
+                                    {filteredScans.map((scan) => (
+                                        <button
+                                            key={scan.id}
+                                            type="button"
+                                            className={`w-full text-left rounded-md border px-2.5 py-2 transition ${selectedScanId === scan.id ? "border-primary bg-primary/5" : "hover:bg-muted/30"
+                                                }`}
+                                            onClick={() => {
+                                                if (selectedScanId === scan.id) {
+                                                    startRename(scan);
+                                                } else {
+                                                    setSelectedScanId(scan.id);
+                                                    setRenamingScanId(null);
+                                                }
+                                            }}
+                                        >
+                                            {renamingScanId === scan.id ? (
+                                                <Input
+                                                    value={renamingValue}
+                                                    autoFocus
+                                                    onClick={(event) => event.stopPropagation()}
+                                                    onChange={(event) => setRenamingValue(event.target.value)}
+                                                    onBlur={() => {
+                                                        void commitRename();
+                                                    }}
+                                                    onKeyDown={(event) => {
+                                                        if (event.key === "Enter") {
+                                                            void commitRename();
+                                                        }
+                                                        if (event.key === "Escape") {
+                                                            setRenamingScanId(null);
+                                                        }
+                                                    }}
+                                                />
+                                            ) : (
+                                                <p className="text-sm font-medium truncate">
+                                                    {scan.preview?.trim() || `New Scan ${scan.id.slice(0, 8)}`}
+                                                </p>
+                                            )}
+                                            <p className="text-xs text-muted-foreground mt-1 truncate">
+                                                {scan.status === "Draft" ? "a.k.a new request" : "a.k.a completed request"}
+                                            </p>
+                                        </button>
+                                    ))}
+                                    {!filteredScans.length ? (
+                                        <p className="text-xs text-muted-foreground px-1 py-2">No queries yet</p>
+                                    ) : null}
+                                </div>
                             </div>
                         </aside>
 
@@ -344,6 +525,45 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                     </div>
                 )}
             </div>
+
+            <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Rename Project</DialogTitle>
+                        <DialogDescription>
+                            Set a display name for this project.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="rename-project-input">Project name</Label>
+                        <Input
+                            id="rename-project-input"
+                            value={renameProjectValue}
+                            onChange={(event) => setRenameProjectValue(event.target.value)}
+                            onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                    void renameProject();
+                                }
+                            }}
+                            autoFocus
+                        />
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setRenameDialogOpen(false)}
+                            disabled={renameProjectSaving}
+                        >
+                            Cancel
+                        </Button>
+                        <Button onClick={() => void renameProject()} disabled={renameProjectSaving}>
+                            {renameProjectSaving ? "Saving..." : "Save"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </MainLayout>
     );
 }

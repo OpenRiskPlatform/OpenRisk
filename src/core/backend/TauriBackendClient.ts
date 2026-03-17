@@ -133,6 +133,19 @@ export class TauriBackendClient extends BackendClient {
     }
   }
 
+  async updateProjectName(directory: string, name: string): Promise<ProjectSummary> {
+    try {
+      const result = await invoke<string>("update_project_name", {
+        dirPath: directory,
+        name,
+      });
+      return JSON.parse(result) as ProjectSummary;
+    } catch (error: any) {
+      console.error("[TauriBackendClient] updateProjectName error:", error);
+      throw new Error(error?.message ?? error?.toString() ?? "Failed to update project name");
+    }
+  }
+
   async updateProjectPluginSettings(
     directory: string,
     pluginId: string,
@@ -208,6 +221,24 @@ export class TauriBackendClient extends BackendClient {
     } catch (error: any) {
       console.error("[TauriBackendClient] runScan error:", error);
       throw new Error(error?.message ?? error?.toString() ?? "Failed to run scan");
+    }
+  }
+
+  async updateScanPreview(
+    directory: string,
+    scanId: string,
+    preview: string
+  ): Promise<ScanSummary> {
+    try {
+      const result = await invoke<string>("update_scan_preview", {
+        dirPath: directory,
+        scanId,
+        preview,
+      });
+      return JSON.parse(result) as ScanSummary;
+    } catch (error: any) {
+      console.error("[TauriBackendClient] updateScanPreview error:", error);
+      throw new Error(error?.message ?? error?.toString() ?? "Failed to rename scan");
     }
   }
 

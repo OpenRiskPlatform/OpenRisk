@@ -1,5 +1,4 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
-import { TanStackRouterDevtools } from "@tanstack/router-devtools";
 import { SettingsProvider } from "@/core/settings/SettingsContext";
 import { BackendClientProvider } from "@/hooks/useBackendClient";
 import { PluginProvider } from "@/hooks/usePlugins";
@@ -21,7 +20,6 @@ function RootComponent() {
       <BackendClientProvider>
         <PluginProvider>
           <Outlet />
-          {import.meta.env.DEV && <TanStackRouterDevtools />}
         </PluginProvider>
       </BackendClientProvider>
     </SettingsProvider>

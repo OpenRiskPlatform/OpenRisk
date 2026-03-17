@@ -1195,6 +1195,52 @@ pub async fn update_project_settings(
         .map_err(|e| e.to_string())
 }
 
+pub async fn update_project_name(
+    dir_path: PathBuf,
+    name: String,
+) -> Result<ProjectSummary, String> {
+    let db_path = dir_path.join(DB_FILE_NAME);
+    if !db_path.exists() {
+        return Err(format!("No project found in directory {:?}", dir_path));
+    }
+
+    let next_name = name.trim().to_string();
+    if next_name.is_empty() {
+        return Err("Project name must not be empty".to_string());
+    }
+
+    let mut conn = SqliteProjectPersistence::connect(&db_path)
+        .await
+        .map_err(|e| e.to_string())?;
+    SqliteProjectPersistence::apply_schema(&mut conn)
+        .await
+        .map_err(|e| e.to_string())?;
+    SqliteProjectPersistence::apply_migrations_to_latest(&mut conn)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let project_row = sqlx::query_as::<_, ProjectRow>(
+        "SELECT id, name, audit, project_settings_id FROM Project LIMIT 1",
+    )
+    .fetch_one(&mut conn)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    sqlx::query("UPDATE Project SET name = ?1 WHERE id = ?2")
+        .bind(&next_name)
+        .bind(&project_row.id)
+        .execute(&mut conn)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(ProjectSummary {
+        id: project_row.id,
+        name: next_name,
+        audit: project_row.audit,
+        directory: dir_path,
+    })
+}
+
 pub async fn update_project_plugin_settings(
     dir_path: PathBuf,
     plugin_id: String,
@@ -1345,6 +1391,11 @@ pub async fn create_scan(
         .map_err(|e| e.to_string())?;
 
     let id = Uuid::new_v4().to_string();
+    let fallback_preview = format!("New Scan {}", &id[..8]);
+    let final_preview = preview
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .unwrap_or(fallback_preview);
     let inputs_json = "{}".to_string();
     let selected_plugins_json = "[]".to_string();
 
@@ -1354,7 +1405,7 @@ pub async fn create_scan(
     .bind(&id)
     .bind(&project_id)
     .bind("Draft")
-    .bind(preview.clone())
+    .bind(final_preview.clone())
     .bind(inputs_json)
     .bind(selected_plugins_json)
     .execute(&mut conn)
@@ -1364,7 +1415,54 @@ pub async fn create_scan(
     Ok(ScanSummaryRecord {
         id,
         status: "Draft".to_string(),
-        preview,
+        preview: Some(final_preview),
+    })
+}
+
+pub async fn update_scan_preview(
+    dir_path: PathBuf,
+    scan_id: String,
+    preview: String,
+) -> Result<ScanSummaryRecord, String> {
+    let db_path = dir_path.join(DB_FILE_NAME);
+    if !db_path.exists() {
+        return Err(format!("No project found in directory {:?}", dir_path));
+    }
+
+    let next_preview = preview.trim().to_string();
+    if next_preview.is_empty() {
+        return Err("Scan name must not be empty".to_string());
+    }
+
+    let mut conn = SqliteProjectPersistence::connect(&db_path)
+        .await
+        .map_err(|e| e.to_string())?;
+    SqliteProjectPersistence::apply_schema(&mut conn)
+        .await
+        .map_err(|e| e.to_string())?;
+    SqliteProjectPersistence::apply_migrations_to_latest(&mut conn)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let current = sqlx::query_as::<_, ScanRow>(
+        "SELECT id, status, preview, inputs_json, selected_plugins_json FROM Scan WHERE id = ?1 LIMIT 1",
+    )
+    .bind(&scan_id)
+    .fetch_one(&mut conn)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    sqlx::query("UPDATE Scan SET preview = ?1 WHERE id = ?2")
+        .bind(&next_preview)
+        .bind(&scan_id)
+        .execute(&mut conn)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(ScanSummaryRecord {
+        id: scan_id,
+        status: current.status,
+        preview: Some(next_preview),
     })
 }
 

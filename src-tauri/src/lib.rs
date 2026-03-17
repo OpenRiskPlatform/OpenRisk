@@ -36,12 +36,14 @@ pub fn run() {
             transport::open_project,
             transport::load_settings,
             transport::update_project_settings,
+            transport::update_project_name,
             transport::update_project_plugin_settings,
             transport::create_scan,
             transport::list_scans,
             transport::get_scan,
             transport::run_scan,
             transport::upsert_project_plugin_from_dir,
+            transport::update_scan_preview,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

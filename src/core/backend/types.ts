@@ -150,6 +150,14 @@ export abstract class BackendClient {
   ): Promise<ProjectSettingsRecord>;
 
   /**
+   * Update project display name persisted in project database
+   */
+  abstract updateProjectName(
+    directory: string,
+    name: string
+  ): Promise<ProjectSummary>;
+
+  /**
    * Update plugin settings persisted in current project database
    */
   abstract updateProjectPluginSettings(
@@ -184,6 +192,15 @@ export abstract class BackendClient {
     scanId: string,
     selectedPlugins: string[],
     inputs: Record<string, unknown>
+  ): Promise<ScanSummary>;
+
+  /**
+   * Rename scan (updates preview/title)
+   */
+  abstract updateScanPreview(
+    directory: string,
+    scanId: string,
+    preview: string
   ): Promise<ScanSummary>;
 
   /**

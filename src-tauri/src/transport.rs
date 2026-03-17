@@ -102,6 +102,17 @@ pub async fn update_project_settings(
 }
 
 #[tauri::command]
+pub async fn update_project_name(dir_path: String, name: String) -> Result<String, String> {
+    let dir = std::path::PathBuf::from(dir_path);
+    if !dir.exists() || !dir.is_dir() {
+        return Err(format!("Project directory does not exist: {:?}", dir));
+    }
+
+    let project = app_project::update_project_name(dir, name).await?;
+    serde_json::to_string(&project).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn update_project_plugin_settings(
     dir_path: String,
     plugin_id: String,
@@ -170,6 +181,21 @@ pub async fn run_scan(
         serde_json::from_str(&inputs_json).map_err(|e| format!("Invalid inputs JSON: {}", e))?;
 
     let scan = app_project::run_scan(dir, scan_id, selected_plugins, inputs).await?;
+    serde_json::to_string(&scan).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn update_scan_preview(
+    dir_path: String,
+    scan_id: String,
+    preview: String,
+) -> Result<String, String> {
+    let dir = std::path::PathBuf::from(dir_path);
+    if !dir.exists() || !dir.is_dir() {
+        return Err(format!("Project directory does not exist: {:?}", dir));
+    }
+
+    let scan = app_project::update_scan_preview(dir, scan_id, preview).await?;
     serde_json::to_string(&scan).map_err(|e| e.to_string())
 }
 

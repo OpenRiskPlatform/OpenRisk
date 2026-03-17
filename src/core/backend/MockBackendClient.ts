@@ -144,6 +144,15 @@ export class MockBackendClient extends BackendClient {
     };
   }
 
+  async updateProjectName(directory: string, name: string): Promise<ProjectSummary> {
+    return {
+      id: `mock-${Math.floor(Math.random() * 1000)}`,
+      name,
+      audit: null,
+      directory,
+    };
+  }
+
   async updateProjectPluginSettings(
     _directory: string,
     pluginId: string,
@@ -200,6 +209,23 @@ export class MockBackendClient extends BackendClient {
       status: "Completed",
       preview: null,
     };
+  }
+
+  async updateScanPreview(
+    _directory: string,
+    scanId: string,
+    preview: string
+  ): Promise<ScanSummary> {
+    this.scans = this.scans.map((scan) =>
+      scan.id === scanId ? { ...scan, preview } : scan
+    );
+    return (
+      this.scans.find((scan) => scan.id === scanId) ?? {
+        id: scanId,
+        status: "Draft",
+        preview,
+      }
+    );
   }
 
   async upsertProjectPluginFromDir(
