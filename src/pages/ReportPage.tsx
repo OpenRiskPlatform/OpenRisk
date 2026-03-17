@@ -169,7 +169,7 @@ export function ReportPage() {
         </Card>
 
         {/* Search Form */}
-        {selectedPlugin && (
+        {Boolean(selectedPlugin) && (
           <Card className="mb-8">
             <CardHeader>
               <CardTitle>Run Plugin: {selectedPlugin}</CardTitle>
@@ -209,7 +209,7 @@ export function ReportPage() {
         )}
 
         {/* Results Display */}
-        {result && (
+        {result !== null && (
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">

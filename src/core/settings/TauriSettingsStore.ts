@@ -11,15 +11,23 @@ const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
 };
 
 export class TauriSettingsStore implements SettingsStore {
-  private store: Store;
+  private store: Store | null;
   private globalSettings: GlobalSettings;
   private pluginSettings: Map<string, PluginSettings>;
   private initialized = false;
 
   constructor() {
-    this.store = new Store("settings.json");
+    this.store = null;
     this.globalSettings = { ...DEFAULT_GLOBAL_SETTINGS };
     this.pluginSettings = new Map();
+  }
+
+  private async getStore(): Promise<Store> {
+    if (this.store) {
+      return this.store;
+    }
+    this.store = await Store.load("settings.json");
+    return this.store;
   }
 
   /**
@@ -29,15 +37,16 @@ export class TauriSettingsStore implements SettingsStore {
     if (this.initialized) return;
 
     try {
+      const store = await this.getStore();
       // Load global settings
-      const savedGlobal = await this.store.get<GlobalSettings>("global");
+      const savedGlobal = await store.get<GlobalSettings>("global");
       if (savedGlobal) {
         this.globalSettings = { ...DEFAULT_GLOBAL_SETTINGS, ...savedGlobal };
       }
 
       // Load plugin settings
       const savedPlugins =
-        await this.store.get<Record<string, PluginSettings>>("plugins");
+        await store.get<Record<string, PluginSettings>>("plugins");
       if (savedPlugins) {
         this.pluginSettings = new Map(Object.entries(savedPlugins));
       }
@@ -60,8 +69,9 @@ export class TauriSettingsStore implements SettingsStore {
     };
 
     try {
-      await this.store.set("global", this.globalSettings);
-      await this.store.save();
+      const store = await this.getStore();
+      await store.set("global", this.globalSettings);
+      await store.save();
 
       // Also persist theme to localStorage for FOUC prevention
       if (settings.theme !== undefined) {
@@ -90,8 +100,9 @@ export class TauriSettingsStore implements SettingsStore {
     this.pluginSettings.set(pluginId, { ...settings });
 
     try {
-      await this.store.set("plugins", Object.fromEntries(this.pluginSettings));
-      await this.store.save();
+      const store = await this.getStore();
+      await store.set("plugins", Object.fromEntries(this.pluginSettings));
+      await store.save();
     } catch (error) {
       console.error(
         "[TauriSettingsStore] Failed to save plugin settings:",
@@ -105,8 +116,9 @@ export class TauriSettingsStore implements SettingsStore {
     this.pluginSettings.clear();
 
     try {
-      await this.store.clear();
-      await this.store.save();
+      const store = await this.getStore();
+      await store.clear();
+      await store.save();
     } catch (error) {
       console.error("[TauriSettingsStore] Failed to reset settings:", error);
     }
@@ -129,18 +141,21 @@ export class TauriSettingsStore implements SettingsStore {
 
       if (data.global) {
         this.globalSettings = { ...DEFAULT_GLOBAL_SETTINGS, ...data.global };
-        await this.store.set("global", this.globalSettings);
+        const store = await this.getStore();
+        await store.set("global", this.globalSettings);
       }
 
       if (data.plugins) {
         this.pluginSettings = new Map(Object.entries(data.plugins));
-        await this.store.set(
+        const store = await this.getStore();
+        await store.set(
           "plugins",
           Object.fromEntries(this.pluginSettings)
         );
       }
 
-      await this.store.save();
+      const store = await this.getStore();
+      await store.save();
     } catch (error) {
       console.error("[TauriSettingsStore] Failed to import settings:", error);
       throw new Error("Invalid settings format");

@@ -1,5 +1,5 @@
 import React from 'react';
-import type { ComponentMapping } from '@/types/adapter';
+import type { ComponentMapping } from './adapter';
 import {
   ComponentText,
   ComponentTitle,
@@ -23,35 +23,43 @@ import {
 /**
  * Универсальный маппинг типов данных на React компоненты
  */
-export const allComponentsMapping: ComponentMapping = {
+type AnyRenderer = (
+  data: any,
+  componentsMapping: AnyMapping,
+  metadata?: Record<string, any>
+) => React.ReactNode;
+
+type AnyMapping = Record<string, AnyRenderer>;
+
+export const allComponentsMapping: AnyMapping = {
   // Базовые типы текста
-  'std.text': (data) => {
+  'std.text': (data: any) => {
     return <ComponentText key={Math.random()} data={data} />;
   },
 
-  'std.title': (data) => {
+  'std.title': (data: any) => {
     return <ComponentTitle key={Math.random()} data={data} />;
   },
 
-  'std.subtitle': (data) => {
+  'std.subtitle': (data: any) => {
     return <ComponentSubtitle key={Math.random()} data={data} />;
   },
 
-  'std.paragraph': (data) => {
+  'std.paragraph': (data: any) => {
     return <ComponentParagraph key={Math.random()} data={data} />;
   },
 
-  'std.badge': (data, _componentsMapping, _metadata) => {
+  'std.badge': (data: any, _componentsMapping: AnyMapping, _metadata?: Record<string, any>) => {
     return (
-      <ComponentBadge 
-        key={Math.random()} 
-        data={data.text || data} 
+      <ComponentBadge
+        key={Math.random()}
+        data={data.text || data}
         variant={data.variant}
       />
     );
   },
 
-  'std.section': (data, componentsMapping, _metadata) => {
+  'std.section': (data: any, componentsMapping: AnyMapping, _metadata?: Record<string, any>) => {
     const content = data.content.map((item: any) => {
       const { type, value, metadata: itemMetadata } = item;
       return componentsMapping[type](value, componentsMapping, itemMetadata);
@@ -64,9 +72,9 @@ export const allComponentsMapping: ComponentMapping = {
     );
   },
 
-  'std.date': (data, _componentsMapping, metadata) => {
+  'std.date': (data: any, _componentsMapping: AnyMapping, metadata?: Record<string, any>) => {
     return (
-      <ComponentDate 
+      <ComponentDate
         key={Math.random()}
         date={data}
         format={metadata?.format}
@@ -75,29 +83,29 @@ export const allComponentsMapping: ComponentMapping = {
     );
   },
 
-  'std.boolean': (data) => {
+  'std.boolean': (data: any) => {
     return <ComponentBoolean key={Math.random()} value={data} />;
   },
 
-  'std.url': (data) => {
+  'std.url': (data: any) => {
     return <ComponentUrl key={Math.random()} url={data} />;
   },
 
-  'std.link': (data) => {
+  'std.link': (data: any) => {
     return <ComponentLink key={Math.random()} url={data.url} text={data.text} />;
   },
 
-  'std.email': (data) => {
+  'std.email': (data: any) => {
     return <ComponentEmail key={Math.random()} email={data} />;
   },
 
-  'std.phone': (data) => {
+  'std.phone': (data: any) => {
     return <ComponentPhone key={Math.random()} phone={data} />;
   },
 
-  'std.address': (data) => {
+  'std.address': (data: any) => {
     return (
-      <ComponentAddress 
+      <ComponentAddress
         key={Math.random()}
         country={data.country}
         city={data.city}
@@ -108,13 +116,13 @@ export const allComponentsMapping: ComponentMapping = {
   },
 
   // Свойства
-  'std.property': (data, componentsMapping, _metadata) => {
-    const value = data.value?.type 
+  'std.property': (data: any, componentsMapping: AnyMapping, _metadata?: Record<string, any>) => {
+    const value = data.value?.type
       ? componentsMapping[data.value.type](data.value.data, componentsMapping, data.value.metadata)
       : data.value;
 
     return (
-      <ComponentProperty 
+      <ComponentProperty
         key={Math.random()}
         key_name={data.key}
         value={value}
@@ -123,7 +131,7 @@ export const allComponentsMapping: ComponentMapping = {
   },
 
   // Массив элементов
-  'std.array': (data, componentsMapping, metadata) => {
+  'std.array': (data: any[], componentsMapping: AnyMapping, metadata?: Record<string, any>) => {
     const items = data.map((item: any) => {
       if (typeof item === 'object' && item.type) {
         return componentsMapping[item.type](item.value, componentsMapping, item.metadata);
@@ -132,16 +140,16 @@ export const allComponentsMapping: ComponentMapping = {
     });
 
     return (
-      <ComponentArray 
+      <ComponentArray
         key={Math.random()}
-        items={items} 
+        items={items}
         variant={metadata?.variant}
       />
     );
   },
 
   // Сетка элементов
-  'std.grid': (data, componentsMapping, metadata) => {
+  'std.grid': (data: any[], componentsMapping: AnyMapping, metadata?: Record<string, any>) => {
     const items = data.map((item: any) => {
       if (typeof item === 'object' && item.type) {
         return componentsMapping[item.type](item.value, componentsMapping, item.metadata);
@@ -150,18 +158,18 @@ export const allComponentsMapping: ComponentMapping = {
     });
 
     return (
-      <ComponentGrid 
+      <ComponentGrid
         key={Math.random()}
-        items={items} 
+        items={items}
         columns={metadata?.columns}
       />
     );
   },
 
   // Таблица
-  'std.table': (data, _componentsMapping, metadata) => {
+  'std.table': (data: any, _componentsMapping: AnyMapping, metadata?: Record<string, any>) => {
     return (
-      <ComponentTable 
+      <ComponentTable
         key={Math.random()}
         headers={data.headers}
         rows={data.rows}
@@ -176,7 +184,7 @@ export const allComponentsMapping: ComponentMapping = {
  */
 export const renderData = (
   data: Array<{ type: string; value: any; metadata?: any }>,
-  componentsMapping: ComponentMapping = allComponentsMapping
+  componentsMapping: AnyMapping = allComponentsMapping
 ): React.ReactNode[] => {
   const result: React.ReactNode[] = [];
 
@@ -191,3 +199,5 @@ export const renderData = (
 
   return result;
 };
+
+export const typedComponentsMapping = allComponentsMapping as unknown as ComponentMapping;
