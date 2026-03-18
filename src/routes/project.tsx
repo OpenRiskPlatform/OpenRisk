@@ -9,6 +9,5 @@ export const Route = createFileRoute("/project")({
 });
 
 function ProjectRoute() {
-  const { dir } = Route.useSearch();
-  return <ProjectPage projectDir={dir} />;
+  return <ProjectPage />;
 }

@@ -3,7 +3,6 @@
  */
 
 import { createContext, useContext, useState, type ReactNode } from "react";
-import { MockBackendClient } from "@/core/backend/MockBackendClient";
 import { TauriBackendClient } from "@/core/backend/TauriBackendClient";
 import type { BackendClient } from "@/core/backend/types";
 

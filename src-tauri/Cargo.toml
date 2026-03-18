@@ -47,3 +47,4 @@ sqlx = { version = "0.8.6", default-features = false, features = [
 ] }
 ts-rs = { version = "11.1", features = ["serde-json-impl", "uuid-impl"] }
 diesel = { version = "2.2.0", features = ["sqlite", "returning_clauses_for_sqlite_3_35"] }
+derive_more = { version = "2", features = ["deref", "deref_mut"] }

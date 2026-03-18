@@ -1,16 +1,16 @@
 use diesel::{prelude::*, SqliteConnection};
+use serde::{Deserialize, Serialize};
+#[allow(unused)]
 use std::{
     fs::{self, File},
     path::PathBuf,
     str::FromStr,
-    sync::Mutex,
 };
-use tauri::State;
+use ts_rs::TS;
 
 use crate::{
     interface::project_manager::ProjectManager,
     models::project::{Project, ProjectSettings},
-    ActiveProject,
 };
 
 const DATABASE_REL_PATH: &'static str = "./database.db";
@@ -36,15 +36,15 @@ pub enum FSPMError {
 
 // TODO: Add file locking so two project don't use the same file
 impl FileSystemProjectManager {
-    fn project_path(&self) -> PathBuf {
+    pub fn project_path(&self) -> PathBuf {
         self.options.path.clone()
     }
 
-    fn settings_path(&self) -> PathBuf {
+    pub fn settings_path(&self) -> PathBuf {
         self.project_path().join(SETTINGS_REL_PATH)
     }
 
-    fn database_path(&self) -> PathBuf {
+    pub fn database_path(&self) -> PathBuf {
         self.project_path().join(DATABASE_REL_PATH)
     }
 }
@@ -106,54 +106,13 @@ impl ProjectManager for FileSystemProjectManager {
     }
 }
 
-#[tauri::command]
-pub fn create_project(
-    name: String,
-    path: String,
-    active_project: State<Mutex<ActiveProject>>,
-) -> BackendResult<Project>, String> {
-    let mut ap = active_project.lock().unwrap();
-
-    let mut new_pm = FileSystemProjectManager::new(FSPMOptions {
-        name,
-        path: PathBuf::from_str(&path).map_err(|_| "Invalid path")?,
-    });
-
-    let Ok(project) = new_pm.create_project() else {
-        // return Err("Creating project failed".to_string());
-
-        return Ok(BackendResult::Err("Creating project failed".to_string()));
-    };
-
-    let project_clone = project.clone();
-
-    ap.project = Some(project);
-
-    Ok(project_clone)
-}
-
-#[tauri::command]
-pub fn load_project(
-    path: String,
-    active_project: State<Mutex<ActiveProject>>,
-) -> Result<Project, String> {
-    let mut ap = active_project.lock().unwrap();
-
-    let mut new_pm = FileSystemProjectManager::new(FSPMOptions {
-        // This is ugly af
-        name: "n/a".to_string(),
-        path: PathBuf::from_str(&path).map_err(|_| "Invalid path")?,
-    });
-
-    let Ok(project) = new_pm.load_project() else {
-        return Err("Creating project failed".to_string());
-    };
-
-    let project_clone = project.clone();
-
-    ap.project = Some(project);
-
-    Ok(project_clone)
+impl FSPMOptions {
+    fn new(name: impl Into<String>, path: impl Into<PathBuf>) -> Self {
+        Self {
+            name: name.into(),
+            path: path.into(),
+        }
+    }
 }
 
 #[test]

@@ -77,8 +77,8 @@ export class TauriBackendClient extends BackendClient {
   async createProject(name: string, directory: string): Promise<Project> {
     try {
       const result = await invoke<Project>("create_project", {
-        name,
-        dirPath: directory,
+        name: name,
+        path: directory,
       });
       return result;
     } catch (error: any) {
@@ -90,7 +90,7 @@ export class TauriBackendClient extends BackendClient {
   async openProject(directory: string): Promise<Project> {
     try {
       const result = await invoke<Project>("load_project", {
-        dirPath: directory,
+        path: directory,
       });
       return result;
     } catch (error: any) {

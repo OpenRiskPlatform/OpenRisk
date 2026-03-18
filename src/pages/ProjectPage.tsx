@@ -10,13 +10,11 @@ import {
 import { useBackendClient } from "@/hooks/useBackendClient";
 import { Project } from "../../src-tauri/bindings/Project";
 
-interface ProjectPageProps {
-  project: Project;
-}
-
-export function ProjectPage({ project }: ProjectPageProps) {
+export async function ProjectPage() {
   const backendClient = useBackendClient();
   const [error, setError] = useState<string | null>(null);
+  
+  let project = await backendClient.getActiveProject();
 
   return (
     <MainLayout projectDir={project.id}>
