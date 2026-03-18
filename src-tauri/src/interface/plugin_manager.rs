@@ -4,6 +4,7 @@ use crate::models::plugin::{InstalledPlugin, PluginId};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum PluginManagerError {
+    Io(&'static str),
     PluginNotFound,
     PluginInstallationFailed,
 }

@@ -13,19 +13,19 @@ use ts_rs::TS;
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/bindings/Plugin.ts")]
 pub struct Plugin {
-    id: PluginId,
-    name: String,
-    version: String,
-    description: String,
-    authors: Vec<String>,
-    license: String,
-    entrypoint: String,
+    pub id: PluginId,
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub authors: Vec<String>,
+    pub license: String,
+    pub entrypoint: String,
     pub default_settings: PluginSettings,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/bindings/Plugin.ts")]
-pub struct PluginId(String);
+pub struct PluginId(pub String);
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/bindings/Plugin.ts")]
