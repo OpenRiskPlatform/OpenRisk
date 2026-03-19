@@ -1,17 +1,29 @@
 import { FormEvent, useEffect, useState } from "react";
 import { FolderOpen, FolderPlus, History, LogOut, Settings } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { useBackendClient } from "@/hooks/useBackendClient";
 
 const LAST_PROJECT_DIR_KEY = "openrisk:last-project-dir";
 const RECENT_PROJECTS_KEY = "openrisk:recent-projects";
+const LOCKED_PROJECT_ERROR_PREFIX = "PROJECT_LOCKED:";
+const PROJECT_FILE_FILTERS = [
+    { name: "OpenRisk Project", extensions: ["orproj", "db"] },
+    { name: "SQLite Database", extensions: ["db", "sqlite", "sqlite3", "orproj"] },
+];
 
 interface EntryPageProps {
     initialMode?: "create" | "open";
@@ -27,20 +39,38 @@ export function EntryPage({ initialMode }: EntryPageProps) {
     const [settingsOpen, setSettingsOpen] = useState(false);
 
     const [projectName, setProjectName] = useState("");
-    const [projectDir, setProjectDir] = useState("");
-    const [openProjectDir, setOpenProjectDir] = useState("");
+    const [projectPath, setProjectPath] = useState("");
+    const [openProjectPath, setOpenProjectPath] = useState("");
 
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [recentProjects, setRecentProjects] = useState<string[]>([]);
+    const [unlockOpen, setUnlockOpen] = useState(false);
+    const [unlockPath, setUnlockPath] = useState("");
+    const [unlockPassword, setUnlockPassword] = useState("");
+    const [unlockError, setUnlockError] = useState<string | null>(null);
+    const [unlockBusy, setUnlockBusy] = useState(false);
+
+    const inferProjectName = (path: string) => {
+        const parts = path.split(/[\\/]/).filter(Boolean);
+        const fileName = parts[parts.length - 1] || "NewProject";
+        return fileName.replace(/\.(db|orproj)$/i, "");
+    };
+
+    const isLockedError = (message: string) => message.startsWith(LOCKED_PROJECT_ERROR_PREFIX);
+
+    const startUnlockFlow = (path: string, message?: string) => {
+        setUnlockPath(path);
+        setUnlockPassword("");
+        setUnlockError(message ?? "This project file is encrypted. Enter password to unlock.");
+        setUnlockOpen(true);
+    };
 
     useEffect(() => {
-        if (mode === "create" && projectDir && !projectName.trim()) {
-            const parts = projectDir.split(/[\\/]/).filter(Boolean);
-            const fallback = parts[parts.length - 1] || "NewProject";
-            setProjectName(fallback);
+        if (mode === "create" && projectPath && !projectName.trim()) {
+            setProjectName(inferProjectName(projectPath));
         }
-    }, [mode, projectDir, projectName]);
+    }, [mode, projectPath, projectName]);
 
     useEffect(() => {
         try {
@@ -73,12 +103,16 @@ export function EntryPage({ initialMode }: EntryPageProps) {
             }
 
             const valid: string[] = [];
-            for (const directory of recentProjects) {
+            for (const projectPathValue of recentProjects) {
                 try {
-                    await backendClient.openProject(directory);
-                    valid.push(directory);
-                } catch {
-                    // Skip invalid or missing project directories.
+                    await backendClient.openProject(projectPathValue);
+                    valid.push(projectPathValue);
+                } catch (err) {
+                    const message = err instanceof Error ? err.message : String(err);
+                    // Keep encrypted files in recent list.
+                    if (isLockedError(message)) {
+                        valid.push(projectPathValue);
+                    }
                 }
             }
 
@@ -99,29 +133,40 @@ export function EntryPage({ initialMode }: EntryPageProps) {
         };
     }, [backendClient, recentProjects]);
 
-    const saveRecent = (directory: string) => {
+    const saveRecent = (projectPathValue: string) => {
         const next = [
-            directory,
-            ...recentProjects.filter((item) => item !== directory),
+            projectPathValue,
+            ...recentProjects.filter((item) => item !== projectPathValue),
         ].slice(0, 10);
         setRecentProjects(next);
         localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(next));
     };
 
-    const chooseCreateDir = async () => {
+    const chooseCreateFile = async () => {
         setError(null);
-        const selection = await open({ directory: true, multiple: false });
+        const fileNameHint = projectName.trim() ? `${projectName.trim()}.orproj` : "new-project.orproj";
+        const selection = await save({
+            defaultPath: fileNameHint,
+            filters: PROJECT_FILE_FILTERS,
+        });
         if (typeof selection === "string") {
-            setProjectDir(selection);
+            setProjectPath(selection);
+            if (!projectName.trim()) {
+                setProjectName(inferProjectName(selection));
+            }
             setMode("create");
         }
     };
 
-    const chooseOpenDir = async () => {
+    const chooseOpenFile = async () => {
         setError(null);
-        const selection = await open({ directory: true, multiple: false });
+        const selection = await open({
+            directory: false,
+            multiple: false,
+            filters: PROJECT_FILE_FILTERS,
+        });
         if (typeof selection === "string") {
-            setOpenProjectDir(selection);
+            setOpenProjectPath(selection);
             setMode("open");
         }
     };
@@ -129,8 +174,8 @@ export function EntryPage({ initialMode }: EntryPageProps) {
     const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setError(null);
-        if (!projectDir) {
-            setError("Select parent folder for new project");
+        if (!projectPath) {
+            setError("Select project file path");
             return;
         }
         if (!projectName.trim()) {
@@ -140,7 +185,7 @@ export function EntryPage({ initialMode }: EntryPageProps) {
 
         setBusy(true);
         try {
-            const project = await backendClient.createProject(projectName.trim(), projectDir);
+            const project = await backendClient.createProject(projectName.trim(), projectPath);
             localStorage.setItem(LAST_PROJECT_DIR_KEY, project.directory);
             saveRecent(project.directory);
             await navigate({ to: "/project", search: { dir: project.directory } });
@@ -153,19 +198,24 @@ export function EntryPage({ initialMode }: EntryPageProps) {
 
     const handleOpen = async () => {
         setError(null);
-        if (!openProjectDir) {
-            setError("Select project directory");
+        if (!openProjectPath) {
+            setError("Select project file");
             return;
         }
 
         setBusy(true);
         try {
-            const project = await backendClient.openProject(openProjectDir);
+            const project = await backendClient.openProject(openProjectPath);
             localStorage.setItem(LAST_PROJECT_DIR_KEY, project.directory);
             saveRecent(project.directory);
             await navigate({ to: "/project", search: { dir: project.directory } });
         } catch (err) {
-            setError(err instanceof Error ? err.message : String(err));
+            const message = err instanceof Error ? err.message : String(err);
+            if (isLockedError(message)) {
+                startUnlockFlow(openProjectPath);
+            } else {
+                setError(message);
+            }
         } finally {
             setBusy(false);
         }
@@ -180,18 +230,45 @@ export function EntryPage({ initialMode }: EntryPageProps) {
         }
     };
 
-    const openRecentProject = async (directory: string) => {
+    const openRecentProject = async (projectPathValue: string) => {
         setError(null);
         setBusy(true);
         try {
-            const project = await backendClient.openProject(directory);
+            const project = await backendClient.openProject(projectPathValue);
             localStorage.setItem(LAST_PROJECT_DIR_KEY, project.directory);
             saveRecent(project.directory);
             await navigate({ to: "/project", search: { dir: project.directory } });
         } catch (err) {
-            setError(err instanceof Error ? err.message : String(err));
+            const message = err instanceof Error ? err.message : String(err);
+            if (isLockedError(message)) {
+                startUnlockFlow(projectPathValue);
+            } else {
+                setError(message);
+            }
         } finally {
             setBusy(false);
+        }
+    };
+
+    const handleUnlock = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!unlockPath) {
+            return;
+        }
+        setUnlockError(null);
+        setUnlockBusy(true);
+        try {
+            await backendClient.unlockProject(unlockPath, unlockPassword);
+            const project = await backendClient.openProject(unlockPath);
+            localStorage.setItem(LAST_PROJECT_DIR_KEY, project.directory);
+            saveRecent(project.directory);
+            setUnlockOpen(false);
+            setUnlockPassword("");
+            await navigate({ to: "/project", search: { dir: project.directory } });
+        } catch (err) {
+            setUnlockError(err instanceof Error ? err.message : String(err));
+        } finally {
+            setUnlockBusy(false);
         }
     };
 
@@ -245,19 +322,20 @@ export function EntryPage({ initialMode }: EntryPageProps) {
                             {recentProjects.length === 0 ? (
                                 <p className="text-sm text-muted-foreground">no projects opened before</p>
                             ) : (
-                                recentProjects.map((directory) => {
-                                    const parts = directory.split(/[\\/]/).filter(Boolean);
-                                    const name = parts[parts.length - 1] || directory;
+                                recentProjects.map((projectPathValue) => {
+                                    const parts = projectPathValue.split(/[\\/]/).filter(Boolean);
+                                    const fileName = parts[parts.length - 1] || projectPathValue;
+                                    const name = fileName.replace(/\.(db|orproj)$/i, "");
                                     return (
                                         <button
-                                            key={directory}
+                                            key={projectPathValue}
                                             type="button"
                                             className="w-full text-left rounded-md border px-3 py-2 hover:bg-muted/30"
-                                            onClick={() => void openRecentProject(directory)}
+                                            onClick={() => void openRecentProject(projectPathValue)}
                                             disabled={busy}
                                         >
                                             <p className="text-sm font-medium truncate">{name}</p>
-                                            <p className="text-xs text-muted-foreground truncate">{directory}</p>
+                                            <p className="text-xs text-muted-foreground truncate">{projectPathValue}</p>
                                         </button>
                                     );
                                 })
@@ -274,10 +352,10 @@ export function EntryPage({ initialMode }: EntryPageProps) {
                         <CardContent>
                             <form className="space-y-3" onSubmit={handleCreate}>
                                 <div className="space-y-1">
-                                    <Label>Parent folder</Label>
+                                    <Label>Project file</Label>
                                     <div className="flex gap-2">
-                                        <Input value={projectDir} readOnly placeholder="Select folder" />
-                                        <Button type="button" variant="outline" onClick={chooseCreateDir}>Browse</Button>
+                                        <Input value={projectPath} readOnly placeholder="Select .orproj or .db path" />
+                                        <Button type="button" variant="outline" onClick={chooseCreateFile}>Browse</Button>
                                     </div>
                                 </div>
                                 <div className="space-y-1">
@@ -299,10 +377,10 @@ export function EntryPage({ initialMode }: EntryPageProps) {
                         </CardHeader>
                         <CardContent className="space-y-3">
                             <div className="space-y-1">
-                                <Label>Project folder</Label>
+                                <Label>Project file</Label>
                                 <div className="flex gap-2">
-                                    <Input value={openProjectDir} readOnly placeholder="Select project folder" />
-                                    <Button type="button" variant="outline" onClick={chooseOpenDir}>Browse</Button>
+                                    <Input value={openProjectPath} readOnly placeholder="Select .orproj or .db file" />
+                                    <Button type="button" variant="outline" onClick={chooseOpenFile}>Browse</Button>
                                 </div>
                             </div>
                             <Button type="button" disabled={busy} onClick={handleOpen} className="w-full">
@@ -319,8 +397,39 @@ export function EntryPage({ initialMode }: EntryPageProps) {
             <SettingsDialog
                 open={settingsOpen}
                 onOpenChange={setSettingsOpen}
-                projectDir={openProjectDir || projectDir || undefined}
+                projectDir={openProjectPath || projectPath || undefined}
             />
+
+            <Dialog open={unlockOpen} onOpenChange={setUnlockOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Unlock Encrypted Project</DialogTitle>
+                        <DialogDescription>
+                            This file is encrypted. Enter password to open it.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form className="space-y-3" onSubmit={handleUnlock}>
+                        <div className="space-y-1">
+                            <Label>Project file</Label>
+                            <Input value={unlockPath} readOnly />
+                        </div>
+                        <div className="space-y-1">
+                            <Label>Password</Label>
+                            <Input
+                                type="password"
+                                value={unlockPassword}
+                                onChange={(e) => setUnlockPassword(e.target.value)}
+                                placeholder="Enter password"
+                                autoFocus
+                            />
+                        </div>
+                        {unlockError ? <p className="text-sm text-red-600">{unlockError}</p> : null}
+                        <Button type="submit" disabled={unlockBusy || !unlockPassword.trim()} className="w-full">
+                            {unlockBusy ? "Unlocking..." : "Unlock"}
+                        </Button>
+                    </form>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

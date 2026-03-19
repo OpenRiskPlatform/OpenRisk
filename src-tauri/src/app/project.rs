@@ -1,21 +1,30 @@
 use crate::app::plugin as plugin_app;
 use crate::plugin_manifest::{parse_manifest, OpenRiskPluginManifest};
 use async_trait::async_trait;
+use once_cell::sync::Lazy;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 use sqlx::{
-    sqlite::{SqliteConnectOptions, SqliteJournalMode},
+    sqlite::SqliteConnectOptions,
     Connection, SqliteConnection,
 };
+use std::collections::HashMap;
 use std::fmt;
 use std::fs;
+use std::fs::File;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::Duration;
 use uuid::Uuid;
 
 const DB_FILE_NAME: &str = "project.db";
 const PLUGINS_DIR_NAME: &str = "plugins";
 const CURRENT_SCHEMA_VERSION: i64 = 4;
+const LOCKED_PROJECT_ERROR_PREFIX: &str = "PROJECT_LOCKED:";
+const MIN_PASSWORD_LEN: usize = 8;
+
+static PROJECT_KEYS: Lazy<Mutex<HashMap<String, String>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
 
 const SCHEMA_SQL: &str = r#"
 PRAGMA foreign_keys = ON;
@@ -150,6 +159,13 @@ pub struct ScanDetailRecord {
     pub results: Vec<ScanPluginResultRecord>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectLockStatus {
+    pub locked: bool,
+    pub unlocked: bool,
+}
+
 #[derive(Debug)]
 pub enum PersistenceError {
     Validation(String),
@@ -183,6 +199,63 @@ impl From<serde_json::Error> for PersistenceError {
     fn from(value: serde_json::Error) -> Self {
         Self::Validation(value.to_string())
     }
+}
+
+fn lock_error() -> String {
+    format!(
+        "{}Project file is encrypted. Unlock it first.",
+        LOCKED_PROJECT_ERROR_PREFIX
+    )
+}
+
+fn canonical_key_path(path: &Path) -> String {
+    fs::canonicalize(path)
+        .unwrap_or_else(|_| path.to_path_buf())
+        .to_string_lossy()
+        .to_string()
+}
+
+fn get_cached_key(path: &Path) -> Option<String> {
+    let key = canonical_key_path(path);
+    PROJECT_KEYS
+        .lock()
+        .ok()
+        .and_then(|guard| guard.get(&key).cloned())
+}
+
+fn cache_key(path: &Path, password: String) {
+    let key = canonical_key_path(path);
+    if let Ok(mut guard) = PROJECT_KEYS.lock() {
+        guard.insert(key, password);
+    }
+}
+
+fn clear_cached_key(path: &Path) {
+    let key = canonical_key_path(path);
+    if let Ok(mut guard) = PROJECT_KEYS.lock() {
+        guard.remove(&key);
+    }
+}
+
+fn escape_sql_literal(value: &str) -> String {
+    value.replace('\'', "''")
+}
+
+fn validate_password(value: &str) -> Result<(), String> {
+    if value.len() < MIN_PASSWORD_LEN {
+        return Err(format!(
+            "Password must be at least {} characters",
+            MIN_PASSWORD_LEN
+        ));
+    }
+    Ok(())
+}
+
+fn validate_non_empty_password(value: &str, field: &str) -> Result<(), String> {
+    if value.trim().is_empty() {
+        return Err(format!("{} must not be empty", field));
+    }
+    Ok(())
 }
 
 fn plugins_root() -> PathBuf {
@@ -395,17 +468,190 @@ impl SqliteProjectPersistence {
         Self
     }
 
-    async fn connect(db_path: &Path) -> Result<SqliteConnection, PersistenceError> {
+    async fn connect(
+        db_path: &Path,
+        create_if_missing: bool,
+        key: Option<&str>,
+    ) -> Result<SqliteConnection, PersistenceError> {
         let options = SqliteConnectOptions::new()
             .filename(db_path)
-            .create_if_missing(true)
-            .journal_mode(SqliteJournalMode::Wal)
-            .busy_timeout(Duration::from_secs(5))
-            .foreign_keys(true);
+            .create_if_missing(create_if_missing)
+            .busy_timeout(Duration::from_secs(5));
 
-        SqliteConnection::connect_with(&options)
+        let mut conn = SqliteConnection::connect_with(&options)
             .await
-            .map_err(PersistenceError::from)
+            .map_err(PersistenceError::from)?;
+
+        if let Some(password) = key {
+            let escaped = escape_sql_literal(password);
+            let pragma = format!("PRAGMA key = '{}';", escaped);
+            sqlx::query(&pragma)
+                .execute(&mut conn)
+                .await
+                .map_err(PersistenceError::from)?;
+        }
+
+        // Force key validation for SQLCipher-enabled databases.
+        sqlx::query("SELECT count(1) FROM sqlite_master")
+            .fetch_one(&mut conn)
+            .await
+            .map_err(PersistenceError::from)?;
+
+        sqlx::query("PRAGMA foreign_keys = ON;")
+            .execute(&mut conn)
+            .await
+            .map_err(PersistenceError::from)?;
+        sqlx::query("PRAGMA journal_mode = WAL;")
+            .execute(&mut conn)
+            .await
+            .map_err(PersistenceError::from)?;
+
+        Ok(conn)
+    }
+
+    fn is_encrypted_error(err: &PersistenceError) -> bool {
+        match err {
+            PersistenceError::Database(db_err) => {
+                let msg = db_err.to_string().to_ascii_lowercase();
+                msg.contains("file is encrypted") || msg.contains("not a database")
+            }
+            _ => false,
+        }
+    }
+
+    async fn connect_for_existing_project(
+        db_path: &Path,
+    ) -> Result<SqliteConnection, PersistenceError> {
+        if let Some(password) = get_cached_key(db_path) {
+            match Self::connect(db_path, false, Some(&password)).await {
+                Ok(conn) => return Ok(conn),
+                Err(err) if Self::is_encrypted_error(&err) => {
+                    clear_cached_key(db_path);
+                }
+                Err(err) => return Err(err),
+            }
+        }
+
+        match Self::connect(db_path, false, None).await {
+            Ok(conn) => Ok(conn),
+            Err(err) if Self::is_encrypted_error(&err) => {
+                Err(PersistenceError::Validation(lock_error()))
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    async fn read_lock_status(db_path: &Path) -> Result<ProjectLockStatus, String> {
+        let cached = get_cached_key(db_path).is_some();
+        match Self::connect(db_path, false, None).await {
+            Ok(_) => Ok(ProjectLockStatus {
+                locked: false,
+                unlocked: true,
+            }),
+            Err(err) if Self::is_encrypted_error(&err) => Ok(ProjectLockStatus {
+                locked: true,
+                unlocked: cached,
+            }),
+            Err(err) => Err(err.to_string()),
+        }
+    }
+
+    fn sidecar_path(db_path: &Path, suffix: &str) -> PathBuf {
+        PathBuf::from(format!("{}{}", db_path.to_string_lossy(), suffix))
+    }
+
+    fn cleanup_sidecars(db_path: &Path) {
+        let wal = Self::sidecar_path(db_path, "-wal");
+        let shm = Self::sidecar_path(db_path, "-shm");
+        let _ = fs::remove_file(wal);
+        let _ = fs::remove_file(shm);
+    }
+
+    async fn rewrite_database_with_key(
+        db_path: &Path,
+        source_key: Option<&str>,
+        target_key: Option<&str>,
+    ) -> Result<(), String> {
+        let parent = db_path
+            .parent()
+            .ok_or_else(|| format!("Invalid database path: {:?}", db_path))?;
+        if !parent.exists() || !parent.is_dir() {
+            return Err(format!("Database parent directory does not exist: {:?}", parent));
+        }
+
+        let mut temp_path = db_path.to_path_buf();
+        let temp_ext = match db_path.extension().and_then(|ext| ext.to_str()) {
+            Some(ext) if !ext.is_empty() => format!("{}.tmp", ext),
+            _ => "tmp".to_string(),
+        };
+        temp_path.set_extension(temp_ext);
+
+        let _ = fs::remove_file(&temp_path);
+        Self::cleanup_sidecars(&temp_path);
+
+        // Ensure ATTACH target exists and is writable in current environment.
+        File::create(&temp_path).map_err(|e| e.to_string())?;
+
+        let mut conn = Self::connect(db_path, false, source_key)
+            .await
+            .map_err(|err| {
+                if Self::is_encrypted_error(&err) {
+                    "Invalid current password".to_string()
+                } else {
+                    err.to_string()
+                }
+            })?;
+
+        let escaped_temp = escape_sql_literal(&temp_path.to_string_lossy());
+        let attach_sql = match target_key {
+            Some(password) => {
+                let escaped = escape_sql_literal(password);
+                format!(
+                    "ATTACH DATABASE '{}' AS __openrisk_rekey__ KEY '{}';",
+                    escaped_temp, escaped
+                )
+            }
+            None => format!(
+                "ATTACH DATABASE '{}' AS __openrisk_rekey__ KEY '';",
+                escaped_temp
+            ),
+        };
+
+        sqlx::query(&attach_sql)
+            .execute(&mut conn)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        sqlx::query("SELECT sqlcipher_export('__openrisk_rekey__');")
+            .execute(&mut conn)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        sqlx::query("DETACH DATABASE __openrisk_rekey__;")
+            .execute(&mut conn)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        drop(conn);
+
+        Self::cleanup_sidecars(db_path);
+
+        let backup_path = Self::sidecar_path(db_path, "pre-rekey-backup");
+        let _ = fs::remove_file(&backup_path);
+
+        fs::rename(db_path, &backup_path).map_err(|e| e.to_string())?;
+        match fs::rename(&temp_path, db_path) {
+            Ok(_) => {
+                let _ = fs::remove_file(&backup_path);
+                Self::cleanup_sidecars(db_path);
+                Ok(())
+            }
+            Err(err) => {
+                let _ = fs::rename(&backup_path, db_path);
+                let _ = fs::remove_file(&temp_path);
+                Err(err.to_string())
+            }
+        }
     }
 
     async fn apply_schema(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
@@ -731,12 +977,38 @@ impl SqliteProjectPersistence {
         }
     }
 
-    fn project_dir(parent_dir: &Path, trimmed_name: &str) -> PathBuf {
-        parent_dir.join(trimmed_name)
+    fn has_project_file_extension(path: &Path) -> bool {
+        path.extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| {
+                let lower = ext.to_ascii_lowercase();
+                lower == "db" || lower == "orproj"
+            })
+            .unwrap_or(false)
     }
 
-    fn db_path(project_dir: &Path) -> PathBuf {
-        project_dir.join(DB_FILE_NAME)
+    fn create_db_path(project_path: &Path, trimmed_name: &str) -> PathBuf {
+        if Self::has_project_file_extension(project_path) || project_path.extension().is_some() {
+            return project_path.to_path_buf();
+        }
+
+        if project_path.exists() && project_path.is_file() {
+            return project_path.to_path_buf();
+        }
+
+        project_path.join(format!("{}.orproj", trimmed_name))
+    }
+
+    fn db_path(project_path: &Path) -> PathBuf {
+        if project_path.exists() && project_path.is_file() {
+            return project_path.to_path_buf();
+        }
+
+        if Self::has_project_file_extension(project_path) {
+            return project_path.to_path_buf();
+        }
+
+        project_path.join(DB_FILE_NAME)
     }
 
     async fn sync_local_plugins(
@@ -793,7 +1065,7 @@ impl ProjectPersistence for SqliteProjectPersistence {
     async fn create_project(
         &self,
         name: &str,
-        parent_dir: &Path,
+        project_path: &Path,
     ) -> Result<ProjectSummary, PersistenceError> {
         let trimmed_name = name.trim();
         if trimmed_name.is_empty() {
@@ -802,18 +1074,25 @@ impl ProjectPersistence for SqliteProjectPersistence {
             ));
         }
 
-        let project_dir = Self::project_dir(parent_dir, trimmed_name);
-        if project_dir.exists() {
+        let db_path = Self::create_db_path(project_path, trimmed_name);
+        if db_path.exists() {
             return Err(PersistenceError::Validation(format!(
-                "Project directory {:?} already exists. Rename project or open existing one.",
-                project_dir
+                "Project file {:?} already exists. Rename project or open existing one.",
+                db_path
             )));
         }
 
-        fs::create_dir_all(&project_dir)?;
+        let parent = db_path.parent().ok_or_else(|| {
+            PersistenceError::Validation(format!("Invalid project file path: {:?}", db_path))
+        })?;
+        if !parent.exists() || !parent.is_dir() {
+            return Err(PersistenceError::Validation(format!(
+                "Project parent directory does not exist: {:?}",
+                parent
+            )));
+        }
 
-        let db_path = Self::db_path(&project_dir);
-        let mut conn = Self::connect(&db_path).await?;
+        let mut conn = Self::connect(&db_path, true, None).await?;
         Self::apply_schema(&mut conn).await?;
         Self::apply_migrations_to_latest(&mut conn).await?;
 
@@ -846,20 +1125,20 @@ impl ProjectPersistence for SqliteProjectPersistence {
             id: project_id,
             name: trimmed_name.to_owned(),
             audit: None,
-            directory: project_dir,
+            directory: db_path,
         })
     }
 
-    async fn open_project(&self, project_dir: &Path) -> Result<ProjectSummary, PersistenceError> {
-        let db_path = Self::db_path(project_dir);
+    async fn open_project(&self, project_path: &Path) -> Result<ProjectSummary, PersistenceError> {
+        let db_path = Self::db_path(project_path);
         if !db_path.exists() {
             return Err(PersistenceError::Validation(format!(
-                "There is no project in the directory {:?}",
+                "There is no project database file at {:?}",
                 db_path
             )));
         }
 
-        let mut conn = Self::connect(&db_path).await?;
+        let mut conn = Self::connect_for_existing_project(&db_path).await?;
         Self::apply_schema(&mut conn).await?;
         Self::apply_migrations_to_latest(&mut conn).await?;
         let row = sqlx::query_as::<_, ProjectRow>(
@@ -872,23 +1151,23 @@ impl ProjectPersistence for SqliteProjectPersistence {
             id: row.id,
             name: row.name,
             audit: row.audit,
-            directory: project_dir.to_path_buf(),
+            directory: db_path,
         })
     }
 
     async fn load_settings(
         &self,
-        project_dir: &Path,
+        project_path: &Path,
     ) -> Result<ProjectSettingsPayload, PersistenceError> {
-        let db_path = Self::db_path(project_dir);
+        let db_path = Self::db_path(project_path);
         if !db_path.exists() {
             return Err(PersistenceError::Validation(format!(
-                "There is no project in the directory {:?}",
+                "There is no project database file at {:?}",
                 db_path
             )));
         }
 
-        let mut conn = Self::connect(&db_path).await?;
+        let mut conn = Self::connect_for_existing_project(&db_path).await?;
         Self::apply_schema(&mut conn).await?;
         Self::apply_migrations_to_latest(&mut conn).await?;
         let project_row = sqlx::query_as::<_, ProjectRow>(
@@ -901,7 +1180,7 @@ impl ProjectPersistence for SqliteProjectPersistence {
             id: project_row.id.clone(),
             name: project_row.name.clone(),
             audit: project_row.audit.clone(),
-            directory: project_dir.to_path_buf(),
+            directory: db_path,
         };
 
         let settings_row = sqlx::query_as::<_, ProjectSettingsRow>(
@@ -943,18 +1222,18 @@ impl ProjectPersistence for SqliteProjectPersistence {
 
     async fn update_project_settings(
         &self,
-        project_dir: &Path,
+        project_path: &Path,
         theme: Option<String>,
     ) -> Result<ProjectSettingsRecord, PersistenceError> {
-        let db_path = Self::db_path(project_dir);
+        let db_path = Self::db_path(project_path);
         if !db_path.exists() {
             return Err(PersistenceError::Validation(format!(
-                "There is no project in the directory {:?}",
+                "There is no project database file at {:?}",
                 db_path
             )));
         }
 
-        let mut conn = Self::connect(&db_path).await?;
+        let mut conn = Self::connect_for_existing_project(&db_path).await?;
         Self::apply_schema(&mut conn).await?;
         Self::apply_migrations_to_latest(&mut conn).await?;
 
@@ -984,7 +1263,7 @@ impl ProjectPersistence for SqliteProjectPersistence {
 
     async fn update_project_plugin_settings(
         &self,
-        project_dir: &Path,
+        project_path: &Path,
         plugin_id: &str,
         settings: Value,
     ) -> Result<PluginSettingsPayload, PersistenceError> {
@@ -994,15 +1273,15 @@ impl ProjectPersistence for SqliteProjectPersistence {
             ));
         }
 
-        let db_path = Self::db_path(project_dir);
+        let db_path = Self::db_path(project_path);
         if !db_path.exists() {
             return Err(PersistenceError::Validation(format!(
-                "There is no project in the directory {:?}",
+                "There is no project database file at {:?}",
                 db_path
             )));
         }
 
-        let mut conn = Self::connect(&db_path).await?;
+        let mut conn = Self::connect_for_existing_project(&db_path).await?;
         Self::apply_schema(&mut conn).await?;
         Self::apply_migrations_to_latest(&mut conn).await?;
 
@@ -1155,10 +1434,9 @@ pub async fn create_project(name: String, dir_path: PathBuf) -> Result<ProjectSu
 }
 
 pub async fn open_project(dir_path: PathBuf) -> Result<ProjectSummary, String> {
-    // check if project.db exists
-    let db_path = dir_path.join(DB_FILE_NAME);
+    let db_path = SqliteProjectPersistence::db_path(&dir_path);
     if !db_path.exists() {
-        return Err(format!("No project found in directory {:?}", dir_path));
+        return Err(format!("No project database file found at {:?}", db_path));
     }
     let store = SqliteProjectPersistence::new();
     store
@@ -1168,9 +1446,9 @@ pub async fn open_project(dir_path: PathBuf) -> Result<ProjectSummary, String> {
 }
 
 pub async fn load_settings(dir_path: PathBuf) -> Result<ProjectSettingsPayload, String> {
-    let db_path = dir_path.join(DB_FILE_NAME);
+    let db_path = SqliteProjectPersistence::db_path(&dir_path);
     if !db_path.exists() {
-        return Err(format!("No project found in directory {:?}", dir_path));
+        return Err(format!("No project database file found at {:?}", db_path));
     }
     let store = SqliteProjectPersistence::new();
     store
@@ -1183,9 +1461,9 @@ pub async fn update_project_settings(
     dir_path: PathBuf,
     theme: Option<String>,
 ) -> Result<ProjectSettingsRecord, String> {
-    let db_path = dir_path.join(DB_FILE_NAME);
+    let db_path = SqliteProjectPersistence::db_path(&dir_path);
     if !db_path.exists() {
-        return Err(format!("No project found in directory {:?}", dir_path));
+        return Err(format!("No project database file found at {:?}", db_path));
     }
 
     let store = SqliteProjectPersistence::new();
@@ -1199,9 +1477,9 @@ pub async fn update_project_name(
     dir_path: PathBuf,
     name: String,
 ) -> Result<ProjectSummary, String> {
-    let db_path = dir_path.join(DB_FILE_NAME);
+    let db_path = SqliteProjectPersistence::db_path(&dir_path);
     if !db_path.exists() {
-        return Err(format!("No project found in directory {:?}", dir_path));
+        return Err(format!("No project database file found at {:?}", db_path));
     }
 
     let next_name = name.trim().to_string();
@@ -1209,7 +1487,7 @@ pub async fn update_project_name(
         return Err("Project name must not be empty".to_string());
     }
 
-    let mut conn = SqliteProjectPersistence::connect(&db_path)
+    let mut conn = SqliteProjectPersistence::connect_for_existing_project(&db_path)
         .await
         .map_err(|e| e.to_string())?;
     SqliteProjectPersistence::apply_schema(&mut conn)
@@ -1237,7 +1515,7 @@ pub async fn update_project_name(
         id: project_row.id,
         name: next_name,
         audit: project_row.audit,
-        directory: dir_path,
+        directory: db_path,
     })
 }
 
@@ -1246,9 +1524,9 @@ pub async fn update_project_plugin_settings(
     plugin_id: String,
     settings: Value,
 ) -> Result<PluginSettingsPayload, String> {
-    let db_path = dir_path.join(DB_FILE_NAME);
+    let db_path = SqliteProjectPersistence::db_path(&dir_path);
     if !db_path.exists() {
-        return Err(format!("No project found in directory {:?}", dir_path));
+        return Err(format!("No project database file found at {:?}", db_path));
     }
 
     let store = SqliteProjectPersistence::new();
@@ -1263,9 +1541,9 @@ pub async fn upsert_project_plugin_from_dir(
     plugin_dir: PathBuf,
     replace_plugin_id: Option<String>,
 ) -> Result<PluginSettingsPayload, String> {
-    let db_path = dir_path.join(DB_FILE_NAME);
+    let db_path = SqliteProjectPersistence::db_path(&dir_path);
     if !db_path.exists() {
-        return Err(format!("No project found in directory {:?}", dir_path));
+        return Err(format!("No project database file found at {:?}", db_path));
     }
     if !plugin_dir.exists() || !plugin_dir.is_dir() {
         return Err(format!("Plugin directory does not exist: {:?}", plugin_dir));
@@ -1280,7 +1558,7 @@ pub async fn upsert_project_plugin_from_dir(
     let bundle =
         load_plugin_bundle_with_id(&plugin_dir, plugin_id.clone()).map_err(|e| e.to_string())?;
 
-    let mut conn = SqliteProjectPersistence::connect(&db_path)
+    let mut conn = SqliteProjectPersistence::connect_for_existing_project(&db_path)
         .await
         .map_err(|e| e.to_string())?;
     SqliteProjectPersistence::apply_schema(&mut conn)
@@ -1370,12 +1648,12 @@ pub async fn create_scan(
     dir_path: PathBuf,
     preview: Option<String>,
 ) -> Result<ScanSummaryRecord, String> {
-    let db_path = dir_path.join(DB_FILE_NAME);
+    let db_path = SqliteProjectPersistence::db_path(&dir_path);
     if !db_path.exists() {
-        return Err(format!("No project found in directory {:?}", dir_path));
+        return Err(format!("No project database file found at {:?}", db_path));
     }
 
-    let mut conn = SqliteProjectPersistence::connect(&db_path)
+    let mut conn = SqliteProjectPersistence::connect_for_existing_project(&db_path)
         .await
         .map_err(|e| e.to_string())?;
     SqliteProjectPersistence::apply_schema(&mut conn)
@@ -1424,9 +1702,9 @@ pub async fn update_scan_preview(
     scan_id: String,
     preview: String,
 ) -> Result<ScanSummaryRecord, String> {
-    let db_path = dir_path.join(DB_FILE_NAME);
+    let db_path = SqliteProjectPersistence::db_path(&dir_path);
     if !db_path.exists() {
-        return Err(format!("No project found in directory {:?}", dir_path));
+        return Err(format!("No project database file found at {:?}", db_path));
     }
 
     let next_preview = preview.trim().to_string();
@@ -1434,7 +1712,7 @@ pub async fn update_scan_preview(
         return Err("Scan name must not be empty".to_string());
     }
 
-    let mut conn = SqliteProjectPersistence::connect(&db_path)
+    let mut conn = SqliteProjectPersistence::connect_for_existing_project(&db_path)
         .await
         .map_err(|e| e.to_string())?;
     SqliteProjectPersistence::apply_schema(&mut conn)
@@ -1467,12 +1745,12 @@ pub async fn update_scan_preview(
 }
 
 pub async fn list_scans(dir_path: PathBuf) -> Result<Vec<ScanSummaryRecord>, String> {
-    let db_path = dir_path.join(DB_FILE_NAME);
+    let db_path = SqliteProjectPersistence::db_path(&dir_path);
     if !db_path.exists() {
-        return Err(format!("No project found in directory {:?}", dir_path));
+        return Err(format!("No project database file found at {:?}", db_path));
     }
 
-    let mut conn = SqliteProjectPersistence::connect(&db_path)
+    let mut conn = SqliteProjectPersistence::connect_for_existing_project(&db_path)
         .await
         .map_err(|e| e.to_string())?;
     SqliteProjectPersistence::apply_schema(&mut conn)
@@ -1499,12 +1777,12 @@ pub async fn list_scans(dir_path: PathBuf) -> Result<Vec<ScanSummaryRecord>, Str
 }
 
 pub async fn get_scan(dir_path: PathBuf, scan_id: String) -> Result<ScanDetailRecord, String> {
-    let db_path = dir_path.join(DB_FILE_NAME);
+    let db_path = SqliteProjectPersistence::db_path(&dir_path);
     if !db_path.exists() {
-        return Err(format!("No project found in directory {:?}", dir_path));
+        return Err(format!("No project database file found at {:?}", db_path));
     }
 
-    let mut conn = SqliteProjectPersistence::connect(&db_path)
+    let mut conn = SqliteProjectPersistence::connect_for_existing_project(&db_path)
         .await
         .map_err(|e| e.to_string())?;
     SqliteProjectPersistence::apply_schema(&mut conn)
@@ -1566,15 +1844,15 @@ pub async fn run_scan(
     selected_plugins: Vec<String>,
     inputs: Value,
 ) -> Result<ScanSummaryRecord, String> {
-    let db_path = dir_path.join(DB_FILE_NAME);
+    let db_path = SqliteProjectPersistence::db_path(&dir_path);
     if !db_path.exists() {
-        return Err(format!("No project found in directory {:?}", dir_path));
+        return Err(format!("No project database file found at {:?}", db_path));
     }
     if selected_plugins.is_empty() {
         return Err("Select at least one plugin before run".to_string());
     }
 
-    let mut conn = SqliteProjectPersistence::connect(&db_path)
+    let mut conn = SqliteProjectPersistence::connect_for_existing_project(&db_path)
         .await
         .map_err(|e| e.to_string())?;
     SqliteProjectPersistence::apply_schema(&mut conn)
@@ -1702,5 +1980,150 @@ pub async fn run_scan(
         id: scan_id,
         status: "Completed".to_string(),
         preview: scan.preview,
+    })
+}
+
+pub async fn get_project_lock_status(dir_path: PathBuf) -> Result<ProjectLockStatus, String> {
+    let db_path = SqliteProjectPersistence::db_path(&dir_path);
+    if !db_path.exists() {
+        return Err(format!("No project database file found at {:?}", db_path));
+    }
+
+    SqliteProjectPersistence::read_lock_status(&db_path).await
+}
+
+pub async fn unlock_project(
+    dir_path: PathBuf,
+    password: String,
+) -> Result<ProjectLockStatus, String> {
+    validate_non_empty_password(&password, "Password")?;
+
+    let db_path = SqliteProjectPersistence::db_path(&dir_path);
+    if !db_path.exists() {
+        return Err(format!("No project database file found at {:?}", db_path));
+    }
+
+    let status = SqliteProjectPersistence::read_lock_status(&db_path).await?;
+    if !status.locked {
+        return Ok(ProjectLockStatus {
+            locked: false,
+            unlocked: true,
+        });
+    }
+
+    let mut conn = SqliteProjectPersistence::connect(&db_path, false, Some(&password))
+        .await
+        .map_err(|err| {
+            if SqliteProjectPersistence::is_encrypted_error(&err) {
+                "Invalid password".to_string()
+            } else {
+                err.to_string()
+            }
+        })?;
+    SqliteProjectPersistence::apply_schema(&mut conn)
+        .await
+        .map_err(|e| e.to_string())?;
+    SqliteProjectPersistence::apply_migrations_to_latest(&mut conn)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    cache_key(&db_path, password);
+
+    Ok(ProjectLockStatus {
+        locked: true,
+        unlocked: true,
+    })
+}
+
+pub async fn set_project_password(
+    dir_path: PathBuf,
+    new_password: String,
+) -> Result<ProjectLockStatus, String> {
+    validate_password(&new_password)?;
+
+    let db_path = SqliteProjectPersistence::db_path(&dir_path);
+    if !db_path.exists() {
+        return Err(format!("No project database file found at {:?}", db_path));
+    }
+
+    let status = SqliteProjectPersistence::read_lock_status(&db_path).await?;
+    if status.locked && !status.unlocked {
+        return Err(lock_error());
+    }
+
+    let source_key = if status.locked {
+        get_cached_key(&db_path)
+    } else {
+        None
+    };
+    if status.locked && source_key.is_none() {
+        return Err(lock_error());
+    }
+    SqliteProjectPersistence::rewrite_database_with_key(
+        &db_path,
+        source_key.as_deref(),
+        Some(new_password.as_str()),
+    )
+    .await?;
+
+    cache_key(&db_path, new_password);
+
+    Ok(ProjectLockStatus {
+        locked: true,
+        unlocked: true,
+    })
+}
+
+pub async fn change_project_password(
+    dir_path: PathBuf,
+    current_password: String,
+    new_password: String,
+) -> Result<ProjectLockStatus, String> {
+    validate_password(&new_password)?;
+    validate_non_empty_password(&current_password, "Current password")?;
+
+    let db_path = SqliteProjectPersistence::db_path(&dir_path);
+    if !db_path.exists() {
+        return Err(format!("No project database file found at {:?}", db_path));
+    }
+
+    SqliteProjectPersistence::rewrite_database_with_key(
+        &db_path,
+        Some(current_password.as_str()),
+        Some(new_password.as_str()),
+    )
+    .await?;
+
+    cache_key(&db_path, new_password);
+
+    Ok(ProjectLockStatus {
+        locked: true,
+        unlocked: true,
+    })
+}
+
+pub async fn remove_project_password(
+    dir_path: PathBuf,
+    current_password: String,
+) -> Result<ProjectLockStatus, String> {
+    validate_non_empty_password(&current_password, "Current password")?;
+
+    let db_path = SqliteProjectPersistence::db_path(&dir_path);
+    if !db_path.exists() {
+        return Err(format!("No project database file found at {:?}", db_path));
+    }
+
+    SqliteProjectPersistence::rewrite_database_with_key(
+        &db_path,
+        Some(current_password.as_str()),
+        None,
+    )
+    .await?;
+
+    clear_cached_key(&db_path);
+
+    Ok(ProjectLockStatus {
+        locked: false,
+        unlocked: true,
     })
 }

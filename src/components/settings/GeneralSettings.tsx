@@ -2,9 +2,11 @@
  * General Settings Panel
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ProjectSettingsRecord } from "@/core/backend/types";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -33,6 +35,13 @@ export function GeneralSettings({
   const backendClient = useBackendClient();
   const { updateGlobalSettings } = useSettings();
   const [savingTheme, setSavingTheme] = useState(false);
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordInfo, setPasswordInfo] = useState<string | null>(null);
+  const [passwordEnabled, setPasswordEnabled] = useState<boolean | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
 
   const theme = projectSettings?.theme ?? "system";
 
@@ -52,6 +61,93 @@ export function GeneralSettings({
       setSavingTheme(false);
     }
   };
+
+  const refreshPasswordStatus = async () => {
+    if (!projectDir) {
+      setPasswordEnabled(null);
+      return;
+    }
+    const status = await backendClient.getProjectLockStatus(projectDir);
+    setPasswordEnabled(status.locked);
+  };
+
+  const clearPasswordInputs = () => {
+    setNewPassword("");
+    setConfirmPassword("");
+    setCurrentPassword("");
+  };
+
+  const submitEnablePassword = async () => {
+    if (!projectDir) {
+      return;
+    }
+    setPasswordError(null);
+    setPasswordInfo(null);
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Passwords do not match");
+      return;
+    }
+
+    setPasswordBusy(true);
+    try {
+      await backendClient.setProjectPassword(projectDir, newPassword);
+      setPasswordInfo("Password protection enabled. Database file is now encrypted.");
+      clearPasswordInputs();
+      await refreshPasswordStatus();
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPasswordBusy(false);
+    }
+  };
+
+  const submitChangePassword = async () => {
+    if (!projectDir) {
+      return;
+    }
+    setPasswordError(null);
+    setPasswordInfo(null);
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New passwords do not match");
+      return;
+    }
+
+    setPasswordBusy(true);
+    try {
+      await backendClient.changeProjectPassword(projectDir, currentPassword, newPassword);
+      setPasswordInfo("Password changed successfully.");
+      clearPasswordInputs();
+      await refreshPasswordStatus();
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPasswordBusy(false);
+    }
+  };
+
+  const submitDisablePassword = async () => {
+    if (!projectDir) {
+      return;
+    }
+    setPasswordError(null);
+    setPasswordInfo(null);
+    setPasswordBusy(true);
+    try {
+      await backendClient.removeProjectPassword(projectDir, currentPassword);
+      setPasswordInfo("Password protection removed. File is no longer encrypted.");
+      clearPasswordInputs();
+      await refreshPasswordStatus();
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPasswordBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshPasswordStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectDir]);
 
   return (
     <div className="space-y-6">
@@ -104,6 +200,82 @@ export function GeneralSettings({
           <p className="text-xs text-muted-foreground">
             Locale: {projectSettings.locale} • Settings ID: {projectSettings.id}
           </p>
+
+          <div className="rounded-lg border p-4 space-y-3">
+            <div className="space-y-0.5">
+              <Label>Password Protection</Label>
+              <p className="text-sm text-muted-foreground">
+                Encrypt this project file with SQLCipher.
+              </p>
+            </div>
+
+            {passwordEnabled === false && (
+              <div className="space-y-2">
+                <Input
+                  type="password"
+                  placeholder="New password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+                <Input
+                  type="password"
+                  placeholder="Confirm new password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+                <Button
+                  type="button"
+                  onClick={() => void submitEnablePassword()}
+                  disabled={passwordBusy || !newPassword || !confirmPassword}
+                >
+                  {passwordBusy ? "Applying..." : "Enable Encryption"}
+                </Button>
+              </div>
+            )}
+
+            {passwordEnabled === true && (
+              <div className="space-y-2">
+                <Input
+                  type="password"
+                  placeholder="Current password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                />
+                <Input
+                  type="password"
+                  placeholder="New password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+                <Input
+                  type="password"
+                  placeholder="Confirm new password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => void submitChangePassword()}
+                    disabled={passwordBusy || !currentPassword || !newPassword || !confirmPassword}
+                  >
+                    {passwordBusy ? "Saving..." : "Change Password"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void submitDisablePassword()}
+                    disabled={passwordBusy || !currentPassword}
+                  >
+                    Disable Encryption
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {passwordError ? <p className="text-sm text-red-600">{passwordError}</p> : null}
+            {passwordInfo ? <p className="text-sm text-muted-foreground">{passwordInfo}</p> : null}
+          </div>
         </div>
       )}
     </div>

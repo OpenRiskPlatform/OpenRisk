@@ -44,6 +44,11 @@ pub fn run() {
             transport::run_scan,
             transport::upsert_project_plugin_from_dir,
             transport::update_scan_preview,
+            transport::get_project_lock_status,
+            transport::unlock_project,
+            transport::set_project_password,
+            transport::change_project_password,
+            transport::remove_project_password,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

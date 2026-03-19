@@ -13,6 +13,7 @@ import type {
   ProjectSettingsPayload,
   ProjectSettingsRecord,
   PluginSettingsDescriptor,
+  ProjectLockStatus,
   ProjectSummary,
 } from "./types";
 
@@ -20,6 +21,7 @@ export class MockBackendClient extends BackendClient {
   private eventCallbacks: Array<(event: BackendEvent) => void> = [];
   private pluginStatuses: Map<string, PluginStatus> = new Map();
   private scans: ScanSummary[] = [];
+  private lockStatusByPath: Map<string, ProjectLockStatus> = new Map();
 
   executePlugin(
     pluginId: string,
@@ -243,6 +245,41 @@ export class MockBackendClient extends BackendClient {
       settingsSchema: [],
       settings: {},
     };
+  }
+
+  async getProjectLockStatus(directory: string): Promise<ProjectLockStatus> {
+    return this.lockStatusByPath.get(directory) ?? { locked: false, unlocked: true };
+  }
+
+  async unlockProject(directory: string, _password: string): Promise<ProjectLockStatus> {
+    const next = { locked: true, unlocked: true };
+    this.lockStatusByPath.set(directory, next);
+    return next;
+  }
+
+  async setProjectPassword(directory: string, _newPassword: string): Promise<ProjectLockStatus> {
+    const next = { locked: true, unlocked: true };
+    this.lockStatusByPath.set(directory, next);
+    return next;
+  }
+
+  async changeProjectPassword(
+    directory: string,
+    _currentPassword: string,
+    _newPassword: string
+  ): Promise<ProjectLockStatus> {
+    const next = { locked: true, unlocked: true };
+    this.lockStatusByPath.set(directory, next);
+    return next;
+  }
+
+  async removeProjectPassword(
+    directory: string,
+    _currentPassword: string
+  ): Promise<ProjectLockStatus> {
+    const next = { locked: false, unlocked: true };
+    this.lockStatusByPath.set(directory, next);
+    return next;
   }
 
   private emitEvent(event: BackendEvent): void {

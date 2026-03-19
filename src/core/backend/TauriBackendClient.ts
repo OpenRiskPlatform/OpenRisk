@@ -13,6 +13,7 @@ import type {
   PluginStatusResponse,
   PluginSettingsDescriptor,
   ProjectSettingsRecord,
+  ProjectLockStatus,
   ProjectSummary,
   ProjectSettingsPayload,
 } from "./types";
@@ -258,6 +259,85 @@ export class TauriBackendClient extends BackendClient {
       console.error("[TauriBackendClient] upsertProjectPluginFromDir error:", error);
       throw new Error(
         error?.message ?? error?.toString() ?? "Failed to load plugin from folder"
+      );
+    }
+  }
+
+  async getProjectLockStatus(directory: string): Promise<ProjectLockStatus> {
+    try {
+      const result = await invoke<string>("get_project_lock_status", {
+        dirPath: directory,
+      });
+      return JSON.parse(result) as ProjectLockStatus;
+    } catch (error: any) {
+      console.error("[TauriBackendClient] getProjectLockStatus error:", error);
+      throw new Error(error?.message ?? error?.toString() ?? "Failed to read lock status");
+    }
+  }
+
+  async unlockProject(directory: string, password: string): Promise<ProjectLockStatus> {
+    try {
+      const result = await invoke<string>("unlock_project", {
+        dirPath: directory,
+        password,
+      });
+      return JSON.parse(result) as ProjectLockStatus;
+    } catch (error: any) {
+      console.error("[TauriBackendClient] unlockProject error:", error);
+      throw new Error(error?.message ?? error?.toString() ?? "Failed to unlock project");
+    }
+  }
+
+  async setProjectPassword(
+    directory: string,
+    newPassword: string
+  ): Promise<ProjectLockStatus> {
+    try {
+      const result = await invoke<string>("set_project_password", {
+        dirPath: directory,
+        newPassword,
+      });
+      return JSON.parse(result) as ProjectLockStatus;
+    } catch (error: any) {
+      console.error("[TauriBackendClient] setProjectPassword error:", error);
+      throw new Error(error?.message ?? error?.toString() ?? "Failed to set project password");
+    }
+  }
+
+  async changeProjectPassword(
+    directory: string,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<ProjectLockStatus> {
+    try {
+      const result = await invoke<string>("change_project_password", {
+        dirPath: directory,
+        currentPassword,
+        newPassword,
+      });
+      return JSON.parse(result) as ProjectLockStatus;
+    } catch (error: any) {
+      console.error("[TauriBackendClient] changeProjectPassword error:", error);
+      throw new Error(
+        error?.message ?? error?.toString() ?? "Failed to change project password"
+      );
+    }
+  }
+
+  async removeProjectPassword(
+    directory: string,
+    currentPassword: string
+  ): Promise<ProjectLockStatus> {
+    try {
+      const result = await invoke<string>("remove_project_password", {
+        dirPath: directory,
+        currentPassword,
+      });
+      return JSON.parse(result) as ProjectLockStatus;
+    } catch (error: any) {
+      console.error("[TauriBackendClient] removeProjectPassword error:", error);
+      throw new Error(
+        error?.message ?? error?.toString() ?? "Failed to remove project password"
       );
     }
   }

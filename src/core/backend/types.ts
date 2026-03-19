@@ -74,6 +74,11 @@ export interface ProjectSettingsPayload {
   plugins: PluginSettingsDescriptor[];
 }
 
+export interface ProjectLockStatus {
+  locked: boolean;
+  unlocked: boolean;
+}
+
 export interface ScanSummary {
   id: string;
   status: "Draft" | "Running" | "Completed" | "Failed" | "Finished";
@@ -211,4 +216,27 @@ export abstract class BackendClient {
     pluginDir: string,
     replacePluginId?: string
   ): Promise<PluginSettingsDescriptor>;
+
+  abstract getProjectLockStatus(directory: string): Promise<ProjectLockStatus>;
+
+  abstract unlockProject(
+    directory: string,
+    password: string
+  ): Promise<ProjectLockStatus>;
+
+  abstract setProjectPassword(
+    directory: string,
+    newPassword: string
+  ): Promise<ProjectLockStatus>;
+
+  abstract changeProjectPassword(
+    directory: string,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<ProjectLockStatus>;
+
+  abstract removeProjectPassword(
+    directory: string,
+    currentPassword: string
+  ): Promise<ProjectLockStatus>;
 }
