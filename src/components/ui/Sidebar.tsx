@@ -22,7 +22,7 @@ export function Sidebar() {
   };
 
   return (
-    <div className="w-16 h-screen bg-white flex flex-col items-center py-4 border-r border-gray-200">
+    <div className="w-16 shrink-0 bg-white flex flex-col items-center py-4 border-r border-gray-200">
       {/* Navigation Items */}
       <nav className="flex-1 flex flex-col gap-2 w-full px-2">
         {navItems.map((item) => {
