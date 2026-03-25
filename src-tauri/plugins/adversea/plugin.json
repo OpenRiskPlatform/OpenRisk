@@ -30,7 +30,7 @@
     ],
     "inputs": [
         {
-            "name": "target",
+            "name": "name",
             "type": "string",
             "optional": false,
             "title": "Name of the target",
