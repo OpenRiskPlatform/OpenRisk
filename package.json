@@ -25,7 +25,7 @@
     "@tanstack/react-router": "^1.133.32",
     "@tanstack/router-devtools": "^1.133.32",
     "@tanstack/router-vite-plugin": "^1.133.32",
-    "@tauri-apps/api": "^2",
+    "@tauri-apps/api": "~2.9",
     "@tauri-apps/plugin-dialog": "^2.4.2",
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-shell": "^2.3.5",

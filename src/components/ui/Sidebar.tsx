@@ -28,7 +28,7 @@ export function Sidebar() {
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeRoute === item.route;
-          
+
           return (
             <button
               key={item.route}
@@ -36,8 +36,8 @@ export function Sidebar() {
               className={`
                 w-full h-12 rounded-lg flex items-center justify-center
                 transition-colors duration-150
-                ${isActive 
-                  ? 'border-2 border-gray-500 text-gray-900' 
+                ${isActive
+                  ? 'border-2 border-gray-500 text-gray-900'
                   : 'text-gray-600 hover:bg-gray-200'
                 }
               `}
