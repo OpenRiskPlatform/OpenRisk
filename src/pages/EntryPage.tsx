@@ -2,288 +2,287 @@
  * Entry Page - Landing/Home screen
  */
 
-import { Settings } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { FormEvent, useState } from "react";
-import { SettingsDialog } from "@/components/settings/SettingsDialog";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  ArrowRight,
+  Box,
+  FolderOpen,
+  Loader2,
+  LogOut,
+  Plus,
+  Settings,
+} from "lucide-react";
+import { SettingsDialog } from "@/components/settings/SettingsDialog";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useBackendClient } from "@/hooks/useBackendClient";
 
-const RECENT_PROJECT_DIR = "/home/ms/Downloads/test/";
+const RECENT_PROJECTS_KEY = "openrisk.recentProjects";
+const MAX_RECENT_PROJECTS = 5;
+
+function getBaseName(pathValue: string): string {
+  const normalized = pathValue.replace(/[\\/]+$/, "");
+  const parts = normalized.split(/[\\/]/);
+  return parts[parts.length - 1] ?? "";
+}
+
+function getParentDirectory(pathValue: string): string | null {
+  const normalized = pathValue.replace(/[\\/]+$/, "");
+  const lastSlash = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
+
+  if (lastSlash < 0) {
+    return null;
+  }
+
+  if (lastSlash === 0) {
+    return normalized[0] ?? null;
+  }
+
+  return normalized.slice(0, lastSlash);
+}
+
+function normalizeProjectDirectory(pathValue: string): string {
+  if (!pathValue.toLowerCase().endsWith(".project")) {
+    return pathValue;
+  }
+
+  return getParentDirectory(pathValue) ?? pathValue;
+}
+
+function getProjectLabel(projectDir: string): string {
+  const name = getBaseName(projectDir);
+  if (!name) {
+    return "untitled.project";
+  }
+  return `${name}.project`;
+}
+
+function pushRecentProject(recent: string[], projectDir: string): string[] {
+  const deduplicated = recent.filter((entry) => entry !== projectDir);
+  return [projectDir, ...deduplicated].slice(0, MAX_RECENT_PROJECTS);
+}
 
 export function EntryPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [projectName, setProjectName] = useState("");
-  const [projectDir, setProjectDir] = useState("");
-  const [openProjectDir, setOpenProjectDir] = useState("");
-  const [isCreating, setIsCreating] = useState(false);
-  const [isOpeningProject, setIsOpeningProject] = useState(false);
+  const [settingsProjectDir, setSettingsProjectDir] = useState<string | undefined>(undefined);
+  const [recentProjects, setRecentProjects] = useState<string[]>([]);
+  const [loadingRecentProject, setLoadingRecentProject] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<"open" | "save" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [openError, setOpenError] = useState<string | null>(null);
+
   const navigate = useNavigate();
   const backendClient = useBackendClient();
 
-  const handlePickDirectory = async () => {
+  const controlsDisabled = pendingAction !== null || loadingRecentProject !== null;
+
+  useEffect(() => {
     try {
-      const selection = await open({
-        directory: true,
-        multiple: false,
-      });
-      if (typeof selection === "string") {
-        setProjectDir(selection);
+      const raw = localStorage.getItem(RECENT_PROJECTS_KEY);
+      if (!raw) {
+        return;
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to open directory picker";
-      setError(message);
-    }
-  };
-
-  const handleUseRecentProject = () => {
-    setProjectDir(RECENT_PROJECT_DIR);
-  };
-
-  const handlePickExistingProject = async () => {
-    setOpenError(null);
-    try {
-      const selection = await open({
-        directory: true,
-        multiple: false,
-      });
-      if (typeof selection === "string") {
-        setOpenProjectDir(selection);
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.every((item) => typeof item === "string")) {
+        setRecentProjects(parsed.slice(0, MAX_RECENT_PROJECTS));
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to open directory picker";
-      setOpenError(message);
+    } catch {
+      setRecentProjects([]);
     }
+  }, []);
+
+  const persistRecentProjects = (updater: (current: string[]) => string[]) => {
+    setRecentProjects((current) => {
+      const next = updater(current);
+      localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(next));
+      return next;
+    });
   };
 
-  const handleCreateProject = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const openProjectDirectory = async (projectDir: string) => {
+    const project = await backendClient.openProject(projectDir);
+    setSettingsProjectDir(project.directory);
+    persistRecentProjects((current) => pushRecentProject(current, project.directory));
+    await navigate({ to: "/project", search: { dir: project.directory } });
+  };
+
+  const handleOpenProjectFile = async () => {
     setError(null);
-
-    if (!projectName.trim()) {
-      setError("Project name is required");
-      return;
-    }
-    if (!projectDir) {
-      setError("Please select a directory for the project");
-      return;
-    }
-
-    setIsCreating(true);
+    setPendingAction("open");
     try {
-      const project = await backendClient.createProject(
-        projectName.trim(),
-        projectDir
-      );
-      await navigate({ to: "/project", search: { dir: project.directory } });
+      const selection = await open({
+        directory: false,
+        multiple: false,
+        filters: [{ name: "OpenRisk Project", extensions: ["project"] }],
+      });
+
+      if (typeof selection !== "string") {
+        return;
+      }
+
+      await openProjectDirectory(normalizeProjectDirectory(selection));
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setError(message);
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setIsCreating(false);
+      setPendingAction(null);
     }
   };
 
-  const handleOpenProject = async () => {
-    setOpenError(null);
-    if (!openProjectDir) {
-      setOpenError("Select a project directory to open");
-      return;
-    }
-
-    setIsOpeningProject(true);
+  const handleCreateProjectFile = async () => {
+    setError(null);
+    setPendingAction("save");
     try {
-      const project = await backendClient.openProject(openProjectDir);
+      const selection = await save({
+        defaultPath: "new-project.project",
+        filters: [{ name: "OpenRisk Project", extensions: ["project"] }],
+      });
+
+      if (typeof selection !== "string") {
+        return;
+      }
+
+      const parentDirectory = getParentDirectory(selection);
+      if (!parentDirectory) {
+        throw new Error("Could not determine target directory from selected file path");
+      }
+
+      const fileName = getBaseName(selection);
+      const projectName = fileName.replace(/\.project$/i, "").trim() || "new-project";
+
+      const project = await backendClient.createProject(projectName, parentDirectory);
+      setSettingsProjectDir(project.directory);
+      persistRecentProjects((current) => pushRecentProject(current, project.directory));
       await navigate({ to: "/project", search: { dir: project.directory } });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setOpenError(message);
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setIsOpeningProject(false);
+      setPendingAction(null);
     }
+  };
+
+  const handleRecentProjectClick = async (projectDir: string) => {
+    setError(null);
+    setLoadingRecentProject(projectDir);
+    try {
+      await openProjectDirectory(projectDir);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoadingRecentProject(null);
+    }
+  };
+
+  const handleExitApp = () => {
+    console.info("Mock exit app action triggered");
+    window.close();
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
-      {/* Header with Settings */}
-      <header className="absolute top-0 right-0 p-6">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setSettingsOpen(true)}
-          className="rounded-full"
-        >
-          <Settings className="h-5 w-5" />
-          <span className="sr-only">Settings</span>
-        </Button>
-      </header>
-
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4">
-        <div className="text-center space-y-8 max-w-2xl">
-          {/* Logo/Icon placeholder */}
+    <div className="min-h-screen bg-muted/30">
+      <main className="flex min-h-screen items-center justify-center px-4">
+        <div className="w-full max-w-sm space-y-8">
           <div className="flex justify-center">
-            <div className="w-32 h-32 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <svg
-                className="w-20 h-20 text-primary"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-                />
-              </svg>
+            <div className="flex h-28 w-64 items-center justify-center rounded-3xl bg-slate-950 text-4xl font-extrabold text-white">
+              OpenRisk
             </div>
           </div>
 
-          {/* Title & Description */}
-          <div className="space-y-3">
-            <h1 className="text-5xl font-bold text-slate-900 dark:text-slate-50">
-              OpenRisk
-            </h1>
-            <p className="text-xl text-slate-600 dark:text-slate-400">
-              Modular Risk Analysis Platform
-            </p>
-            <p className="text-sm text-slate-500 dark:text-slate-500 max-w-md mx-auto">
-              Analyze risk profiles using extensible plugins. Configure your
-              workspace and start assessing entities.
-            </p>
-          </div>
-
-          {/* Project creation form */}
-          <div className="max-w-xl mx-auto w-full">
-            <form
-              onSubmit={handleCreateProject}
-              className="bg-white dark:bg-slate-900/70 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 p-6 space-y-5"
+          <div className="flex items-center justify-center gap-2">
+            <Button
+              type="button"
+              variant="default"
+              size="icon"
+              onClick={handleOpenProjectFile}
+              disabled={controlsDisabled}
+              aria-label="Open project file"
             >
-              <div className="space-y-2 text-left">
-                <Label htmlFor="projectName" className="text-slate-700 dark:text-slate-200">
-                  Project Name
-                </Label>
-                <Input
-                  id="projectName"
-                  value={projectName}
-                  onChange={(event) => setProjectName(event.target.value)}
-                  placeholder="ACME Risk Assessment"
-                />
-              </div>
-
-              <div className="space-y-2 text-left">
-                <Label htmlFor="projectDirectory" className="text-slate-700 dark:text-slate-200">
-                  Project Directory
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="projectDirectory"
-                    value={projectDir}
-                    placeholder="Select or create a folder"
-                    readOnly
-                  />
-                  <Button type="button" variant="outline" onClick={handlePickDirectory}>
-                    Browse
-                  </Button>
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Recently used:{" "}
-                  <button
-                    type="button"
-                    onClick={handleUseRecentProject}
-                    className="underline-offset-2 hover:underline font-medium"
-                  >
-                    {RECENT_PROJECT_DIR}
-                  </button>
-                </p>
-              </div>
-
-              {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-
-              <Button type="submit" size="lg" className="w-full" disabled={isCreating}>
-                {isCreating ? "Creating Project..." : "Create Project"}
-              </Button>
-            </form>
+              <FolderOpen className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={handleCreateProjectFile}
+              disabled={controlsDisabled}
+              aria-label="Create project file"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => undefined}
+              disabled={controlsDisabled}
+              aria-label="Plugins menu placeholder"
+            >
+              <Box className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => setSettingsOpen(true)}
+              disabled={controlsDisabled}
+              aria-label="Open settings"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={handleExitApp}
+              disabled={controlsDisabled}
+              aria-label="Exit application"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
           </div>
-                <Button
-        variant="outline"
-        size="sm"
-        onClick={async () => {
-          const project = await backendClient.createProject("Demo", "/home/user/demo");
-          console.log('Test project:', project);
-        }}
-      >
-        Test Create
-      </Button>
 
-          <Button
-            variant="ghost"
-            size="lg"
-            className="text-base"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <Settings className="mr-2 h-4 w-4" />
-            Configure platform settings
-          </Button>
-
-          <Card className="max-w-xl mx-auto w-full text-left">
-            <CardHeader>
-              <CardTitle>Open Existing Project</CardTitle>
-              <CardDescription>
-                Select a project directory that already contains a project database.
-              </CardDescription>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Recent Projects</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="openProjectDirectory">Project Directory</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="openProjectDirectory"
-                    value={openProjectDir}
-                    placeholder="Select a project folder"
-                    readOnly
-                  />
-                  <Button type="button" variant="outline" onClick={handlePickExistingProject}>
-                    Browse
-                  </Button>
-                </div>
-              </div>
-
-              {openError && (
-                <p className="text-sm text-red-600 dark:text-red-400">{openError}</p>
+            <CardContent className="space-y-1">
+              {recentProjects.length === 0 && (
+                <p className="py-4 text-sm text-muted-foreground">No recent projects yet.</p>
               )}
 
-              <Button
-                type="button"
-                className="w-full"
-                onClick={handleOpenProject}
-                disabled={isOpeningProject}
-              >
-                {isOpeningProject ? "Opening Project..." : "Open Project"}
-              </Button>
+              {recentProjects.map((projectDir) => {
+                const isLoading = loadingRecentProject === projectDir;
+                return (
+                  <Button
+                    key={projectDir}
+                    type="button"
+                    variant="ghost"
+                    className="h-10 w-full justify-between border px-3"
+                    onClick={() => {
+                      void handleRecentProjectClick(projectDir);
+                    }}
+                    disabled={controlsDisabled}
+                  >
+                    <span className="truncate text-sm">{getProjectLabel(projectDir)}</span>
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    ) : (
+                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </Button>
+                );
+              })}
             </CardContent>
           </Card>
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
       </main>
 
-      {/* Settings Dialog */}
       <SettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
-        projectDir={openProjectDir || projectDir || undefined}
+        projectDir={settingsProjectDir}
       />
     </div>
   );
