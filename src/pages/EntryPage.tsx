@@ -279,11 +279,6 @@ export function EntryPage() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="p-6 text-center text-sm text-slate-500 dark:text-slate-600">
-        OpenRisk Platform v0.1.0 • Built with React & TypeScript
-      </footer>
-
       {/* Settings Dialog */}
       <SettingsDialog
         open={settingsOpen}
