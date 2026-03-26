@@ -2,7 +2,10 @@ use std::sync::Mutex;
 
 use tauri::Manager;
 
-use crate::{local_persistance::plugins::LocalPluginManager, models::project::Project};
+use crate::{
+    interface::plugin_manager::PluginManager, local_persistance::plugins::LocalPluginManager,
+    models::project::Project,
+};
 
 mod app;
 mod interface;
@@ -25,7 +28,7 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             app.manage(Mutex::new(ActiveProject::default()));
-            app.manage(Mutex::new(LocalPluginManager::default()));
+            app.manage(Mutex::new(LocalPluginManager::load()));
             Ok(())
         })
         .plugin(tauri_plugin_dialog::init())

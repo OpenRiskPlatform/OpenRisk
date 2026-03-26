@@ -7,7 +7,7 @@ use crate::{
     models::plugin::{InstalledPlugin, PluginId},
 };
 
-const PLUGIN_STORAGE_DIR: &str = "./plugins";
+const PLUGIN_STORAGE_DIR: &str = "../plugins";
 
 #[derive(Default)]
 pub struct LocalPluginManager {
@@ -43,6 +43,9 @@ impl PluginManager for LocalPluginManager {
     }
 
     fn load() -> Self {
+        println!("HELLO");
+        tracing::info!("Loading LocalPluginManager...");
+
         let mut manager = LocalPluginManager::default();
 
         let Ok(entries) = fs::read_dir(PLUGIN_STORAGE_DIR) else {

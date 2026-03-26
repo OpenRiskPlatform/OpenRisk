@@ -11,30 +11,35 @@ import type {
   PluginStatusResponse,
 } from "./types";
 import { Project } from "src/bindings/Project";
-import { ProjectSettings } from "src/bindings/Project";
+import { InstalledPlugin, PluginId, PluginInputs, PluginSettings } from "@/bindings/Plugin";
 
 export class TauriBackendClient extends BackendClient {
   private eventCallbacks: Array<(event: BackendEvent) => void> = [];
 
+  async listPlugins(): Promise<Array<InstalledPlugin>> {
+    return await invoke<Array<InstalledPlugin>>("list_plugins", {});
+  }
+
+  async getPlugin(pluginId: PluginId): Promise<InstalledPlugin> {
+    return await invoke<InstalledPlugin>("get_plugin", { pluginId });
+  }
+
+  async configurePlugin(pluginId: PluginId, settings: PluginSettings) {
+    return await invoke<any>("configure_plugin", { pluginId, settings });
+  }
+
   async executePlugin(
-    pluginId: string,
-    inputs: Record<string, unknown>,
-    settings?: Record<string, unknown>
+    pluginId: PluginId,
+    inputs: PluginInputs,
   ): Promise<PluginExecutionResponse> {
     try {
       console.log("[TauriBackendClient] Executing plugin:", pluginId);
       console.log("[TauriBackendClient] Inputs:", inputs);
-      console.log("[TauriBackendClient] Settings:", settings);
-
-      const inputsJson = JSON.stringify(inputs);
-      const settingsJson = JSON.stringify(settings || {});
-
       console.log("[TauriBackendClient] Invoking Tauri command...");
 
       const result = await invoke<string>("execute_plugin", {
         pluginId,
-        inputsJson,
-        settingsJson,
+        inputs,
       });
 
       console.log("[TauriBackendClient] Raw result from Rust:", result);

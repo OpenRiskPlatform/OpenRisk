@@ -7,13 +7,13 @@ use crate::models::plugin::{PluginId, PluginSettings};
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/bindings/Project.ts")]
 pub struct Project {
-    id: ProjectId,
-    name: String,
+    pub id: ProjectId,
+    pub name: String,
     pub settings: ProjectSettings,
-    plugin_settings: Vec<ProjectPluginSettings>,
+    pub plugin_settings: Vec<ProjectPluginSettings>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
 #[ts(export, export_to = "../../src/bindings/Project.ts")]
 pub struct ProjectId(Uuid);
 

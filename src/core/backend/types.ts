@@ -2,6 +2,7 @@
  * Backend Communication Type Definitions
  */
 
+import { InstalledPlugin, PluginId, PluginInputs, PluginSettings } from "@/bindings/Plugin";
 import { Project } from "@/bindings/Project";
 import { ProjectSettings } from "src-tauri/bindings/ProjectSettings";
 
@@ -52,13 +53,19 @@ export interface PluginStatusResponse {
  * Implementations: MockBackendClient, TauriBackendClient, HttpBackendClient
  */
 export abstract class BackendClient {
+  
+  abstract listPlugins(): Promise<Array<InstalledPlugin>>;
+
+  abstract getPlugin(pluginId: PluginId): Promise<InstalledPlugin>;
+
+  abstract configurePlugin(pluginId: PluginId, settings: PluginSettings): any;
+
   /**
    * Execute a plugin with given inputs and settings
    */
   abstract executePlugin(
-    pluginId: string,
-    inputs: Record<string, unknown>,
-    settings?: Record<string, unknown>
+    plugin_id: PluginId,
+    inputs: PluginInputs,
   ): Promise<PluginExecutionResponse>;
 
   /**

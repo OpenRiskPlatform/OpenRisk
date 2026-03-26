@@ -1,0 +1,64 @@
+{
+  "id": "example.plugin",
+  "name": "Example Plugin",
+  "version": "1.0.0",
+  "description": "Test plugin",
+  "authors": [
+    "Test Author"
+  ],
+  "license": "MIT",
+  "entrypoint": "index.ts",
+  "default_settings": [
+    {
+      "name": "example_setting",
+      "value": {
+        "string": "Default setting"
+      },
+      "description": "A test setting"
+    }
+  ],
+  "inputs": [
+    {
+      "name": "name",
+      "optional": false,
+      "input_type": {
+        "string": null
+      },
+      "description": "Name of the person to search for"
+    },
+    {
+      "name": "enabled",
+      "optional": true,
+      "input_type": {
+        "toggle": true
+      },
+      "description": "Enable feature"
+    },
+    {
+      "name": "switch",
+      "optional": true,
+      "input_type": {
+        "switch": [
+          {
+            "name": "endpoint 1",
+            "extra_inputs": []
+          },
+          {
+            "name": "endpoint 2",
+            "extra_inputs": [
+              {
+                "name": "age",
+                "optional": false,
+                "input_type": {
+                  "number": null
+                },
+                "description": "User name"
+              }
+            ]
+          }
+        ]
+      },
+      "description": "Endpoint to use for the search"
+    }
+  ]
+}

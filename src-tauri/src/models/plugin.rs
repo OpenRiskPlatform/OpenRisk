@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
 
+use crate::models::project::ProjectId;
+
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/bindings/Plugin.ts")]
 pub struct Plugin {
@@ -86,8 +88,16 @@ pub struct InstalledPlugin {
     #[deref]
     plugin: Plugin,
     enabled: bool,
-    pub settings: PluginSettings,
+    pub settings: Vec<ProjectPluginSettings>,
     pub installation_path: PathBuf,
+}
+
+#[derive(Deref, Clone, Debug, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/Plugin.ts")]
+pub struct ProjectPluginSettings {
+    pub project_id: ProjectId,
+    #[deref]
+    pub settings: PluginSettings,
 }
 
 impl InstalledPlugin {

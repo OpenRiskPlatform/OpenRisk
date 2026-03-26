@@ -21,7 +21,7 @@ import { useBackendClient } from "@/hooks/useBackendClient";
 
 const RECENT_PROJECT_DIR = "/home/ms/Downloads/test/";
 
-export function EntryPage() {
+export async function EntryPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [projectDir, setProjectDir] = useState("");
@@ -32,6 +32,8 @@ export function EntryPage() {
   const [openError, setOpenError] = useState<string | null>(null);
   const navigate = useNavigate();
   const backendClient = useBackendClient();
+
+  console.log("Installed plugins: " + await backendClient.listPlugins());
 
   const handlePickDirectory = async () => {
     try {
