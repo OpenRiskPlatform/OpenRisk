@@ -21,6 +21,7 @@ pub struct Plugin {
     pub license: String,
     pub entrypoint: String,
     pub default_settings: PluginSettings,
+    pub inputs: PluginInputs,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -29,8 +30,54 @@ pub struct PluginId(pub String);
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/bindings/Plugin.ts")]
-pub struct PluginSettings {
-    enabled: bool,
+pub struct PluginSettings(Vec<PluginSetting>);
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/Plugin.ts")]
+pub struct PluginSetting {
+    name: String,
+    value: PluginSettingValue,
+    description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/Plugin.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum PluginSettingValue {
+    String(String),
+    Number(i64),
+    Float(f64),
+    Toggle(bool),
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/Plugin.ts")]
+pub struct PluginInputs(Vec<PluginInput>);
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/Plugin.ts")]
+pub struct PluginInput {
+    name: String,
+    optional: bool,
+    input_type: PluginInputType,
+    description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/Plugin.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum PluginInputType {
+    String(Option<String>),
+    Number(Option<i64>),
+    Switch(Vec<PluginSwitchOption>),
+    Toggle(Option<bool>),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/Plugin.ts")]
+pub struct PluginSwitchOption {
+    name: String,
+    extra_inputs: Vec<PluginInput>,
 }
 
 #[derive(Deref, Clone, Debug, Serialize, Deserialize, TS)]
@@ -38,15 +85,18 @@ pub struct PluginSettings {
 pub struct InstalledPlugin {
     #[deref]
     plugin: Plugin,
+    enabled: bool,
     pub settings: PluginSettings,
     pub installation_path: PathBuf,
 }
 
 impl InstalledPlugin {
-    pub fn execute(&self, input: Value) -> Result<Value, String> {
+    pub fn execute(&self, input: PluginInputs) -> Result<Value, String> {
         let entry = self.installation_path.join(&self.entrypoint);
         let code = fs::read_to_string(&entry)
             .map_err(|e| format!("Failed to read plugin code {:?}: {}", &entry, e))?;
+        let input = serde_json::to_value(input)
+            .map_err(|e| format!("Failed to deserialize input: {}", e))?;
 
         // Wrapper module code
         let wrapper_code = format!(
@@ -139,5 +189,87 @@ impl ImportProvider for ScriptImportProvider {
         rustyscript::deno_core::error::ModuleLoaderError,
     > {
         Ok(source)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+
+    #[test]
+    fn plugin_json_roundtrip() {
+        let plugin = Plugin {
+            id: PluginId("example.plugin".to_string()),
+            name: "Example Plugin".to_string(),
+            version: "1.0.0".to_string(),
+            description: "Test plugin".to_string(),
+            authors: vec!["Test Author".to_string()],
+            license: "MIT".to_string(),
+            entrypoint: "index.ts".to_string(),
+            default_settings: PluginSettings(vec![PluginSetting {
+                name: "example_setting".to_string(),
+                value: PluginSettingValue::String("Default setting".to_string()),
+                description: "A test setting".to_string(),
+            }]),
+            inputs: PluginInputs(vec![
+                PluginInput {
+                    name: "name".to_string(),
+                    optional: false,
+                    input_type: PluginInputType::String(None),
+                    description: "Name of the person to search for".to_string(),
+                },
+                PluginInput {
+                    name: "enabled".to_string(),
+                    optional: true,
+                    input_type: PluginInputType::Toggle(Some(true)),
+                    description: "Enable feature".to_string(),
+                },
+                PluginInput {
+                    name: "switch".to_string(),
+                    optional: true,
+                    input_type: PluginInputType::Switch(vec![
+                        PluginSwitchOption {
+                            name: "endpoint 1".to_string(),
+                            extra_inputs: vec![],
+                        },
+                        PluginSwitchOption {
+                            name: "endpoint 2".to_string(),
+                            extra_inputs: vec![PluginInput {
+                                name: "age".to_string(),
+                                optional: false,
+                                input_type: PluginInputType::Number(None),
+                                description: "User name".to_string(),
+                            }],
+                        },
+                    ]),
+                    description: "Endpoint to use for the search".to_string(),
+                },
+            ]),
+        };
+
+        let path = PathBuf::from("./schemas/example_plugin_schema.json");
+
+        // Serialize and save
+        let json = serde_json::to_string_pretty(&plugin).unwrap();
+        fs::write(&path, json).unwrap();
+
+        // Read file
+        let contents = fs::read_to_string(&path).unwrap();
+
+        // Deserialize
+        let loaded: Plugin = serde_json::from_str(&contents).unwrap();
+
+        // Verify fields
+        assert_eq!(plugin.id.0, loaded.id.0);
+        assert_eq!(plugin.name, loaded.name);
+        assert_eq!(plugin.version, loaded.version);
+        assert_eq!(plugin.description, loaded.description);
+        assert_eq!(plugin.entrypoint, loaded.entrypoint);
+        assert_eq!(plugin.authors, loaded.authors);
+
+        // Cleanup
+        // fs::remove_file(path).unwrap();
     }
 }

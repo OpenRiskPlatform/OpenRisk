@@ -10,8 +10,8 @@ import type {
   PluginExecutionResponse,
   PluginStatusResponse,
 } from "./types";
-import { Project } from "src-tauri/bindings/Project";
-import { ProjectSettings } from "src-tauri/bindings/ProjectSettings";
+import { Project } from "src/bindings/Project";
+import { ProjectSettings } from "src/bindings/Project";
 
 export class TauriBackendClient extends BackendClient {
   private eventCallbacks: Array<(event: BackendEvent) => void> = [];

@@ -4,7 +4,7 @@ use tauri::State;
 
 use crate::interface::plugin_manager::PluginManager;
 use crate::local_persistance::plugins::LocalPluginManager;
-use crate::models::plugin::{InstalledPlugin, PluginId, PluginSettings};
+use crate::models::plugin::{InstalledPlugin, PluginId, PluginInputs, PluginSettings};
 
 #[tauri::command]
 pub fn list_plugins(
@@ -54,7 +54,7 @@ pub fn configure_plugin(
 #[tauri::command]
 pub fn execute_plugin(
     plugin_id: PluginId,
-    inputs_json: Value,
+    inputs: PluginInputs,
     plugin_manager: State<Mutex<LocalPluginManager>>,
 ) -> Result<Value, String> {
     let Ok(manager) = plugin_manager.lock() else {
@@ -62,7 +62,7 @@ pub fn execute_plugin(
     };
 
     if let Ok(plugin) = manager.get_installed_plugin(plugin_id.clone()) {
-        return plugin.execute(inputs_json);
+        return plugin.execute(inputs);
     }
 
     return Err(format!("Plugin {:?} not found", plugin_id));
