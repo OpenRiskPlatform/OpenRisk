@@ -2,12 +2,9 @@ use crate::app::plugin as plugin_app;
 use crate::plugin_manifest::{parse_manifest, OpenRiskPluginManifest};
 use async_trait::async_trait;
 use once_cell::sync::Lazy;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
-use sqlx::{
-    sqlite::SqliteConnectOptions,
-    Connection, SqliteConnection,
-};
+use sqlx::{sqlite::SqliteConnectOptions, Connection, SqliteConnection};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
@@ -19,12 +16,25 @@ use uuid::Uuid;
 
 const DB_FILE_NAME: &str = "project.db";
 const PLUGINS_DIR_NAME: &str = "plugins";
-const CURRENT_SCHEMA_VERSION: i64 = 4;
+const CURRENT_SCHEMA_VERSION: i64 = 5;
+/// The minimum schema version that can be migrated to current.
+/// Any project with version < MIN_SUPPORTED_SCHEMA_VERSION will be rejected.
+const MIN_SUPPORTED_SCHEMA_VERSION: i64 = 4;
 const LOCKED_PROJECT_ERROR_PREFIX: &str = "PROJECT_LOCKED:";
+const PROJECT_LEGACY_ERROR_PREFIX: &str = "PROJECT_LEGACY:";
+const PROJECT_OUTDATED_ERROR_PREFIX: &str = "PROJECT_OUTDATED:";
 const MIN_PASSWORD_LEN: usize = 8;
 
 static PROJECT_KEYS: Lazy<Mutex<HashMap<String, String>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
+
+/// Represents one selected (plugin, entrypoint) pair in a scan run.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginEntrypointSelection {
+    pub plugin_id: String,
+    pub entrypoint_id: String,
+}
 
 const SCHEMA_SQL: &str = r#"
 PRAGMA foreign_keys = ON;
@@ -81,6 +91,7 @@ CREATE TABLE IF NOT EXISTS Scan (
 CREATE TABLE IF NOT EXISTS ScanPluginResult (
     id TEXT PRIMARY KEY,
     plugin_id TEXT NOT NULL,
+    entrypoint_id TEXT NOT NULL DEFAULT 'default',
     scan_id TEXT NOT NULL,
     output_json_ir TEXT CHECK (output_json_ir IS NULL OR json_valid(output_json_ir)),
     FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE,
@@ -145,6 +156,7 @@ pub struct ScanSummaryRecord {
 #[serde(rename_all = "camelCase")]
 pub struct ScanPluginResultRecord {
     pub plugin_id: String,
+    pub entrypoint_id: String,
     pub output: Value,
 }
 
@@ -154,7 +166,7 @@ pub struct ScanDetailRecord {
     pub id: String,
     pub status: String,
     pub preview: Option<String>,
-    pub selected_plugins: Vec<String>,
+    pub selected_plugins: Vec<PluginEntrypointSelection>,
     pub inputs: Value,
     pub results: Vec<ScanPluginResultRecord>,
 }
@@ -576,7 +588,10 @@ impl SqliteProjectPersistence {
             .parent()
             .ok_or_else(|| format!("Invalid database path: {:?}", db_path))?;
         if !parent.exists() || !parent.is_dir() {
-            return Err(format!("Database parent directory does not exist: {:?}", parent));
+            return Err(format!(
+                "Database parent directory does not exist: {:?}",
+                parent
+            ));
         }
 
         let mut temp_path = db_path.to_path_buf();
@@ -673,41 +688,48 @@ impl SqliteProjectPersistence {
     async fn apply_migrations_to_latest(
         conn: &mut SqliteConnection,
     ) -> Result<(), PersistenceError> {
-        sqlx::query(
-            "CREATE TABLE IF NOT EXISTS SchemaVersion (id INTEGER PRIMARY KEY CHECK (id = 1), version INTEGER NOT NULL)",
-        )
-        .execute(&mut *conn)
-        .await?;
+        // A valid project MUST have the SchemaVersion table.
+        let has_schema_version = Self::table_exists(conn, "SchemaVersion").await?;
+        if !has_schema_version {
+            return Err(PersistenceError::Validation(format!(
+                "{}This file is not a valid OpenRisk project or was created by an incompatible older version.",
+                PROJECT_LEGACY_ERROR_PREFIX
+            )));
+        }
 
         let existing =
             sqlx::query_scalar::<_, i64>("SELECT version FROM SchemaVersion WHERE id = 1")
                 .fetch_optional(&mut *conn)
                 .await?;
 
-        let mut current_version = match existing {
-            Some(version) => version,
+        let current_version = match existing {
+            Some(v) => v,
             None => {
-                let has_theme = Self::column_exists(conn, "ProjectSettings", "theme").await?;
-                let detected = if has_theme { 2 } else { 1 };
-                sqlx::query(
-                    "INSERT INTO SchemaVersion (id, version) VALUES (1, ?1) ON CONFLICT(id) DO UPDATE SET version = excluded.version",
-                )
-                .bind(detected)
-                .execute(&mut *conn)
-                .await?;
-                detected
+                return Err(PersistenceError::Validation(format!(
+                    "{}This file is not a valid OpenRisk project or was created by an incompatible older version.",
+                    PROJECT_LEGACY_ERROR_PREFIX
+                )));
             }
         };
 
-        while current_version < CURRENT_SCHEMA_VERSION {
-            let next = current_version + 1;
+        if current_version < MIN_SUPPORTED_SCHEMA_VERSION {
+            return Err(PersistenceError::Validation(format!(
+                "{}{}:This project was created with an older, incompatible version of OpenRisk (schema v{}). Please create a new project.",
+                PROJECT_OUTDATED_ERROR_PREFIX,
+                current_version,
+                current_version
+            )));
+        }
+
+        let mut version = current_version;
+
+        while version < CURRENT_SCHEMA_VERSION {
+            let next = version + 1;
             match next {
-                2 => Self::migrate_to_v2(conn).await?,
-                3 => Self::migrate_to_v3(conn).await?,
-                4 => Self::migrate_to_v4(conn).await?,
+                5 => Self::migrate_to_v5(conn).await?,
                 _ => {
                     return Err(PersistenceError::Validation(format!(
-                        "Missing migration for schema version {}",
+                        "Missing migration to schema version {}",
                         next
                     )))
                 }
@@ -717,228 +739,73 @@ impl SqliteProjectPersistence {
                 .bind(next)
                 .execute(&mut *conn)
                 .await?;
-            current_version = next;
+            version = next;
         }
 
         Ok(())
     }
 
-    async fn migrate_to_v2(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
-        let has_theme = Self::column_exists(conn, "ProjectSettings", "theme").await?;
-        if !has_theme {
-            sqlx::query("ALTER TABLE ProjectSettings ADD COLUMN theme TEXT")
+    /// Migration v4 → v5:
+    /// 1. Add `entrypoint_id` column to `ScanPluginResult`.
+    /// 2. Convert `selected_plugins_json` in all Scan rows from
+    ///    `["pluginId"]` → `[{"pluginId":"...", "entrypointId":"default"}]`.
+    async fn migrate_to_v5(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
+        // 1. Add entrypoint_id column to ScanPluginResult if missing.
+        let has_entrypoint_col =
+            Self::column_exists(conn, "ScanPluginResult", "entrypoint_id").await?;
+        if !has_entrypoint_col {
+            sqlx::query(
+                "ALTER TABLE ScanPluginResult ADD COLUMN entrypoint_id TEXT NOT NULL DEFAULT 'default'",
+            )
+            .execute(&mut *conn)
+            .await?;
+        }
+
+        // 2. Migrate selected_plugins_json format on all Scan rows.
+        let scan_rows: Vec<(String, Option<String>)> =
+            sqlx::query_as("SELECT id, selected_plugins_json FROM Scan")
+                .fetch_all(&mut *conn)
+                .await?;
+
+        for (scan_id, raw_opt) in scan_rows {
+            let raw = match raw_opt {
+                Some(r) if !r.trim().is_empty() => r,
+                _ => continue,
+            };
+
+            let value: Value = match serde_json::from_str(&raw) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+
+            let items = match &value {
+                Value::Array(arr) => arr,
+                _ => continue,
+            };
+
+            // Already migrated if items are objects with a "pluginId" key.
+            let already_new = items
+                .iter()
+                .any(|item| item.is_object() && item.get("pluginId").is_some());
+            if already_new {
+                continue;
+            }
+
+            let converted: Vec<Value> = items
+                .iter()
+                .filter_map(|item| {
+                    item.as_str()
+                        .map(|s| json!({ "pluginId": s, "entrypointId": "default" }))
+                })
+                .collect();
+
+            let new_json = serde_json::to_string(&Value::Array(converted))?;
+            sqlx::query("UPDATE Scan SET selected_plugins_json = ?1 WHERE id = ?2")
+                .bind(new_json)
+                .bind(scan_id)
                 .execute(&mut *conn)
                 .await?;
         }
-
-        Ok(())
-    }
-
-    async fn migrate_to_v3(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
-        let has_scan = Self::table_exists(conn, "Scan").await?;
-        if !has_scan {
-            sqlx::query(
-                "CREATE TABLE Scan (
-                    id TEXT PRIMARY KEY,
-                    project_id TEXT NOT NULL,
-                    status TEXT NOT NULL CHECK (status IN ('Draft','Running','Completed','Failed')),
-                    preview TEXT,
-                    inputs_json TEXT CHECK (inputs_json IS NULL OR json_valid(inputs_json)),
-                    selected_plugins_json TEXT CHECK (selected_plugins_json IS NULL OR json_valid(selected_plugins_json)),
-                    FOREIGN KEY (project_id) REFERENCES Project(id) ON DELETE CASCADE
-                )",
-            )
-            .execute(&mut *conn)
-            .await?;
-            return Ok(());
-        }
-
-        // Rebuild Scan table to update status enum and migrate old Finished -> Completed.
-        sqlx::query("ALTER TABLE Scan RENAME TO Scan_old")
-            .execute(&mut *conn)
-            .await?;
-
-        // Rebuild dependent results table to keep FK pointing to the final Scan table.
-        sqlx::query("ALTER TABLE ScanPluginResult RENAME TO ScanPluginResult_old")
-            .execute(&mut *conn)
-            .await?;
-
-        sqlx::query(
-            "CREATE TABLE Scan (
-                id TEXT PRIMARY KEY,
-                project_id TEXT NOT NULL,
-                status TEXT NOT NULL CHECK (status IN ('Draft','Running','Completed','Failed')),
-                preview TEXT,
-                inputs_json TEXT CHECK (inputs_json IS NULL OR json_valid(inputs_json)),
-                selected_plugins_json TEXT CHECK (selected_plugins_json IS NULL OR json_valid(selected_plugins_json)),
-                FOREIGN KEY (project_id) REFERENCES Project(id) ON DELETE CASCADE
-            )",
-        )
-        .execute(&mut *conn)
-        .await?;
-
-        sqlx::query(
-            "CREATE TABLE ScanPluginResult (
-                id TEXT PRIMARY KEY,
-                plugin_id TEXT NOT NULL,
-                scan_id TEXT NOT NULL,
-                output_json_ir TEXT CHECK (output_json_ir IS NULL OR json_valid(output_json_ir)),
-                FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE,
-                FOREIGN KEY (scan_id) REFERENCES Scan(id) ON DELETE CASCADE
-            )",
-        )
-        .execute(&mut *conn)
-        .await?;
-
-        sqlx::query(
-            "INSERT INTO Scan (id, project_id, status, preview, inputs_json, selected_plugins_json)
-             SELECT id, project_id,
-                CASE status
-                    WHEN 'Finished' THEN 'Completed'
-                    WHEN 'Draft' THEN 'Draft'
-                    WHEN 'Running' THEN 'Running'
-                    ELSE 'Failed'
-                END,
-                preview,
-                inputs_json,
-                selected_plugins_json
-             FROM Scan_old",
-        )
-        .execute(&mut *conn)
-        .await?;
-
-        sqlx::query(
-            "INSERT INTO ScanPluginResult (id, plugin_id, scan_id, output_json_ir)
-             SELECT id, plugin_id, scan_id, output_json_ir FROM ScanPluginResult_old",
-        )
-        .execute(&mut *conn)
-        .await?;
-
-        sqlx::query("DROP TABLE Scan_old")
-            .execute(&mut *conn)
-            .await?;
-        sqlx::query("DROP TABLE ScanPluginResult_old")
-            .execute(&mut *conn)
-            .await?;
-
-        Ok(())
-    }
-
-    async fn migrate_to_v4(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
-        let has_scan = Self::table_exists(conn, "Scan").await?;
-        let has_scan_old = Self::table_exists(conn, "Scan_old").await?;
-
-        if !has_scan {
-            sqlx::query(
-                "CREATE TABLE Scan (
-                    id TEXT PRIMARY KEY,
-                    project_id TEXT NOT NULL,
-                    status TEXT NOT NULL CHECK (status IN ('Draft','Running','Completed','Failed')),
-                    preview TEXT,
-                    inputs_json TEXT CHECK (inputs_json IS NULL OR json_valid(inputs_json)),
-                    selected_plugins_json TEXT CHECK (selected_plugins_json IS NULL OR json_valid(selected_plugins_json)),
-                    FOREIGN KEY (project_id) REFERENCES Project(id) ON DELETE CASCADE
-                )",
-            )
-            .execute(&mut *conn)
-            .await?;
-        }
-
-        if has_scan_old {
-            sqlx::query(
-                "INSERT OR IGNORE INTO Scan (id, project_id, status, preview, inputs_json, selected_plugins_json)
-                 SELECT id, project_id,
-                    CASE status
-                        WHEN 'Finished' THEN 'Completed'
-                        WHEN 'Draft' THEN 'Draft'
-                        WHEN 'Running' THEN 'Running'
-                        WHEN 'Completed' THEN 'Completed'
-                        ELSE 'Failed'
-                    END,
-                    preview,
-                    inputs_json,
-                    selected_plugins_json
-                 FROM Scan_old",
-            )
-            .execute(&mut *conn)
-            .await?;
-
-            sqlx::query("DROP TABLE Scan_old")
-                .execute(&mut *conn)
-                .await?;
-        }
-
-        Self::rebuild_scan_results_table(conn, "ScanPluginResult").await?;
-        Self::rebuild_scan_results_table(conn, "ScanPluginResult_old").await?;
-        Self::rebuild_scan_results_table(conn, "ScanPluginResult_old_v4").await?;
-
-        Ok(())
-    }
-
-    async fn rebuild_scan_results_table(
-        conn: &mut SqliteConnection,
-        source_table: &str,
-    ) -> Result<(), PersistenceError> {
-        if !Self::table_exists(conn, source_table).await? {
-            return Ok(());
-        }
-
-        let has_target = Self::table_exists(conn, "ScanPluginResult").await?;
-        if !has_target {
-            sqlx::query(
-                "CREATE TABLE ScanPluginResult (
-                    id TEXT PRIMARY KEY,
-                    plugin_id TEXT NOT NULL,
-                    scan_id TEXT NOT NULL,
-                    output_json_ir TEXT CHECK (output_json_ir IS NULL OR json_valid(output_json_ir)),
-                    FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE,
-                    FOREIGN KEY (scan_id) REFERENCES Scan(id) ON DELETE CASCADE
-                )",
-            )
-            .execute(&mut *conn)
-            .await?;
-        }
-
-        if source_table != "ScanPluginResult" {
-            let insert_sql = format!(
-                "INSERT OR IGNORE INTO ScanPluginResult (id, plugin_id, scan_id, output_json_ir)
-                 SELECT id, plugin_id, scan_id, output_json_ir FROM {} WHERE scan_id IN (SELECT id FROM Scan)",
-                source_table
-            );
-            sqlx::query(&insert_sql).execute(&mut *conn).await?;
-            let drop_sql = format!("DROP TABLE {}", source_table);
-            sqlx::query(&drop_sql).execute(&mut *conn).await?;
-            return Ok(());
-        }
-
-        // Rebuild target table in place to ensure FK points to Scan (not stale Scan_old).
-        sqlx::query("ALTER TABLE ScanPluginResult RENAME TO ScanPluginResult_old_v4")
-            .execute(&mut *conn)
-            .await?;
-
-        sqlx::query(
-            "CREATE TABLE ScanPluginResult (
-                id TEXT PRIMARY KEY,
-                plugin_id TEXT NOT NULL,
-                scan_id TEXT NOT NULL,
-                output_json_ir TEXT CHECK (output_json_ir IS NULL OR json_valid(output_json_ir)),
-                FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE,
-                FOREIGN KEY (scan_id) REFERENCES Scan(id) ON DELETE CASCADE
-            )",
-        )
-        .execute(&mut *conn)
-        .await?;
-
-        sqlx::query(
-            "INSERT OR IGNORE INTO ScanPluginResult (id, plugin_id, scan_id, output_json_ir)
-             SELECT id, plugin_id, scan_id, output_json_ir FROM ScanPluginResult_old_v4 WHERE scan_id IN (SELECT id FROM Scan)",
-        )
-        .execute(&mut *conn)
-        .await?;
-
-        sqlx::query("DROP TABLE ScanPluginResult_old_v4")
-            .execute(&mut *conn)
-            .await?;
 
         Ok(())
     }
@@ -1094,7 +961,11 @@ impl ProjectPersistence for SqliteProjectPersistence {
 
         let mut conn = Self::connect(&db_path, true, None).await?;
         Self::apply_schema(&mut conn).await?;
-        Self::apply_migrations_to_latest(&mut conn).await?;
+        // New projects always start at the current schema version — no migrations needed.
+        sqlx::query("INSERT INTO SchemaVersion (id, version) VALUES (1, ?1)")
+            .bind(CURRENT_SCHEMA_VERSION)
+            .execute(&mut conn)
+            .await?;
 
         let project_settings_id = Uuid::new_v4().to_string();
         sqlx::query(
@@ -1393,6 +1264,7 @@ impl ScanRow {
 #[derive(sqlx::FromRow)]
 struct ScanResultRow {
     plugin_id: String,
+    entrypoint_id: String,
     output_json_ir: Option<String>,
 }
 
@@ -1423,6 +1295,22 @@ fn parse_json_text(raw: Option<String>) -> Result<Value, PersistenceError> {
         Some(text) if !text.trim().is_empty() => Ok(serde_json::from_str(&text)?),
         _ => Ok(Value::Null),
     }
+}
+
+/// Given a manifest JSON value and an entrypoint id, return the TypeScript function name to call.
+/// Falls back to `entrypoint_id` itself if not found (or "default" if id is "default").
+fn resolve_entrypoint_function(manifest: &Value, entrypoint_id: &str) -> String {
+    if let Some(entrypoints) = manifest.get("entrypoints").and_then(|v| v.as_array()) {
+        for ep in entrypoints {
+            if ep.get("id").and_then(|v| v.as_str()) == Some(entrypoint_id) {
+                if let Some(func) = ep.get("function").and_then(|v| v.as_str()) {
+                    return func.to_string();
+                }
+            }
+        }
+    }
+    // Default export or fallback: treat entrypoint_id as the function name.
+    entrypoint_id.to_string()
 }
 
 pub async fn create_project(name: String, dir_path: PathBuf) -> Result<ProjectSummary, String> {
@@ -1803,16 +1691,16 @@ pub async fn get_scan(dir_path: PathBuf, scan_id: String) -> Result<ScanDetailRe
     let inputs = parse_json_text(scan.inputs_json).map_err(|e| e.to_string())?;
     let selected_plugins_raw =
         parse_json_text(scan.selected_plugins_json).map_err(|e| e.to_string())?;
-    let selected_plugins = match selected_plugins_raw {
+    let selected_plugins: Vec<PluginEntrypointSelection> = match selected_plugins_raw {
         Value::Array(items) => items
             .into_iter()
-            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .filter_map(|v| serde_json::from_value(v).ok())
             .collect(),
         _ => Vec::new(),
     };
 
     let result_rows = sqlx::query_as::<_, ScanResultRow>(
-        "SELECT plugin_id, output_json_ir FROM ScanPluginResult WHERE scan_id = ?1",
+        "SELECT plugin_id, entrypoint_id, output_json_ir FROM ScanPluginResult WHERE scan_id = ?1",
     )
     .bind(&scan.id)
     .fetch_all(&mut conn)
@@ -1824,6 +1712,7 @@ pub async fn get_scan(dir_path: PathBuf, scan_id: String) -> Result<ScanDetailRe
         let output = parse_json_text(row.output_json_ir).map_err(|e| e.to_string())?;
         results.push(ScanPluginResultRecord {
             plugin_id: row.plugin_id,
+            entrypoint_id: row.entrypoint_id,
             output,
         });
     }
@@ -1841,7 +1730,7 @@ pub async fn get_scan(dir_path: PathBuf, scan_id: String) -> Result<ScanDetailRe
 pub async fn run_scan(
     dir_path: PathBuf,
     scan_id: String,
-    selected_plugins: Vec<String>,
+    selected_plugins: Vec<PluginEntrypointSelection>,
     inputs: Value,
 ) -> Result<ScanSummaryRecord, String> {
     let db_path = SqliteProjectPersistence::db_path(&dir_path);
@@ -1849,7 +1738,7 @@ pub async fn run_scan(
         return Err(format!("No project database file found at {:?}", db_path));
     }
     if selected_plugins.is_empty() {
-        return Err("Select at least one plugin before run".to_string());
+        return Err("Select at least one plugin entrypoint before run".to_string());
     }
 
     let mut conn = SqliteProjectPersistence::connect_for_existing_project(&db_path)
@@ -1885,89 +1774,116 @@ pub async fn run_scan(
     let inputs_json = serde_json::to_string(&inputs).map_err(|e| e.to_string())?;
 
     sqlx::query("UPDATE Scan SET status = 'Running', selected_plugins_json = ?1, inputs_json = ?2 WHERE id = ?3")
-        .bind(selected_plugins_json)
-        .bind(inputs_json)
+        .bind(&selected_plugins_json)
+        .bind(&inputs_json)
         .bind(&scan_id)
         .execute(&mut conn)
         .await
         .map_err(|e| e.to_string())?;
 
-    if !selected_plugins.is_empty() {
-        sqlx::query("DELETE FROM ScanPluginResult WHERE scan_id = ?1")
-            .bind(&scan_id)
-            .execute(&mut conn)
-            .await
-            .map_err(|e| e.to_string())?;
-    }
+    sqlx::query("DELETE FROM ScanPluginResult WHERE scan_id = ?1")
+        .bind(&scan_id)
+        .execute(&mut conn)
+        .await
+        .map_err(|e| e.to_string())?;
 
-    let inputs_by_plugin = if inputs.is_object() {
+    // Load fresh plugin code from disk so runtime source changes take effect without DB re-sync.
+    let fresh_code_by_id: HashMap<String, String> = discover_local_plugins()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|b| (b.id, b.code))
+        .collect();
+
+    let inputs_by_key = if inputs.is_object() {
         inputs
     } else {
         Value::Object(Map::new())
     };
 
-    for plugin_id in &selected_plugins {
-        let plugin_inputs = inputs_by_plugin
-            .get(plugin_id)
+    for selection in &selected_plugins {
+        let ep_key = format!("{}::{}", selection.plugin_id, selection.entrypoint_id);
+        let plugin_inputs = inputs_by_key
+            .get(&ep_key)
             .cloned()
             .unwrap_or_else(|| Value::Object(Map::new()));
 
-        let runtime_row = sqlx::query_as::<_, (Option<String>, Option<String>)>(
-            "SELECT ProjectPluginSettings.settings_json, Plugin.code
+        let runtime_row = sqlx::query_as::<_, (Option<String>, Option<String>, Option<String>)>(
+            "SELECT ProjectPluginSettings.settings_json, Plugin.code, Plugin.manifest_json
              FROM ProjectPluginSettings
              INNER JOIN Plugin ON Plugin.id = ProjectPluginSettings.plugin_id
              WHERE ProjectPluginSettings.plugin_id = ?1 AND ProjectPluginSettings.project_settings_id = ?2
              LIMIT 1",
         )
-        .bind(plugin_id)
+        .bind(&selection.plugin_id)
         .bind(&project_settings_id)
         .fetch_optional(&mut conn)
         .await
         .map_err(|e| e.to_string())?;
 
-        let (settings_json, plugin_code) = runtime_row
-            .ok_or_else(|| format!("Plugin '{}' is not registered in project DB", plugin_id))?;
-
-        let plugin_settings = match settings_json {
-            Some(raw) if !raw.trim().is_empty() => {
-                serde_json::from_str::<Value>(&raw).map_err(|e| e.to_string())?
+        let envelope = match runtime_row {
+            None => {
+                json!({ "ok": false, "error": format!("Plugin '{}' is not registered in this project", selection.plugin_id) })
             }
-            _ => Value::Object(Map::new()),
+            Some((settings_json, plugin_code, manifest_json_raw)) => {
+                let plugin_settings = match settings_json {
+                    Some(raw) if !raw.trim().is_empty() => {
+                        serde_json::from_str::<Value>(&raw).unwrap_or(Value::Object(Map::new()))
+                    }
+                    _ => Value::Object(Map::new()),
+                };
+
+                let manifest_val: Value = manifest_json_raw
+                    .as_deref()
+                    .and_then(|s| serde_json::from_str(s).ok())
+                    .unwrap_or(Value::Null);
+
+                let entrypoint_fn =
+                    resolve_entrypoint_function(&manifest_val, &selection.entrypoint_id);
+
+                // Prefer fresh code from disk; fall back to DB snapshot.
+                let code = fresh_code_by_id
+                    .get(&selection.plugin_id)
+                    .cloned()
+                    .or(plugin_code)
+                    .filter(|c| !c.trim().is_empty());
+                match code {
+                    None => {
+                        json!({ "ok": false, "error": format!("Plugin '{}' has no code in project database", selection.plugin_id) })
+                    }
+                    Some(code) => {
+                        let execute_result = tauri::async_runtime::spawn_blocking(move || {
+                            plugin_app::execute_plugin_code_with_settings(
+                                code,
+                                plugin_inputs,
+                                plugin_settings,
+                                Some(entrypoint_fn),
+                            )
+                        })
+                        .await
+                        .map_err(|e| format!("Failed to join plugin execution task: {}", e))?;
+
+                        match execute_result {
+                            Ok(output) => json!({ "ok": true, "data": output }),
+                            Err(err) => json!({ "ok": false, "error": err }),
+                        }
+                    }
+                }
+            }
         };
 
-        let code = plugin_code
-            .filter(|c| !c.trim().is_empty())
-            .ok_or_else(|| format!("Plugin '{}' has empty code in project DB", plugin_id))?;
+        let envelope_json = serde_json::to_string(&envelope).map_err(|e| e.to_string())?;
 
-        let execute_result = tauri::async_runtime::spawn_blocking(move || {
-            plugin_app::execute_plugin_code_with_settings(code, plugin_inputs, plugin_settings)
-        })
+        sqlx::query(
+            "INSERT INTO ScanPluginResult (id, plugin_id, entrypoint_id, scan_id, output_json_ir) VALUES (?1, ?2, ?3, ?4, ?5)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(&selection.plugin_id)
+        .bind(&selection.entrypoint_id)
+        .bind(&scan_id)
+        .bind(envelope_json)
+        .execute(&mut conn)
         .await
-        .map_err(|e| format!("Failed to join plugin execution task: {}", e))?;
-
-        match execute_result {
-            Ok(output) => {
-                let output_json = serde_json::to_string(&output).map_err(|e| e.to_string())?;
-                sqlx::query(
-                    "INSERT INTO ScanPluginResult (id, plugin_id, scan_id, output_json_ir) VALUES (?1, ?2, ?3, ?4)",
-                )
-                .bind(Uuid::new_v4().to_string())
-                .bind(plugin_id)
-                .bind(&scan_id)
-                .bind(output_json)
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            }
-            Err(err) => {
-                sqlx::query("UPDATE Scan SET status = 'Failed' WHERE id = ?1")
-                    .bind(&scan_id)
-                    .execute(&mut conn)
-                    .await
-                    .map_err(|e| e.to_string())?;
-                return Err(format!("Plugin '{}' failed: {}", plugin_id, err));
-            }
-        }
+        .map_err(|e| e.to_string())?;
     }
 
     sqlx::query("UPDATE Scan SET status = 'Completed' WHERE id = ?1")

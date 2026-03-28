@@ -8,6 +8,7 @@ import { BackendClient } from "./types";
 import type {
   BackendEvent,
   PluginExecutionResponse,
+  PluginEntrypointSelection,
   ScanDetail,
   ScanSummary,
   PluginStatusResponse,
@@ -208,7 +209,7 @@ export class TauriBackendClient extends BackendClient {
   async runScan(
     directory: string,
     scanId: string,
-    selectedPlugins: string[],
+    selectedPlugins: PluginEntrypointSelection[],
     inputs: Record<string, unknown>
   ): Promise<ScanSummary> {
     try {
@@ -222,6 +223,22 @@ export class TauriBackendClient extends BackendClient {
     } catch (error: any) {
       console.error("[TauriBackendClient] runScan error:", error);
       throw new Error(error?.message ?? error?.toString() ?? "Failed to run scan");
+    }
+  }
+
+  async checkPluginReadiness(
+    pluginId: string,
+    settingsJson?: string
+  ): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const result = await invoke<string>("check_plugin_readiness", {
+        pluginId,
+        settingsJson,
+      });
+      return JSON.parse(result) as { ok: boolean; error?: string };
+    } catch (error: any) {
+      console.error("[TauriBackendClient] checkPluginReadiness error:", error);
+      return { ok: false, error: error?.message ?? error?.toString() ?? "Readiness check failed" };
     }
   }
 

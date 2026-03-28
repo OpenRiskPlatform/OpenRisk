@@ -1,30 +1,45 @@
 {
+    "$schema": "../../schemas/plugin-manifest.schema.json",
     "id": "adversea",
     "version": "0.1.0",
     "name": "Adversea",
-    "description": "Some description",
+    "description": "Screens individuals and organizations against PEP lists, sanctions, social media, and topic-based adverse media via the Adversea API.",
     "authors": [
         {
-            "name": "Adversea",
-            "email": "example@gmail.com"
+            "name": "OpenRiskPlatform",
+            "email": "example@openrisk.platform"
         }
     ],
     "icon": "icon.png",
     "license": "MIT",
     "entrypoint": "index.ts",
-    "settings": [
+    "entrypoints": [
         {
-            "name": "adversea_url",
-            "type": "string",
-            "title": "Adversea URL",
-            "description": "The URL of the Adversea instance to connect to.",
-            "default": "https://api.opensanctions.org/"
+            "id": "pep-sanctions",
+            "name": "PEP & Sanctions Check",
+            "description": "Checks PEP exposure and active sanctions datasets for the target name.",
+            "function": "pepSanctionsCheck"
         },
+        {
+            "id": "topic-report",
+            "name": "Topic Report",
+            "description": "Adverse media analysis grouped by risk topics (corruption, financial crime, etc.).",
+            "function": "topicReport"
+        },
+        {
+            "id": "social-media",
+            "name": "Social Media",
+            "description": "Finds public social media profiles matching the target name.",
+            "function": "socialMediaCheck"
+        }
+    ],
+    "settings": [
         {
             "name": "api_key",
             "type": "string",
-            "title": "API Key",
-            "description": "The API key for accessing the Adversea instance.",
+            "title": "Adversea API Key",
+            "description": "Your Adversea API key (X-Adversea-Api-Key header).",
+            "required": true,
             "default": null
         }
     ],
@@ -33,29 +48,8 @@
             "name": "target",
             "type": "string",
             "optional": false,
-            "title": "Name of the target",
-            "description": "The name of the entity to search for."
-        },
-        {
-            "name": "age",
-            "type": "number",
-            "optional": true,
-            "title": "Age",
-            "description": "The age of the entity to search for."
-        },
-        {
-            "name": "*args",
-            "type": "list[string]",
-            "optional": true,
-            "title": "Additional Arguments",
-            "description": "Additional arguments for the search."
-        },
-        {
-            "name": "**kwargs",
-            "type": "map[string, string]",
-            "optional": true,
-            "title": "Keyword Arguments",
-            "description": "Keyword arguments for the search."
+            "title": "Target Name",
+            "description": "Full name of the person or organization to screen."
         }
     ]
 }

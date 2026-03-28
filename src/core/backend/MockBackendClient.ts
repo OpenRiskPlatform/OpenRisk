@@ -7,6 +7,7 @@ import { BackendClient, PluginStatus } from "./types";
 import type {
   BackendEvent,
   PluginExecutionResponse,
+  PluginEntrypointSelection,
   ScanDetail,
   ScanSummary,
   PluginStatusResponse,
@@ -200,7 +201,7 @@ export class MockBackendClient extends BackendClient {
   async runScan(
     _directory: string,
     scanId: string,
-    _selectedPlugins: string[],
+    _selectedPlugins: PluginEntrypointSelection[],
     _inputs: Record<string, unknown>
   ): Promise<ScanSummary> {
     this.scans = this.scans.map((scan) =>
@@ -211,6 +212,13 @@ export class MockBackendClient extends BackendClient {
       status: "Completed",
       preview: null,
     };
+  }
+
+  async checkPluginReadiness(
+    _pluginId: string,
+    _settingsJson?: string
+  ): Promise<{ ok: boolean; error?: string }> {
+    return { ok: true };
   }
 
   async updateScanPreview(

@@ -193,20 +193,23 @@ impl ImportProvider for ScriptImportProvider {
     }
 }
 
-fn run_plugin_module(code: String, merged_inputs: Value) -> Result<Value, String> {
+fn run_plugin_module(code: String, merged_inputs: Value, entrypoint_fn: &str) -> Result<Value, String> {
+    let inputs_json = merged_inputs.to_string();
     let wrapper_code = format!(
         r#"
-        import mod from "script://main.ts";
+        import * as __mod__ from "script://main.ts";
         export default async () => {{
-            if (typeof mod !== 'function') {{
-                throw new TypeError("The plugin must export a default function");
+            const __fn__ = __mod__["{}"];
+            if (typeof __fn__ !== 'function') {{
+                throw new TypeError("Plugin entrypoint '{}' is not exported or is not a function");
             }}
             const inputs = {};
-            const result = await mod(inputs);
-            return result;
+            return await __fn__(inputs);
         }}
         "#,
-        merged_inputs
+        entrypoint_fn,
+        entrypoint_fn,
+        inputs_json
     );
 
     let wrapper = Module::new("wrapper.js", &wrapper_code);
@@ -229,6 +232,7 @@ pub fn execute_plugin_code_with_settings(
     code: String,
     inputs: Value,
     settings: Value,
+    entrypoint_fn: Option<String>,
 ) -> Result<Value, String> {
     let mut merged = match inputs {
         Value::Object(m) => m,
@@ -240,7 +244,8 @@ pub fn execute_plugin_code_with_settings(
         }
     }
 
-    run_plugin_module(code, Value::Object(merged))
+    let fn_name = entrypoint_fn.as_deref().unwrap_or("default");
+    run_plugin_module(code, Value::Object(merged), fn_name)
 }
 
 pub fn execute_plugin_with_settings(
@@ -271,5 +276,49 @@ pub fn execute_plugin_with_settings(
         }
     }
 
-    run_plugin_module(code, Value::Object(merged))
+    run_plugin_module(code, Value::Object(merged), "default")
+}
+
+/// Check whether a plugin can run with the given settings by calling its optional
+/// `validate(settings)` export. Returns `{ ok: true }` if no validate export exists.
+pub fn check_plugin_readiness(plugin_id: &str, settings: Value) -> Result<Value, String> {
+    let dir = plugin_dir(plugin_id)?;
+    let manifest = read_manifest(&dir)?;
+    let entry = manifest.entrypoint.to_string();
+    let code_path = dir.join(entry);
+    let code = fs::read_to_string(&code_path)
+        .map_err(|e| format!("Failed to read plugin code {:?}: {}", code_path, e))?;
+
+    let settings_json = serde_json::to_string(&settings)
+        .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+
+    let wrapper_code = format!(
+        r#"
+        import * as __mod__ from "script://main.ts";
+        export default async () => {{
+            if (typeof __mod__.validate !== 'function') {{
+                return {{ ok: true }};
+            }}
+            const settings = {};
+            const result = await Promise.resolve(__mod__.validate(settings));
+            return result;
+        }}
+        "#,
+        settings_json
+    );
+
+    let wrapper = Module::new("wrapper.js", &wrapper_code);
+    let import_provider = ScriptImportProvider::new(code);
+    let mut runtime = Runtime::new(RuntimeOptions {
+        import_provider: Some(Box::new(import_provider)),
+        ..Default::default()
+    })
+    .expect("Failed to create runtime");
+
+    match runtime.load_module(&wrapper) {
+        Ok(handle) => runtime
+            .call_entrypoint::<Value>(&handle, &())
+            .map_err(|e| e.to_string()),
+        Err(err) => Err(err.to_string()),
+    }
 }

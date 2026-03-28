@@ -1,7 +1,8 @@
 use jsonschema::JSONSchema;
 use std::sync::OnceLock;
 
-// Generated types from the schema (relative to src-tauri/src/)
+// Generated from schemas/plugin-manifest.schema.json via cargo-typify.
+// To regenerate: cd src-tauri && cargo typify schemas/plugin-manifest.schema.json > schemas/plugin-manifest.schema.rs
 #[path = "../schemas/plugin-manifest.schema.rs"]
 mod manifest_types;
 pub use manifest_types::OpenRiskPluginManifest;
@@ -55,14 +56,7 @@ pub fn parse_manifest(json_str: &str) -> Result<OpenRiskPluginManifest, Manifest
         )));
     }
 
-    // The generated Rust type currently doesn't include `id` yet.
-    // Keep `id` required at schema level, but strip it before deserialization.
-    let mut normalized = raw;
-    if let Some(obj) = normalized.as_object_mut() {
-        obj.remove("id");
-    }
-
     // Deserialize into strongly-typed structure
-    serde_json::from_value::<OpenRiskPluginManifest>(normalized)
+    serde_json::from_value::<OpenRiskPluginManifest>(raw)
         .map_err(|e| ManifestError::ParseError(e.to_string()))
 }

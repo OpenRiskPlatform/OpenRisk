@@ -1,12 +1,4 @@
 pub mod plugins;
-use rustyscript::{
-    deno_core::{error::ModuleLoaderError, ModuleSpecifier, RequestedModuleType, ResolutionKind},
-    module_loader::ImportProvider,
-    Module, Runtime, RuntimeOptions,
-};
-use serde_json::Value;
-use std::fs;
-use std::path::PathBuf;
 
 mod app;
 mod core;
@@ -32,6 +24,7 @@ pub fn run() {
             transport::open_plugin,
             transport::configure_plugin,
             transport::execute_plugin,
+            transport::check_plugin_readiness,
             transport::create_project,
             transport::open_project,
             transport::load_settings,

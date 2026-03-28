@@ -1,8 +1,6 @@
 // use rustyscript::{
 //     Module, Runtime, RuntimeOptions
 // };
-use std::fs;
-use std::path::PathBuf;
 // use serde_json::Value;
 
 // // Do we need this function?

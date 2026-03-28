@@ -23,6 +23,13 @@
             "type": "string",
             "description": "JSON Schema reference for IDE support"
         },
+        "entrypoints": {
+            "type": "array",
+            "description": "Named entrypoints exposed by the plugin. If absent, the default export is the sole entrypoint.",
+            "items": {
+                "$ref": "#/definitions/PluginEntrypointDefinition"
+            }
+        },
         "version": {
             "type": "string",
             "description": "Plugin version in semver format (e.g., 0.1.0)",
@@ -268,5 +275,38 @@
             }
         }
     },
-    "additionalProperties": false
+    "additionalProperties": false,
+    "definitions": {
+        "PluginEntrypointDefinition": {
+            "description": "A named entrypoint exposed by a plugin.",
+            "type": "object",
+            "required": [
+                "id",
+                "name",
+                "function"
+            ],
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "Stable entrypoint identifier (kebab-case)",
+                    "pattern": "^[a-z][a-z0-9_-]*$"
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Human-readable entrypoint name",
+                    "minLength": 1
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Entrypoint description"
+                },
+                "function": {
+                    "type": "string",
+                    "description": "Named export function in the entrypoint file",
+                    "pattern": "^[a-zA-Z_$][a-zA-Z0-9_$]*$"
+                }
+            },
+            "additionalProperties": false
+        }
+    }
 }

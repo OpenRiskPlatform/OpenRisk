@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useBackendClient } from "@/hooks/useBackendClient";
 import type {
+    PluginEntrypointSelection,
     PluginSettingsDescriptor,
     ProjectSettingsPayload,
     ScanDetail,
@@ -31,6 +32,34 @@ import type {
 } from "@/core/backend/types";
 import { PluginResultView } from "@/components/data-model/PluginResultView";
 import { isDataModelResult } from "@/core/data-model/types";
+
+function PluginErrorView({ message }: { message: string }) {
+    const [expanded, setExpanded] = useState(false);
+    // Separate the human-readable message from the Deno stack trace.
+    // Stack frames start with " at " (possibly after the message on the same line).
+    const stackStart = message.search(/ at (?:async )?[A-Za-z]/);
+    const summary = stackStart !== -1 ? message.slice(0, stackStart).trim() : message;
+    const stack = stackStart !== -1 ? message.slice(stackStart).trim() : null;
+
+    return (
+        <div className="text-sm text-red-600 space-y-1">
+            <p className="font-medium">Plugin error: {summary}</p>
+            {stack && (
+                <button
+                    className="text-xs text-red-400 underline underline-offset-2 hover:text-red-600"
+                    onClick={() => setExpanded((v) => !v)}
+                >
+                    {expanded ? "Hide details" : "Show details"}
+                </button>
+            )}
+            {expanded && stack && (
+                <pre className="text-xs text-red-400 whitespace-pre-wrap break-all bg-red-50 rounded p-2">
+                    {stack}
+                </pre>
+            )}
+        </div>
+    );
+}
 
 interface ProjectPageProps {
     projectDir?: string;
@@ -204,8 +233,8 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                 setDetailError(null);
 
                 const enabledMap: Record<string, boolean> = {};
-                for (const pluginId of detail.selectedPlugins) {
-                    enabledMap[pluginId] = true;
+                for (const sel of detail.selectedPlugins) {
+                    enabledMap[`${sel.pluginId}::${sel.entrypointId}`] = true;
                 }
                 setEnabledPlugins(enabledMap);
 
@@ -277,12 +306,12 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
         setEnabledPlugins((prev) => ({ ...prev, [pluginId]: enabled }));
     };
 
-    const setPluginField = (pluginId: string, key: string, value: unknown) => {
+    const setPluginField = (key: string, fieldName: string, value: unknown) => {
         setPluginInputs((prev) => ({
             ...prev,
-            [pluginId]: {
-                ...(prev[pluginId] ?? {}),
-                [key]: value,
+            [key]: {
+                ...(prev[key] ?? {}),
+                [fieldName]: value,
             },
         }));
     };
@@ -292,9 +321,12 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
             return;
         }
 
-        const selectedPlugins = Object.entries(enabledPlugins)
+        const selectedPlugins: PluginEntrypointSelection[] = Object.entries(enabledPlugins)
             .filter(([, enabled]) => enabled)
-            .map(([pluginId]) => pluginId);
+            .map(([key]) => {
+                const [pluginId, entrypointId] = key.split("::");
+                return { pluginId, entrypointId: entrypointId ?? "default" };
+            });
 
         if (!selectedPlugins.length) {
             setDetailError("Enable at least one plugin before run.");
@@ -516,16 +548,25 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                                     {scanDetail.status === "Draft" ? (
                                         <>
                                             <div className="space-y-2">
-                                                {(settingsData?.plugins ?? []).map((plugin) => (
-                                                    <PluginRunCard
-                                                        key={plugin.id}
-                                                        plugin={plugin}
-                                                        enabled={Boolean(enabledPlugins[plugin.id])}
-                                                        onEnabledChange={(enabled) => setPluginEnabled(plugin.id, enabled)}
-                                                        values={pluginInputs[plugin.id] ?? {}}
-                                                        onFieldChange={(key, value) => setPluginField(plugin.id, key, value)}
-                                                    />
-                                                ))}
+                                                {(settingsData?.plugins ?? []).map((plugin) => {
+                                                    const entrypoints = getPluginEntrypoints(plugin.manifest);
+                                                    const enabledMap: Record<string, boolean> = {};
+                                                    for (const ep of entrypoints) {
+                                                        enabledMap[ep.id] = Boolean(enabledPlugins[`${plugin.id}::${ep.id}`]);
+                                                    }
+                                                    return (
+                                                        <PluginRunCard
+                                                            key={plugin.id}
+                                                            plugin={plugin}
+                                                            enabledEntrypoints={enabledMap}
+                                                            onEntrypointChange={(epId, enabled) => setPluginEnabled(`${plugin.id}::${epId}`, enabled)}
+                                                            entrypointInputs={Object.fromEntries(
+                                                                entrypoints.map(ep => [ep.id, pluginInputs[`${plugin.id}::${ep.id}`] ?? {}])
+                                                            )}
+                                                            onFieldChange={(epId, fieldKey, value) => setPluginField(`${plugin.id}::${epId}`, fieldKey, value)}
+                                                        />
+                                                    );
+                                                })}
                                             </div>
 
                                             <div className="pt-2 flex justify-center">
@@ -542,27 +583,43 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
 
                                     {scanDetail.status === "Completed" && scanDetail.results.length > 0 ? (
                                         <div className="space-y-3 select-text">
-                                            {scanDetail.results.map((result) => (
-                                                <div key={result.pluginId} className="rounded-lg bg-muted/10 p-3">
-                                                    <div className="mb-2">
-                                                        <h3 className="text-lg font-semibold">
-                                                            {pluginNameById[result.pluginId] ?? result.pluginId}
-                                                        </h3>
-                                                        <p className="text-xs text-muted-foreground">
-                                                            {result.pluginId}
-                                                        </p>
+                                            {scanDetail.results.map((result) => {
+                                                const envelope = result.output;
+                                                const entities =
+                                                    envelope.ok && isDataModelResult(envelope.data)
+                                                        ? envelope.data
+                                                        : null;
+                                                const subtitle =
+                                                    result.entrypointId && result.entrypointId !== "default"
+                                                        ? `${result.pluginId} / ${result.entrypointId}`
+                                                        : result.pluginId;
+                                                return (
+                                                    <div
+                                                        key={`${result.pluginId}::${result.entrypointId}`}
+                                                        className="rounded-lg bg-muted/10 p-3"
+                                                    >
+                                                        <div className="mb-2">
+                                                            <h3 className="text-lg font-semibold">
+                                                                {pluginNameById[result.pluginId] ?? result.pluginId}
+                                                            </h3>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                {subtitle}
+                                                            </p>
+                                                        </div>
+                                                        <div>
+                                                            {!envelope.ok ? (
+                                                                <PluginErrorView message={envelope.error ?? "Unknown error"} />
+                                                            ) : entities ? (
+                                                                <PluginResultView entities={entities} />
+                                                            ) : (
+                                                                <pre className="rounded bg-muted p-3 text-xs overflow-auto">
+                                                                    {JSON.stringify(envelope.data, null, 2)}
+                                                                </pre>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        {isDataModelResult(result.output) ? (
-                                                            <PluginResultView entities={result.output} />
-                                                        ) : (
-                                                            <pre className="rounded bg-muted p-3 text-xs overflow-auto">
-                                                                {JSON.stringify(result.output, null, 2)}
-                                                            </pre>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     ) : null}
 
@@ -618,67 +675,85 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     );
 }
 
+function getPluginEntrypoints(
+    manifest: Record<string, unknown> | null
+): Array<{ id: string; name: string; description?: string }> {
+    const eps = (manifest as any)?.entrypoints;
+    if (Array.isArray(eps) && eps.length > 0) {
+        return eps as Array<{ id: string; name: string; description?: string }>;
+    }
+    return [{ id: "default", name: "Default" }];
+}
+
 function PluginRunCard({
     plugin,
-    enabled,
-    onEnabledChange,
-    values,
+    enabledEntrypoints,
+    onEntrypointChange,
+    entrypointInputs,
     onFieldChange,
 }: {
     plugin: PluginSettingsDescriptor;
-    enabled: boolean;
-    onEnabledChange: (enabled: boolean) => void;
-    values: Record<string, unknown>;
-    onFieldChange: (fieldName: string, value: unknown) => void;
+    enabledEntrypoints: Record<string, boolean>;
+    onEntrypointChange: (entrypointId: string, enabled: boolean) => void;
+    entrypointInputs: Record<string, Record<string, unknown>>;
+    onFieldChange: (entrypointId: string, fieldName: string, value: unknown) => void;
 }) {
+    const entrypoints = getPluginEntrypoints(plugin.manifest);
     const inputSchema = Array.isArray(plugin.inputSchema)
         ? (plugin.inputSchema as Array<any>)
         : [];
 
     return (
         <div className="rounded-lg border bg-card p-3">
-            <div className="flex items-center justify-between gap-3 mb-2">
-                <div>
-                    <p className="text-sm font-semibold">{plugin.name}</p>
-                    <p className="text-xs text-muted-foreground">{plugin.id}</p>
-                </div>
-                <Switch checked={enabled} onCheckedChange={onEnabledChange} />
+            <div className="mb-2">
+                <p className="text-sm font-semibold">{plugin.name}</p>
+                <p className="text-xs text-muted-foreground">{plugin.id}</p>
             </div>
 
-            {enabled ? (
-                <div className="space-y-3 pt-1">
-                    {inputSchema.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">This plugin does not require inputs.</p>
-                    ) : (
-                        inputSchema.map((input) => {
-                            const name = String(input?.name ?? "");
-                            if (!name) {
-                                return null;
-                            }
-
-                            const label = String(input?.title ?? name);
-                            const type = String(input?.type ?? "string");
-                            const description =
-                                input?.description !== undefined ? String(input.description) : "";
-                            const current = values[name];
-
-                            return (
-                                <div key={`${plugin.id}-${name}`} className="space-y-1">
-                                    <Label className="text-sm">{label}</Label>
-                                    {description ? (
-                                        <p className="text-xs text-muted-foreground">{description}</p>
-                                    ) : null}
-                                    <PluginInputField
-                                        type={type}
-                                        value={current}
-                                        onChange={(value) => onFieldChange(name, value)}
-                                    />
-                                </div>
-                            );
-                        })
-                    )}
-                </div>
-            ) : null}
+            <div className="space-y-2">
+                {entrypoints.map((ep) => (
+                    <div key={ep.id}>
+                        <div className="flex items-center justify-between gap-2">
+                            <div>
+                                <p className="text-sm">{ep.name}</p>
+                                {ep.description ? (
+                                    <p className="text-xs text-muted-foreground">{ep.description}</p>
+                                ) : null}
+                            </div>
+                            <Switch
+                                checked={Boolean(enabledEntrypoints[ep.id])}
+                                onCheckedChange={(enabled) => onEntrypointChange(ep.id, enabled)}
+                            />
+                        </div>
+                        {Boolean(enabledEntrypoints[ep.id]) && inputSchema.length > 0 ? (
+                            <div className="mt-2 space-y-2 pl-3 border-l-2 border-border/40">
+                                {inputSchema.map((input) => {
+                                    const name = String(input?.name ?? "");
+                                    if (!name) return null;
+                                    const label = String(input?.title ?? name);
+                                    const type = String(input?.type ?? "string");
+                                    const description =
+                                        input?.description !== undefined ? String(input.description) : "";
+                                    const current = entrypointInputs[ep.id]?.[name];
+                                    return (
+                                        <div key={`${ep.id}-${name}`} className="space-y-1">
+                                            <Label className="text-sm">{label}</Label>
+                                            {description ? (
+                                                <p className="text-xs text-muted-foreground">{description}</p>
+                                            ) : null}
+                                            <PluginInputField
+                                                type={type}
+                                                value={current}
+                                                onChange={(value) => onFieldChange(ep.id, name, value)}
+                                            />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : null}
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }

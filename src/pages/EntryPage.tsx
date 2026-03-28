@@ -20,6 +20,8 @@ import { useBackendClient } from "@/hooks/useBackendClient";
 const LAST_PROJECT_DIR_KEY = "openrisk:last-project-dir";
 const RECENT_PROJECTS_KEY = "openrisk:recent-projects";
 const LOCKED_PROJECT_ERROR_PREFIX = "PROJECT_LOCKED:";
+const LEGACY_PROJECT_ERROR_PREFIX = "PROJECT_LEGACY:";
+const OUTDATED_PROJECT_ERROR_PREFIX = "PROJECT_OUTDATED:";
 const PROJECT_FILE_FILTERS = [
     { name: "OpenRisk Project", extensions: ["orproj", "db"] },
     { name: "SQLite Database", extensions: ["db", "sqlite", "sqlite3", "orproj"] },
@@ -58,6 +60,22 @@ export function EntryPage({ initialMode }: EntryPageProps) {
     };
 
     const isLockedError = (message: string) => message.startsWith(LOCKED_PROJECT_ERROR_PREFIX);
+    const isLegacyError = (message: string) => message.startsWith(LEGACY_PROJECT_ERROR_PREFIX);
+    const isOutdatedError = (message: string) => message.startsWith(OUTDATED_PROJECT_ERROR_PREFIX);
+
+    const friendlyOpenError = (message: string): string => {
+        if (isLegacyError(message)) {
+            return "This project file is too old and cannot be opened. It was created with an incompatible version of OpenRisk.";
+        }
+        if (isOutdatedError(message)) {
+            const ver = message.slice(OUTDATED_PROJECT_ERROR_PREFIX.length).replace(/:.*$/, "");
+            return `This project file uses an outdated schema (version ${ver}) that is no longer supported. It cannot be automatically migrated.`;
+        }
+        return message;
+    };
+
+    const keepInRecent = (message: string): boolean =>
+        isLockedError(message) || isLegacyError(message) || isOutdatedError(message);
 
     const startUnlockFlow = (path: string, message?: string) => {
         setUnlockPath(path);
@@ -109,8 +127,8 @@ export function EntryPage({ initialMode }: EntryPageProps) {
                     valid.push(projectPathValue);
                 } catch (err) {
                     const message = err instanceof Error ? err.message : String(err);
-                    // Keep encrypted files in recent list.
-                    if (isLockedError(message)) {
+                    // Keep encrypted, legacy and outdated files in recent list — they exist on disk.
+                    if (keepInRecent(message)) {
                         valid.push(projectPathValue);
                     }
                 }
@@ -214,7 +232,7 @@ export function EntryPage({ initialMode }: EntryPageProps) {
             if (isLockedError(message)) {
                 startUnlockFlow(openProjectPath);
             } else {
-                setError(message);
+                setError(friendlyOpenError(message));
             }
         } finally {
             setBusy(false);
@@ -243,7 +261,7 @@ export function EntryPage({ initialMode }: EntryPageProps) {
             if (isLockedError(message)) {
                 startUnlockFlow(projectPathValue);
             } else {
-                setError(message);
+                setError(friendlyOpenError(message));
             }
         } finally {
             setBusy(false);

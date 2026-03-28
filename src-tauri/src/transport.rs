@@ -1,5 +1,6 @@
 use crate::app::plugin as app;
 use crate::app::project as app_project;
+use crate::app::project::PluginEntrypointSelection;
 use serde_json::Value;
 use std::path::PathBuf;
 
@@ -141,13 +142,29 @@ pub async fn run_scan(
     inputs_json: String,
 ) -> Result<String, String> {
     let dir = std::path::PathBuf::from(dir_path);
-    let selected_plugins: Vec<String> = serde_json::from_str(&selected_plugins_json)
-        .map_err(|e| format!("Invalid selected plugins JSON: {}", e))?;
+    let selected_plugins: Vec<PluginEntrypointSelection> =
+        serde_json::from_str(&selected_plugins_json)
+            .map_err(|e| format!("Invalid selected plugins JSON: {}", e))?;
     let inputs: Value =
         serde_json::from_str(&inputs_json).map_err(|e| format!("Invalid inputs JSON: {}", e))?;
 
     let scan = app_project::run_scan(dir, scan_id, selected_plugins, inputs).await?;
     serde_json::to_string(&scan).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn check_plugin_readiness(
+    plugin_id: String,
+    settings_json: Option<String>,
+) -> Result<String, String> {
+    let settings: Value = match settings_json {
+        Some(raw) => {
+            serde_json::from_str(&raw).map_err(|e| format!("Invalid settings JSON: {}", e))?
+        }
+        None => Value::Object(serde_json::Map::new()),
+    };
+    let result = app::check_plugin_readiness(&plugin_id, settings)?;
+    serde_json::to_string(&result).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

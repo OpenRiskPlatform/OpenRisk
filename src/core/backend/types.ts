@@ -85,16 +85,28 @@ export interface ScanSummary {
   preview?: string | null;
 }
 
+export interface PluginEntrypointSelection {
+  pluginId: string;
+  entrypointId: string;
+}
+
+export interface PluginResultEnvelope {
+  ok: boolean;
+  data?: unknown;
+  error?: string;
+}
+
 export interface ScanPluginResult {
   pluginId: string;
-  output: unknown;
+  entrypointId: string;
+  output: PluginResultEnvelope;
 }
 
 export interface ScanDetail {
   id: string;
   status: "Draft" | "Running" | "Completed" | "Failed" | "Finished";
   preview?: string | null;
-  selectedPlugins: string[];
+  selectedPlugins: PluginEntrypointSelection[];
   inputs: Record<string, unknown>;
   results: ScanPluginResult[];
 }
@@ -195,9 +207,17 @@ export abstract class BackendClient {
   abstract runScan(
     directory: string,
     scanId: string,
-    selectedPlugins: string[],
+    selectedPlugins: PluginEntrypointSelection[],
     inputs: Record<string, unknown>
   ): Promise<ScanSummary>;
+
+  /**
+   * Check if a plugin is ready to run (calls plugin's validate() export)
+   */
+  abstract checkPluginReadiness(
+    pluginId: string,
+    settingsJson?: string
+  ): Promise<{ ok: boolean; error?: string }>;
 
   /**
    * Rename scan (updates preview/title)
