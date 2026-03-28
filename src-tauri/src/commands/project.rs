@@ -6,7 +6,7 @@
 //! [`close_project`] tears down the session and drops the connection.
 
 use crate::app::project::{
-    PluginEntrypointSelection, ProjectPersistence, SqliteProjectPersistence,
+    service, PluginEntrypointSelection, ProjectPersistence, SqliteProjectPersistence,
 };
 use crate::ProjectState;
 use serde_json::Value;
@@ -42,6 +42,9 @@ pub async fn create_project(
     let (summary, persistence) = SqliteProjectPersistence::create(&name, &PathBuf::from(dir_path))
         .await
         .map_err(|e| e.to_string())?;
+    service::sync_bundled_plugins_for_new_project(&persistence)
+        .await
+        .map_err(|e| e.to_string())?;
     *state.lock().await = Some(Arc::new(persistence));
     serde_json::to_string(&summary).map_err(|e| e.to_string())
 }
@@ -62,6 +65,9 @@ pub async fn open_project(
         None => SqliteProjectPersistence::open(&path).await,
     }
     .map_err(|e| e.to_string())?;
+    service::sync_bundled_plugins_for_existing_project(&persistence)
+        .await
+        .map_err(|e| e.to_string())?;
     *state.lock().await = Some(Arc::new(persistence));
     serde_json::to_string(&summary).map_err(|e| e.to_string())
 }
@@ -138,10 +144,13 @@ pub async fn upsert_project_plugin_from_dir(
     state: tauri::State<'_, ProjectState>,
 ) -> Result<String, String> {
     let project = get_open_project(&state).await?;
-    let payload = project
-        .upsert_project_plugin_from_dir(&PathBuf::from(plugin_dir), replace_plugin_id)
-        .await
-        .map_err(|e| e.to_string())?;
+    let payload = service::upsert_plugin_from_dir(
+        project.as_ref(),
+        &PathBuf::from(plugin_dir),
+        replace_plugin_id,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
     serde_json::to_string(&payload).map_err(|e| e.to_string())
 }
 
@@ -201,8 +210,7 @@ pub async fn run_scan(
     let inputs: Value =
         serde_json::from_str(&inputs_json).map_err(|e| format!("Invalid inputs JSON: {}", e))?;
     let project = get_open_project(&state).await?;
-    let scan = project
-        .run_scan(&scan_id, selected_plugins, inputs)
+    let scan = service::run_scan(project.as_ref(), &scan_id, selected_plugins, inputs)
         .await
         .map_err(|e| e.to_string())?;
     serde_json::to_string(&scan).map_err(|e| e.to_string())

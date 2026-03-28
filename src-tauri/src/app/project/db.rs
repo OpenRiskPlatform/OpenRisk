@@ -13,18 +13,15 @@
 //! for existing ones, or [`SqliteProjectPersistence::open_with_password`] for encrypted ones.
 //! Use [`SqliteProjectPersistence::check_lock_status`] as a pre-open probe (no instance needed).
 
-use super::plugins::{
-    build_default_settings, discover_local_plugins, extract_manifest_id,
-    load_plugin_bundle_with_id, sidecar_path, LocalPluginBundle,
-};
+use super::plugins::{sidecar_path, LocalPluginBundle};
 use super::security::{
     cache_key, clear_cached_key, escape_sql_literal, get_cached_key, lock_error,
     validate_non_empty_password, validate_password,
 };
 use super::types::{
-    PersistenceError, PluginEntrypointSelection, PluginSettingsPayload, ProjectLockStatus,
-    ProjectSettingsPayload, ProjectSettingsRecord, ProjectSummary, ScanDetailRecord,
-    ScanPluginResultRecord, ScanSummaryRecord,
+    PersistenceError, PluginEntrypointSelection, PluginLoadData, PluginSettingsPayload,
+    ProjectLockStatus, ProjectSettingsPayload, ProjectSettingsRecord, ProjectSummary,
+    ScanDetailRecord, ScanPluginResultRecord, ScanRunContext, ScanSummaryRecord,
 };
 use async_trait::async_trait;
 use serde_json::{json, Map, Value};
@@ -141,13 +138,6 @@ pub trait ProjectPersistence: Send + Sync {
         settings: Value,
     ) -> Result<PluginSettingsPayload, PersistenceError>;
 
-    /// Register or refresh a plugin from a directory on disk into this project.
-    async fn upsert_project_plugin_from_dir(
-        &self,
-        plugin_dir: &Path,
-        replace_plugin_id: Option<String>,
-    ) -> Result<PluginSettingsPayload, PersistenceError>;
-
     /// Create a new scan in Draft status.
     async fn create_scan(
         &self,
@@ -160,14 +150,21 @@ pub trait ProjectPersistence: Send + Sync {
     /// Fetch full details of a single scan including all plugin results.
     async fn get_scan(&self, scan_id: &str) -> Result<ScanDetailRecord, PersistenceError>;
 
-    /// Execute a scan: run all selected plugin entrypoints and persist results.
-    ///
-    /// Plugin code is read exclusively from the database (synced on project open).
-    async fn run_scan(
+    /// Mark a scan as Running, snapshot its inputs and plugin selection, and return
+    /// the code + settings needed to execute each selected entrypoint.
+    async fn begin_scan_run(
         &self,
         scan_id: &str,
-        selected_plugins: Vec<PluginEntrypointSelection>,
-        inputs: Value,
+        selected_plugins: &[PluginEntrypointSelection],
+        inputs: &Value,
+    ) -> Result<ScanRunContext, PersistenceError>;
+
+    /// Persist the results of a completed scan execution and mark it as Completed.
+    async fn end_scan_run(
+        &self,
+        scan_id: &str,
+        preview: Option<String>,
+        results: Vec<ScanPluginResultRecord>,
     ) -> Result<ScanSummaryRecord, PersistenceError>;
 
     /// Update the preview (display name) of a scan.
@@ -176,6 +173,28 @@ pub trait ProjectPersistence: Send + Sync {
         scan_id: &str,
         preview: String,
     ) -> Result<ScanSummaryRecord, PersistenceError>;
+
+    /// Insert or update a plugin record (code + metadata) in the database.
+    async fn save_plugin(&self, bundle: &LocalPluginBundle) -> Result<(), PersistenceError>;
+
+    /// Return the current raw settings JSON for a plugin, or `None` if not yet configured.
+    async fn get_plugin_settings_json(
+        &self,
+        plugin_id: &str,
+    ) -> Result<Option<String>, PersistenceError>;
+
+    /// Upsert the settings JSON for a plugin in this project.
+    async fn save_plugin_settings_json(
+        &self,
+        plugin_id: &str,
+        settings_json: &str,
+    ) -> Result<(), PersistenceError>;
+
+    /// Fetch a plugin with its current settings by `plugin_id`.
+    async fn get_plugin_payload(
+        &self,
+        plugin_id: &str,
+    ) -> Result<PluginSettingsPayload, PersistenceError>;
 
     /// Return the encryption / lock state of the open project database.
     async fn get_project_lock_status(&self) -> Result<ProjectLockStatus, PersistenceError>;
@@ -228,7 +247,6 @@ impl SqliteProjectPersistence {
     /// Create a new project database at `project_path` and return an open instance.
     ///
     /// If `project_path` is a directory the file is named `<name>.orproj` inside it.
-    /// Built-in local plugins are synced into the new database.
     pub async fn create(
         name: &str,
         project_path: &Path,
@@ -287,8 +305,6 @@ impl SqliteProjectPersistence {
         .execute(&mut conn)
         .await?;
 
-        Self::sync_local_plugins_on_create(&mut conn, &project_settings_id).await?;
-
         let summary = ProjectSummary {
             id: project_id,
             name: trimmed_name.to_owned(),
@@ -304,8 +320,8 @@ impl SqliteProjectPersistence {
 
     /// Open an existing project and return an open instance.
     ///
-    /// Runs pending migrations and syncs built-in plugin code from disk into the database.
-    /// Returns a lock error when the database is encrypted and no cached key is available.
+    /// Runs pending migrations and returns a lock error when the database is encrypted
+    /// and no cached key is available.
     pub async fn open(project_path: &Path) -> Result<(ProjectSummary, Self), PersistenceError> {
         Self::open_inner(project_path, None).await
     }
@@ -374,9 +390,6 @@ impl SqliteProjectPersistence {
         )
         .fetch_one(&mut conn)
         .await?;
-
-        // Refresh built-in plugin code from disk; preserve user settings already in DB.
-        Self::sync_local_plugins_on_open(&mut conn, &project_row.project_settings_id).await?;
 
         if let Some(pw) = &password {
             cache_key(&db_path, pw.clone());
@@ -537,60 +550,23 @@ impl SqliteProjectPersistence {
 
     /// Migration v4 → v5: add `entrypoint_id` column and convert `selected_plugins_json`.
     async fn migrate_to_v5(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
-        let has_col = Self::column_exists(conn, "ScanPluginResult", "entrypoint_id").await?;
-        if !has_col {
-            sqlx::query(
-                "ALTER TABLE ScanPluginResult ADD COLUMN entrypoint_id TEXT NOT NULL DEFAULT 'default'",
-            )
-            .execute(&mut *conn)
-            .await?;
-        }
-
-        let scan_rows: Vec<(String, Option<String>)> =
-            sqlx::query_as("SELECT id, selected_plugins_json FROM Scan")
-                .fetch_all(&mut *conn)
-                .await?;
-
-        for (scan_id, raw_opt) in scan_rows {
-            let raw = match raw_opt {
-                Some(r) if !r.trim().is_empty() => r,
-                _ => continue,
-            };
-            let value: Value = match serde_json::from_str(&raw) {
-                Ok(v) => v,
-                Err(_) => continue,
-            };
-            let items = match &value {
-                Value::Array(arr) => arr,
-                _ => continue,
-            };
-            if items
-                .iter()
-                .any(|item| item.is_object() && item.get("pluginId").is_some())
-            {
-                continue;
-            }
-            let converted: Vec<Value> = items
-                .iter()
-                .filter_map(|item| {
-                    item.as_str()
-                        .map(|s| json!({ "pluginId": s, "entrypointId": "default" }))
-                })
-                .collect();
-            let new_json = serde_json::to_string(&Value::Array(converted))?;
-            sqlx::query("UPDATE Scan SET selected_plugins_json = ?1 WHERE id = ?2")
-                .bind(new_json)
-                .bind(scan_id)
-                .execute(&mut *conn)
-                .await?;
-        }
+        Self::ensure_scan_result_entrypoint_column(conn).await?;
+        Self::migrate_selected_plugins_json(conn).await?;
         Ok(())
     }
 
     /// Migration v5 → v6: add `entrypoint_id` column (same as v5 for DBs that never got it)
     /// and ensure `selected_plugins_json` uses the `{pluginId, entrypointId}` object format.
     async fn migrate_to_v6(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
-        // Idempotent: only adds the column when it is genuinely absent.
+        Self::ensure_scan_result_entrypoint_column(conn).await?;
+        Self::migrate_selected_plugins_json(conn).await?;
+        Ok(())
+    }
+
+    /// Idempotently ensure `ScanPluginResult.entrypoint_id` exists.
+    async fn ensure_scan_result_entrypoint_column(
+        conn: &mut SqliteConnection,
+    ) -> Result<(), PersistenceError> {
         let has_col = Self::column_exists(conn, "ScanPluginResult", "entrypoint_id").await?;
         if !has_col {
             sqlx::query(
@@ -599,8 +575,13 @@ impl SqliteProjectPersistence {
             .execute(&mut *conn)
             .await?;
         }
+        Ok(())
+    }
 
-        // Convert any remaining string-array Scan.selected_plugins_json rows.
+    /// Convert legacy string-array `Scan.selected_plugins_json` into object entries.
+    async fn migrate_selected_plugins_json(
+        conn: &mut SqliteConnection,
+    ) -> Result<(), PersistenceError> {
         let scan_rows: Vec<(String, Option<String>)> =
             sqlx::query_as("SELECT id, selected_plugins_json FROM Scan")
                 .fetch_all(&mut *conn)
@@ -667,53 +648,6 @@ impl SqliteProjectPersistence {
         .await?
         .is_some();
         Ok(exists)
-    }
-
-    // --- plugin sync ---------------------------------------------------------
-
-    /// Sync local plugins into a *newly created* project (plain INSERT for settings).
-    async fn sync_local_plugins_on_create(
-        conn: &mut SqliteConnection,
-        project_settings_id: &str,
-    ) -> Result<(), PersistenceError> {
-        for plugin in discover_local_plugins()? {
-            Self::insert_plugin(conn, &plugin).await?;
-            let settings_json = serde_json::to_string(&build_default_settings(&plugin.manifest))?;
-            sqlx::query(
-                "INSERT INTO ProjectPluginSettings \
-                 (plugin_id, project_settings_id, settings_json) VALUES (?1, ?2, ?3)",
-            )
-            .bind(&plugin.id)
-            .bind(project_settings_id)
-            .bind(settings_json)
-            .execute(&mut *conn)
-            .await?;
-        }
-        Ok(())
-    }
-
-    /// Sync local plugins into an *existing* project on open.
-    ///
-    /// Uses `INSERT OR REPLACE` for the plugin record (refreshes code from disk) and
-    /// `INSERT OR IGNORE` for settings (preserves user-configured values).
-    async fn sync_local_plugins_on_open(
-        conn: &mut SqliteConnection,
-        project_settings_id: &str,
-    ) -> Result<(), PersistenceError> {
-        for plugin in discover_local_plugins()? {
-            Self::insert_plugin(conn, &plugin).await?;
-            let settings_json = serde_json::to_string(&build_default_settings(&plugin.manifest))?;
-            sqlx::query(
-                "INSERT OR IGNORE INTO ProjectPluginSettings \
-                 (plugin_id, project_settings_id, settings_json) VALUES (?1, ?2, ?3)",
-            )
-            .bind(&plugin.id)
-            .bind(project_settings_id)
-            .bind(settings_json)
-            .execute(&mut *conn)
-            .await?;
-        }
-        Ok(())
     }
 
     /// Insert or replace a plugin record (code + metadata) in the database.
@@ -1091,81 +1025,6 @@ impl ProjectPersistence for SqliteProjectPersistence {
         .into_payload()
     }
 
-    async fn upsert_project_plugin_from_dir(
-        &self,
-        plugin_dir: &Path,
-        replace_plugin_id: Option<String>,
-    ) -> Result<PluginSettingsPayload, PersistenceError> {
-        let manifest_id = extract_manifest_id(plugin_dir)?;
-        let plugin_id = match replace_plugin_id {
-            Some(id) if !id.trim().is_empty() => id.trim().to_string(),
-            _ => manifest_id,
-        };
-        let bundle = load_plugin_bundle_with_id(plugin_dir, plugin_id.clone())?;
-
-        let mut guard = self.conn.lock().await;
-        let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
-
-        let project_settings_id: String =
-            sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
-                .fetch_one(&mut *conn)
-                .await?;
-
-        Self::insert_plugin(conn, &bundle).await?;
-
-        let existing_settings: Option<String> = sqlx::query_scalar(
-            "SELECT settings_json FROM ProjectPluginSettings \
-             WHERE plugin_id = ?1 AND project_settings_id = ?2 LIMIT 1",
-        )
-        .bind(&plugin_id)
-        .bind(&project_settings_id)
-        .fetch_optional(&mut *conn)
-        .await?;
-
-        let default_settings = build_default_settings(&bundle.manifest);
-        let mut merged = match existing_settings {
-            Some(raw) => serde_json::from_str::<Value>(&raw).unwrap_or(Value::Object(Map::new())),
-            None => Value::Object(Map::new()),
-        };
-        if !merged.is_object() {
-            merged = Value::Object(Map::new());
-        }
-        if let (Value::Object(ref mut m), Value::Object(defaults)) = (&mut merged, default_settings)
-        {
-            for (key, value) in defaults {
-                m.entry(key).or_insert(value);
-            }
-        }
-
-        let merged_json = serde_json::to_string(&merged)?;
-        sqlx::query(
-            "INSERT INTO ProjectPluginSettings (plugin_id, project_settings_id, settings_json) \
-             VALUES (?1, ?2, ?3) \
-             ON CONFLICT(plugin_id, project_settings_id) DO UPDATE SET settings_json = excluded.settings_json",
-        )
-        .bind(&plugin_id)
-        .bind(&project_settings_id)
-        .bind(merged_json)
-        .execute(&mut *conn)
-        .await?;
-
-        sqlx::query_as::<_, PluginRow>(
-            "SELECT Plugin.id as plugin_id, Plugin.name as plugin_name, \
-             Plugin.version as plugin_version, Plugin.input_schema_json as input_schema_json, \
-             Plugin.settings_schema_json as settings_schema_json, \
-             Plugin.manifest_json as manifest_json, \
-             ProjectPluginSettings.settings_json as settings_json \
-             FROM Plugin \
-             INNER JOIN ProjectPluginSettings ON ProjectPluginSettings.plugin_id = Plugin.id \
-             WHERE ProjectPluginSettings.project_settings_id = ?1 AND Plugin.id = ?2",
-        )
-        .bind(&project_settings_id)
-        .bind(&plugin_id)
-        .fetch_one(&mut *conn)
-        .await?
-        .into_payload()
-    }
-
     async fn create_scan(
         &self,
         preview: Option<String>,
@@ -1295,183 +1154,198 @@ impl ProjectPersistence for SqliteProjectPersistence {
         })
     }
 
-    async fn run_scan(
+    async fn begin_scan_run(
         &self,
         scan_id: &str,
-        selected_plugins: Vec<PluginEntrypointSelection>,
-        inputs: Value,
-    ) -> Result<ScanSummaryRecord, PersistenceError> {
-        if selected_plugins.is_empty() {
+        selected_plugins: &[PluginEntrypointSelection],
+        inputs: &Value,
+    ) -> Result<ScanRunContext, PersistenceError> {
+        let mut guard = self.conn.lock().await;
+        let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
+
+        let scan = sqlx::query_as::<_, ScanRow>(
+            "SELECT id, status, preview, inputs_json, selected_plugins_json \
+             FROM Scan WHERE id = ?1 LIMIT 1",
+        )
+        .bind(scan_id)
+        .fetch_one(&mut *conn)
+        .await?;
+
+        if scan.status != "Draft" {
             return Err(PersistenceError::Validation(
-                "Select at least one plugin entrypoint before run".into(),
+                "Scan already launched and cannot be rerun".into(),
             ));
         }
 
-        // --- Phase 1: load all data from DB, update status, release lock -----
-        let (scan_preview, plugin_data) = {
-            let mut guard = self.conn.lock().await;
-            let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
+        let project_settings_id: String =
+            sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
+                .fetch_one(&mut *conn)
+                .await?;
 
-            let scan = sqlx::query_as::<_, ScanRow>(
-                "SELECT id, status, preview, inputs_json, selected_plugins_json \
-                 FROM Scan WHERE id = ?1 LIMIT 1",
-            )
-            .bind(scan_id)
-            .fetch_one(&mut *conn)
-            .await?;
+        sqlx::query(
+            "UPDATE Scan SET status = 'Running', \
+             selected_plugins_json = ?1, inputs_json = ?2 WHERE id = ?3",
+        )
+        .bind(serde_json::to_string(selected_plugins)?)
+        .bind(serde_json::to_string(inputs)?)
+        .bind(scan_id)
+        .execute(&mut *conn)
+        .await?;
 
-            if scan.status != "Draft" {
-                return Err(PersistenceError::Validation(
-                    "Scan already launched and cannot be rerun".into(),
-                ));
-            }
-
-            let project_settings_id: String =
-                sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
-                    .fetch_one(&mut *conn)
-                    .await?;
-
-            sqlx::query(
-                "UPDATE Scan SET status = 'Running', \
-                 selected_plugins_json = ?1, inputs_json = ?2 WHERE id = ?3",
-            )
-            .bind(serde_json::to_string(&selected_plugins)?)
-            .bind(serde_json::to_string(&inputs)?)
+        sqlx::query("DELETE FROM ScanPluginResult WHERE scan_id = ?1")
             .bind(scan_id)
             .execute(&mut *conn)
             .await?;
 
-            sqlx::query("DELETE FROM ScanPluginResult WHERE scan_id = ?1")
-                .bind(scan_id)
-                .execute(&mut *conn)
-                .await?;
+        let mut plugins = Vec::with_capacity(selected_plugins.len());
+        for sel in selected_plugins {
+            let row = sqlx::query_as::<_, (Option<String>, Option<String>, Option<String>)>(
+                "SELECT pps.settings_json, p.code, p.manifest_json \
+                 FROM ProjectPluginSettings pps \
+                 INNER JOIN Plugin p ON p.id = pps.plugin_id \
+                 WHERE pps.plugin_id = ?1 AND pps.project_settings_id = ?2 LIMIT 1",
+            )
+            .bind(&sel.plugin_id)
+            .bind(&project_settings_id)
+            .fetch_optional(&mut *conn)
+            .await?;
 
-            // Load plugin code + settings from DB — single source of truth.
-            let mut plugin_data: Vec<(
-                String,
-                String,
-                Option<String>,
-                Option<String>,
-                Option<String>,
-            )> = Vec::new();
-            for sel in &selected_plugins {
-                let row = sqlx::query_as::<_, (Option<String>, Option<String>, Option<String>)>(
-                    "SELECT pps.settings_json, p.code, p.manifest_json \
-                     FROM ProjectPluginSettings pps \
-                     INNER JOIN Plugin p ON p.id = pps.plugin_id \
-                     WHERE pps.plugin_id = ?1 AND pps.project_settings_id = ?2 LIMIT 1",
-                )
-                .bind(&sel.plugin_id)
-                .bind(&project_settings_id)
-                .fetch_optional(&mut *conn)
-                .await?;
-
-                let (settings_json, code, manifest_json) = row.unwrap_or((None, None, None));
-                plugin_data.push((
-                    sel.plugin_id.clone(),
-                    sel.entrypoint_id.clone(),
-                    settings_json,
-                    code,
-                    manifest_json,
-                ));
-            }
-
-            (scan.preview, plugin_data)
-        }; // DB lock released
-
-        let inputs_obj = if inputs.is_object() {
-            inputs
-        } else {
-            Value::Object(Map::new())
-        };
-
-        // --- Phase 2: execute plugins (no DB access) -------------------------
-        let mut envelopes: Vec<(String, String, Value)> = Vec::new();
-
-        for (plugin_id, entrypoint_id, settings_json, plugin_code, manifest_json_raw) in plugin_data
-        {
-            let ep_key = format!("{}::{}", plugin_id, entrypoint_id);
-            let plugin_inputs = inputs_obj
-                .get(&ep_key)
-                .cloned()
-                .unwrap_or_else(|| Value::Object(Map::new()));
-
-            let envelope = match plugin_code.filter(|c| !c.trim().is_empty()) {
-                None => json!({
-                    "ok": false,
-                    "error": format!("Plugin '{}' not found or has no code in database", plugin_id)
-                }),
-                Some(code) => {
-                    let plugin_settings = settings_json
-                        .as_deref()
-                        .filter(|s| !s.trim().is_empty())
-                        .and_then(|s| serde_json::from_str(s).ok())
-                        .unwrap_or_else(|| Value::Object(Map::new()));
-
-                    let manifest_val: Value = manifest_json_raw
-                        .as_deref()
-                        .and_then(|s| serde_json::from_str(s).ok())
-                        .unwrap_or(Value::Null);
-
-                    let entrypoint_fn = resolve_entrypoint_function(&manifest_val, &entrypoint_id);
-
-                    let result = tauri::async_runtime::spawn_blocking(move || {
-                        crate::app::plugin::execute_plugin_code_with_settings(
-                            code,
-                            plugin_inputs,
-                            plugin_settings,
-                            Some(entrypoint_fn),
-                        )
-                    })
-                    .await
-                    .map_err(|e| {
-                        PersistenceError::Validation(format!(
-                            "Failed to join plugin execution task: {}",
-                            e
-                        ))
-                    })?;
-
-                    match result {
-                        Ok((output, logs)) => json!({ "ok": true, "data": output, "logs": logs }),
-                        Err(err) => json!({ "ok": false, "error": err }),
-                    }
-                }
-            };
-
-            envelopes.push((plugin_id, entrypoint_id, envelope));
+            let (settings_json, code, manifest_json) = row.unwrap_or((None, None, None));
+            plugins.push(PluginLoadData {
+                plugin_id: sel.plugin_id.clone(),
+                entrypoint_id: sel.entrypoint_id.clone(),
+                settings_json,
+                code,
+                manifest_json,
+            });
         }
 
-        // --- Phase 3: persist results ----------------------------------------
-        {
-            let mut guard = self.conn.lock().await;
-            let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
+        Ok(ScanRunContext {
+            scan_preview: scan.preview,
+            plugins,
+        })
+    }
 
-            for (plugin_id, entrypoint_id, envelope) in envelopes {
-                sqlx::query(
-                    "INSERT INTO ScanPluginResult \
-                     (id, plugin_id, entrypoint_id, scan_id, output_json_ir) \
-                     VALUES (?1, ?2, ?3, ?4, ?5)",
-                )
-                .bind(Uuid::new_v4().to_string())
-                .bind(&plugin_id)
-                .bind(&entrypoint_id)
-                .bind(scan_id)
-                .bind(serde_json::to_string(&envelope)?)
-                .execute(&mut *conn)
-                .await?;
-            }
+    async fn end_scan_run(
+        &self,
+        scan_id: &str,
+        preview: Option<String>,
+        results: Vec<ScanPluginResultRecord>,
+    ) -> Result<ScanSummaryRecord, PersistenceError> {
+        let mut guard = self.conn.lock().await;
+        let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
-            sqlx::query("UPDATE Scan SET status = 'Completed' WHERE id = ?1")
-                .bind(scan_id)
-                .execute(&mut *conn)
-                .await?;
+        for result in &results {
+            sqlx::query(
+                "INSERT INTO ScanPluginResult \
+                 (id, plugin_id, entrypoint_id, scan_id, output_json_ir) \
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+            )
+            .bind(Uuid::new_v4().to_string())
+            .bind(&result.plugin_id)
+            .bind(&result.entrypoint_id)
+            .bind(scan_id)
+            .bind(serde_json::to_string(&result.output)?)
+            .execute(&mut *conn)
+            .await?;
         }
+
+        sqlx::query("UPDATE Scan SET status = 'Completed' WHERE id = ?1")
+            .bind(scan_id)
+            .execute(&mut *conn)
+            .await?;
 
         Ok(ScanSummaryRecord {
             id: scan_id.to_owned(),
             status: "Completed".to_string(),
-            preview: scan_preview,
+            preview,
         })
+    }
+
+    async fn save_plugin(&self, bundle: &LocalPluginBundle) -> Result<(), PersistenceError> {
+        let mut guard = self.conn.lock().await;
+        let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
+        Self::insert_plugin(conn, bundle).await
+    }
+
+    async fn get_plugin_settings_json(
+        &self,
+        plugin_id: &str,
+    ) -> Result<Option<String>, PersistenceError> {
+        let mut guard = self.conn.lock().await;
+        let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
+
+        let project_settings_id: String =
+            sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
+                .fetch_one(&mut *conn)
+                .await?;
+
+        sqlx::query_scalar(
+            "SELECT settings_json FROM ProjectPluginSettings \
+             WHERE plugin_id = ?1 AND project_settings_id = ?2 LIMIT 1",
+        )
+        .bind(plugin_id)
+        .bind(&project_settings_id)
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(Into::into)
+    }
+
+    async fn save_plugin_settings_json(
+        &self,
+        plugin_id: &str,
+        settings_json: &str,
+    ) -> Result<(), PersistenceError> {
+        let mut guard = self.conn.lock().await;
+        let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
+
+        let project_settings_id: String =
+            sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
+                .fetch_one(&mut *conn)
+                .await?;
+
+        sqlx::query(
+            "INSERT INTO ProjectPluginSettings (plugin_id, project_settings_id, settings_json) \
+             VALUES (?1, ?2, ?3) \
+             ON CONFLICT(plugin_id, project_settings_id) DO UPDATE SET \
+                 settings_json = excluded.settings_json",
+        )
+        .bind(plugin_id)
+        .bind(&project_settings_id)
+        .bind(settings_json)
+        .execute(&mut *conn)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn get_plugin_payload(
+        &self,
+        plugin_id: &str,
+    ) -> Result<PluginSettingsPayload, PersistenceError> {
+        let mut guard = self.conn.lock().await;
+        let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
+
+        let project_settings_id: String =
+            sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
+                .fetch_one(&mut *conn)
+                .await?;
+
+        sqlx::query_as::<_, PluginRow>(
+            "SELECT Plugin.id as plugin_id, Plugin.name as plugin_name, \
+             Plugin.version as plugin_version, Plugin.input_schema_json as input_schema_json, \
+             Plugin.settings_schema_json as settings_schema_json, \
+             Plugin.manifest_json as manifest_json, \
+             ProjectPluginSettings.settings_json as settings_json \
+             FROM Plugin \
+             INNER JOIN ProjectPluginSettings ON ProjectPluginSettings.plugin_id = Plugin.id \
+             WHERE ProjectPluginSettings.project_settings_id = ?1 AND Plugin.id = ?2",
+        )
+        .bind(&project_settings_id)
+        .bind(plugin_id)
+        .fetch_one(&mut *conn)
+        .await?
+        .into_payload()
     }
 
     async fn update_scan_preview(
@@ -1682,27 +1556,10 @@ fn parse_json_text(raw: Option<String>) -> Result<Value, PersistenceError> {
 }
 
 /// Normalize legacy scan outputs into the new envelope shape used by the frontend.
-fn normalize_scan_output(value: Value) -> Value {
+pub(super) fn normalize_scan_output(value: Value) -> Value {
     match value {
         Value::Object(map) if map.contains_key("ok") => Value::Object(map),
         Value::Null => json!({ "ok": false, "error": "No result payload" }),
         other => json!({ "ok": true, "data": other, "logs": [] }),
     }
-}
-
-/// Resolve the TypeScript function name for a given entrypoint ID from a manifest value.
-///
-/// Falls back to the entrypoint ID itself when the manifest has no `entrypoints` array
-/// or the ID is not found.
-fn resolve_entrypoint_function(manifest: &Value, entrypoint_id: &str) -> String {
-    if let Some(entrypoints) = manifest.get("entrypoints").and_then(|v| v.as_array()) {
-        for ep in entrypoints {
-            if ep.get("id").and_then(|v| v.as_str()) == Some(entrypoint_id) {
-                if let Some(func) = ep.get("function").and_then(|v| v.as_str()) {
-                    return func.to_string();
-                }
-            }
-        }
-    }
-    entrypoint_id.to_string()
 }

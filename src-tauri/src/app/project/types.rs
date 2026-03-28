@@ -91,6 +91,23 @@ pub struct ProjectLockStatus {
     pub unlocked: bool,
 }
 
+/// Code + settings for one plugin entrypoint loaded from the DB before execution.
+#[derive(Debug, Clone)]
+pub struct PluginLoadData {
+    pub plugin_id: String,
+    pub entrypoint_id: String,
+    pub settings_json: Option<String>,
+    pub code: Option<String>,
+    pub manifest_json: Option<String>,
+}
+
+/// Everything returned by `begin_scan_run`: context needed to execute all plugins.
+#[derive(Debug, Clone)]
+pub struct ScanRunContext {
+    pub scan_preview: Option<String>,
+    pub plugins: Vec<PluginLoadData>,
+}
+
 /// Unified error type for all persistence operations.
 #[derive(Debug)]
 pub enum PersistenceError {
