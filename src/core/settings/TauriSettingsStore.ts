@@ -123,42 +123,4 @@ export class TauriSettingsStore implements SettingsStore {
       console.error("[TauriSettingsStore] Failed to reset settings:", error);
     }
   }
-
-  exportSettings(): string {
-    return JSON.stringify(
-      {
-        global: this.globalSettings,
-        plugins: Object.fromEntries(this.pluginSettings),
-      },
-      null,
-      2
-    );
-  }
-
-  async importSettings(json: string): Promise<void> {
-    try {
-      const data = JSON.parse(json);
-
-      if (data.global) {
-        this.globalSettings = { ...DEFAULT_GLOBAL_SETTINGS, ...data.global };
-        const store = await this.getStore();
-        await store.set("global", this.globalSettings);
-      }
-
-      if (data.plugins) {
-        this.pluginSettings = new Map(Object.entries(data.plugins));
-        const store = await this.getStore();
-        await store.set(
-          "plugins",
-          Object.fromEntries(this.pluginSettings)
-        );
-      }
-
-      const store = await this.getStore();
-      await store.save();
-    } catch (error) {
-      console.error("[TauriSettingsStore] Failed to import settings:", error);
-      throw new Error("Invalid settings format");
-    }
-  }
 }

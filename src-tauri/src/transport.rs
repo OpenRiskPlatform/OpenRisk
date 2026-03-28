@@ -54,9 +54,6 @@ pub fn execute_plugin(
 // plugins
 
 // Project
-// pub fn change_plugin_settings(project_name: String, settings_json: String) -> Result<(), String> {
-//     crate::app::plugin::configure_plugin(&plugin_id, settings)
-// }
 
 #[tauri::command]
 pub async fn create_project(name: String, dir_path: String) -> Result<String, String> {

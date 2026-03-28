@@ -65,32 +65,4 @@ export class InMemorySettingsStore implements SettingsStore {
     this.globalSettings = { ...DEFAULT_GLOBAL_SETTINGS };
     this.pluginSettings.clear();
   }
-
-  exportSettings(): string {
-    return JSON.stringify(
-      {
-        global: this.globalSettings,
-        plugins: Object.fromEntries(this.pluginSettings),
-      },
-      null,
-      2
-    );
-  }
-
-  importSettings(json: string): void {
-    try {
-      const data = JSON.parse(json);
-
-      if (data.global) {
-        this.globalSettings = { ...DEFAULT_GLOBAL_SETTINGS, ...data.global };
-      }
-
-      if (data.plugins) {
-        this.pluginSettings = new Map(Object.entries(data.plugins));
-      }
-    } catch (error) {
-      console.error("Failed to import settings:", error);
-      throw new Error("Invalid settings format");
-    }
-  }
 }

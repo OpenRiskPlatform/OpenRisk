@@ -37,14 +37,4 @@ export interface SettingsStore {
    * Reset all settings to defaults
    */
   resetToDefaults(): void;
-
-  /**
-   * Export all settings as JSON
-   */
-  exportSettings(): string;
-
-  /**
-   * Import settings from JSON
-   */
-  importSettings(json: string): void;
 }

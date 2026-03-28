@@ -1,7 +1,6 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 import { SettingsProvider } from "@/core/settings/SettingsContext";
 import { BackendClientProvider } from "@/hooks/useBackendClient";
-import { PluginProvider } from "@/hooks/usePlugins";
 import { useTheme } from "@/hooks/useTheme";
 
 export const Route = createRootRoute({
@@ -18,9 +17,7 @@ function RootComponent() {
     <SettingsProvider>
       <ThemeWrapper />
       <BackendClientProvider>
-        <PluginProvider>
-          <Outlet />
-        </PluginProvider>
+        <Outlet />
       </BackendClientProvider>
     </SettingsProvider>
   );

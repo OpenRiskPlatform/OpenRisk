@@ -1,7 +1,4 @@
-pub mod plugins;
-
 mod app;
-mod core;
 mod plugin_manifest;
 mod transport;
 
