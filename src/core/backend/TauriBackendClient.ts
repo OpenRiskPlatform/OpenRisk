@@ -25,10 +25,11 @@ export class TauriBackendClient extends BackendClient {
     }
   }
 
-  async openProject(directory: string): Promise<ProjectSummary> {
+  async openProject(directory: string, password?: string): Promise<ProjectSummary> {
     try {
       const result = await invoke<string>("open_project", {
         dirPath: directory,
+        password: password ?? null,
       });
       return JSON.parse(result) as ProjectSummary;
     } catch (error: any) {
@@ -37,11 +38,18 @@ export class TauriBackendClient extends BackendClient {
     }
   }
 
-  async loadSettings(directory: string): Promise<ProjectSettingsPayload> {
+  async closeProject(): Promise<void> {
     try {
-      const result = await invoke<string>("load_settings", {
-        dirPath: directory,
-      });
+      await invoke("close_project");
+    } catch (error: any) {
+      console.error("[TauriBackendClient] closeProject error:", error);
+      throw new Error(error?.message ?? error?.toString() ?? "Failed to close project");
+    }
+  }
+
+  async loadSettings(): Promise<ProjectSettingsPayload> {
+    try {
+      const result = await invoke<string>("load_settings");
       return JSON.parse(result) as ProjectSettingsPayload;
     } catch (error: any) {
       console.error("[TauriBackendClient] loadSettings error:", error);
@@ -50,12 +58,10 @@ export class TauriBackendClient extends BackendClient {
   }
 
   async updateProjectSettings(
-    directory: string,
     patch: { theme?: "light" | "dark" | "system" }
   ): Promise<ProjectSettingsRecord> {
     try {
       const result = await invoke<string>("update_project_settings", {
-        dirPath: directory,
         theme: patch.theme,
       });
       return JSON.parse(result) as ProjectSettingsRecord;
@@ -67,12 +73,9 @@ export class TauriBackendClient extends BackendClient {
     }
   }
 
-  async updateProjectName(directory: string, name: string): Promise<ProjectSummary> {
+  async updateProjectName(name: string): Promise<ProjectSummary> {
     try {
-      const result = await invoke<string>("update_project_name", {
-        dirPath: directory,
-        name,
-      });
+      const result = await invoke<string>("update_project_name", { name });
       return JSON.parse(result) as ProjectSummary;
     } catch (error: any) {
       console.error("[TauriBackendClient] updateProjectName error:", error);
@@ -81,13 +84,11 @@ export class TauriBackendClient extends BackendClient {
   }
 
   async updateProjectPluginSettings(
-    directory: string,
     pluginId: string,
     settings: Record<string, unknown>
   ): Promise<PluginSettingsDescriptor> {
     try {
       const result = await invoke<string>("update_project_plugin_settings", {
-        dirPath: directory,
         pluginId,
         settingsJson: JSON.stringify(settings),
       });
@@ -100,12 +101,9 @@ export class TauriBackendClient extends BackendClient {
     }
   }
 
-  async createScan(directory: string, preview?: string): Promise<ScanSummary> {
+  async createScan(preview?: string): Promise<ScanSummary> {
     try {
-      const result = await invoke<string>("create_scan", {
-        dirPath: directory,
-        preview,
-      });
+      const result = await invoke<string>("create_scan", { preview });
       return JSON.parse(result) as ScanSummary;
     } catch (error: any) {
       console.error("[TauriBackendClient] createScan error:", error);
@@ -113,11 +111,9 @@ export class TauriBackendClient extends BackendClient {
     }
   }
 
-  async listScans(directory: string): Promise<ScanSummary[]> {
+  async listScans(): Promise<ScanSummary[]> {
     try {
-      const result = await invoke<string>("list_scans", {
-        dirPath: directory,
-      });
+      const result = await invoke<string>("list_scans");
       return JSON.parse(result) as ScanSummary[];
     } catch (error: any) {
       console.error("[TauriBackendClient] listScans error:", error);
@@ -125,12 +121,9 @@ export class TauriBackendClient extends BackendClient {
     }
   }
 
-  async getScan(directory: string, scanId: string): Promise<ScanDetail> {
+  async getScan(scanId: string): Promise<ScanDetail> {
     try {
-      const result = await invoke<string>("get_scan", {
-        dirPath: directory,
-        scanId,
-      });
+      const result = await invoke<string>("get_scan", { scanId });
       return JSON.parse(result) as ScanDetail;
     } catch (error: any) {
       console.error("[TauriBackendClient] getScan error:", error);
@@ -139,14 +132,12 @@ export class TauriBackendClient extends BackendClient {
   }
 
   async runScan(
-    directory: string,
     scanId: string,
     selectedPlugins: PluginEntrypointSelection[],
     inputs: Record<string, unknown>
   ): Promise<ScanSummary> {
     try {
       const result = await invoke<string>("run_scan", {
-        dirPath: directory,
         scanId,
         selectedPluginsJson: JSON.stringify(selectedPlugins),
         inputsJson: JSON.stringify(inputs),
@@ -174,17 +165,9 @@ export class TauriBackendClient extends BackendClient {
     }
   }
 
-  async updateScanPreview(
-    directory: string,
-    scanId: string,
-    preview: string
-  ): Promise<ScanSummary> {
+  async updateScanPreview(scanId: string, preview: string): Promise<ScanSummary> {
     try {
-      const result = await invoke<string>("update_scan_preview", {
-        dirPath: directory,
-        scanId,
-        preview,
-      });
+      const result = await invoke<string>("update_scan_preview", { scanId, preview });
       return JSON.parse(result) as ScanSummary;
     } catch (error: any) {
       console.error("[TauriBackendClient] updateScanPreview error:", error);
@@ -193,13 +176,11 @@ export class TauriBackendClient extends BackendClient {
   }
 
   async upsertProjectPluginFromDir(
-    directory: string,
     pluginDir: string,
     replacePluginId?: string
   ): Promise<PluginSettingsDescriptor> {
     try {
       const result = await invoke<string>("upsert_project_plugin_from_dir", {
-        dirPath: directory,
         pluginDir,
         replacePluginId,
       });
@@ -224,28 +205,9 @@ export class TauriBackendClient extends BackendClient {
     }
   }
 
-  async unlockProject(directory: string, password: string): Promise<ProjectLockStatus> {
+  async setProjectPassword(newPassword: string): Promise<ProjectLockStatus> {
     try {
-      const result = await invoke<string>("unlock_project", {
-        dirPath: directory,
-        password,
-      });
-      return JSON.parse(result) as ProjectLockStatus;
-    } catch (error: any) {
-      console.error("[TauriBackendClient] unlockProject error:", error);
-      throw new Error(error?.message ?? error?.toString() ?? "Failed to unlock project");
-    }
-  }
-
-  async setProjectPassword(
-    directory: string,
-    newPassword: string
-  ): Promise<ProjectLockStatus> {
-    try {
-      const result = await invoke<string>("set_project_password", {
-        dirPath: directory,
-        newPassword,
-      });
+      const result = await invoke<string>("set_project_password", { newPassword });
       return JSON.parse(result) as ProjectLockStatus;
     } catch (error: any) {
       console.error("[TauriBackendClient] setProjectPassword error:", error);
@@ -254,13 +216,11 @@ export class TauriBackendClient extends BackendClient {
   }
 
   async changeProjectPassword(
-    directory: string,
     currentPassword: string,
     newPassword: string
   ): Promise<ProjectLockStatus> {
     try {
       const result = await invoke<string>("change_project_password", {
-        dirPath: directory,
         currentPassword,
         newPassword,
       });
@@ -273,15 +233,9 @@ export class TauriBackendClient extends BackendClient {
     }
   }
 
-  async removeProjectPassword(
-    directory: string,
-    currentPassword: string
-  ): Promise<ProjectLockStatus> {
+  async removeProjectPassword(currentPassword: string): Promise<ProjectLockStatus> {
     try {
-      const result = await invoke<string>("remove_project_password", {
-        dirPath: directory,
-        currentPassword,
-      });
+      const result = await invoke<string>("remove_project_password", { currentPassword });
       return JSON.parse(result) as ProjectLockStatus;
     } catch (error: any) {
       console.error("[TauriBackendClient] removeProjectPassword error:", error);

@@ -36,25 +36,6 @@ pub fn configure_plugin(plugin_id: String, settings_json: String) -> Result<(), 
     plugin::configure_plugin(&plugin_id, value)
 }
 
-/// Execute a plugin entrypoint with the given inputs and optional settings override.
-#[tauri::command]
-pub fn execute_plugin(
-    plugin_id: String,
-    inputs_json: String,
-    settings_json: Option<String>,
-) -> Result<String, String> {
-    let inputs: Value =
-        serde_json::from_str(&inputs_json).map_err(|e| format!("Invalid inputs JSON: {}", e))?;
-    let settings_override = match settings_json {
-        Some(raw) => {
-            Some(serde_json::from_str(&raw).map_err(|e| format!("Invalid settings JSON: {}", e))?)
-        }
-        None => None,
-    };
-    let result = plugin::execute_plugin_with_settings(&plugin_id, inputs, settings_override)?;
-    serde_json::to_string(&result).map_err(|e| e.to_string())
-}
-
 /// Call the optional `validate(settings)` export to confirm a plugin is ready to run.
 #[tauri::command]
 pub fn check_plugin_readiness(

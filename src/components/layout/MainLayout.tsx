@@ -27,7 +27,7 @@ export function MainLayout({ children, projectDir }: MainLayoutProps) {
     }
 
     backendClient
-      .loadSettings(projectDir)
+      .loadSettings()
       .then((payload) => {
         if (!cancelled) {
           updateGlobalSettings({ theme: payload.projectSettings?.theme ?? "system" });

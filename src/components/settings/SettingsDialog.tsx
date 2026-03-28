@@ -48,7 +48,7 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
     setSettingsError(null);
 
     backendClient
-      .loadSettings(projectDir)
+      .loadSettings()
       .then((payload) => {
         if (!cancelled) {
           setSettingsData(payload);

@@ -88,63 +88,42 @@ export abstract class BackendClient {
   ): Promise<ProjectSummary>;
 
   /**
-   * Open an existing project
+   * Open an existing project. Pass `password` for encrypted projects (replaces the old
+   * separate `unlockProject` call).
    */
-  abstract openProject(directory: string): Promise<ProjectSummary>;
+  abstract openProject(directory: string, password?: string): Promise<ProjectSummary>;
 
-  /**
-   * Load project/global settings and plugin configurations
-   */
-  abstract loadSettings(directory: string): Promise<ProjectSettingsPayload>;
+  /** Close the active project and release its database connection. */
+  abstract closeProject(): Promise<void>;
 
-  /**
-   * Update project settings fields persisted in project database
-   */
+  /** Load project/global settings and plugin configurations for the open project. */
+  abstract loadSettings(): Promise<ProjectSettingsPayload>;
+
+  /** Update project settings fields persisted in the open project database. */
   abstract updateProjectSettings(
-    directory: string,
     patch: { theme?: "light" | "dark" | "system" }
   ): Promise<ProjectSettingsRecord>;
 
-  /**
-   * Update project display name persisted in project database
-   */
-  abstract updateProjectName(
-    directory: string,
-    name: string
-  ): Promise<ProjectSummary>;
+  /** Update project display name persisted in the open project database. */
+  abstract updateProjectName(name: string): Promise<ProjectSummary>;
 
-  /**
-   * Update plugin settings persisted in current project database
-   */
+  /** Update plugin settings persisted in the open project database. */
   abstract updateProjectPluginSettings(
-    directory: string,
     pluginId: string,
     settings: Record<string, unknown>
   ): Promise<PluginSettingsDescriptor>;
 
-  /**
-   * Create a draft scan in the project
-   */
-  abstract createScan(
-    directory: string,
-    preview?: string
-  ): Promise<ScanSummary>;
+  /** Create a draft scan in the open project. */
+  abstract createScan(preview?: string): Promise<ScanSummary>;
 
-  /**
-   * Load all scans for the project
-   */
-  abstract listScans(directory: string): Promise<ScanSummary[]>;
+  /** List all scans for the open project. */
+  abstract listScans(): Promise<ScanSummary[]>;
 
-  /**
-   * Load full scan details including selected plugins and results
-   */
-  abstract getScan(directory: string, scanId: string): Promise<ScanDetail>;
+  /** Load full scan details including selected plugins and results. */
+  abstract getScan(scanId: string): Promise<ScanDetail>;
 
-  /**
-   * Run a draft scan with selected plugins and plugin-specific inputs
-   */
+  /** Run a draft scan with selected plugins and plugin-specific inputs. */
   abstract runScan(
-    directory: string,
     scanId: string,
     selectedPlugins: PluginEntrypointSelection[],
     inputs: Record<string, unknown>
@@ -158,44 +137,23 @@ export abstract class BackendClient {
     settingsJson?: string
   ): Promise<{ ok: boolean; error?: string }>;
 
-  /**
-   * Rename scan (updates preview/title)
-   */
-  abstract updateScanPreview(
-    directory: string,
-    scanId: string,
-    preview: string
-  ): Promise<ScanSummary>;
+  /** Rename scan (updates preview/title). */
+  abstract updateScanPreview(scanId: string, preview: string): Promise<ScanSummary>;
 
-  /**
-   * Add a new plugin to project or replace an existing one from folder.
-   */
+  /** Add a new plugin to the open project or replace an existing one from folder. */
   abstract upsertProjectPluginFromDir(
-    directory: string,
     pluginDir: string,
     replacePluginId?: string
   ): Promise<PluginSettingsDescriptor>;
 
   abstract getProjectLockStatus(directory: string): Promise<ProjectLockStatus>;
 
-  abstract unlockProject(
-    directory: string,
-    password: string
-  ): Promise<ProjectLockStatus>;
-
-  abstract setProjectPassword(
-    directory: string,
-    newPassword: string
-  ): Promise<ProjectLockStatus>;
+  abstract setProjectPassword(newPassword: string): Promise<ProjectLockStatus>;
 
   abstract changeProjectPassword(
-    directory: string,
     currentPassword: string,
     newPassword: string
   ): Promise<ProjectLockStatus>;
 
-  abstract removeProjectPassword(
-    directory: string,
-    currentPassword: string
-  ): Promise<ProjectLockStatus>;
+  abstract removeProjectPassword(currentPassword: string): Promise<ProjectLockStatus>;
 }

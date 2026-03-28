@@ -52,7 +52,7 @@ export function GeneralSettings({
 
     setSavingTheme(true);
     try {
-      const updated = await backendClient.updateProjectSettings(projectDir, {
+      const updated = await backendClient.updateProjectSettings({
         theme: value,
       });
       onProjectSettingsUpdated(updated);
@@ -90,7 +90,7 @@ export function GeneralSettings({
 
     setPasswordBusy(true);
     try {
-      await backendClient.setProjectPassword(projectDir, newPassword);
+      await backendClient.setProjectPassword(newPassword);
       setPasswordInfo("Password protection enabled. Database file is now encrypted.");
       clearPasswordInputs();
       await refreshPasswordStatus();
@@ -114,7 +114,7 @@ export function GeneralSettings({
 
     setPasswordBusy(true);
     try {
-      await backendClient.changeProjectPassword(projectDir, currentPassword, newPassword);
+      await backendClient.changeProjectPassword(currentPassword, newPassword);
       setPasswordInfo("Password changed successfully.");
       clearPasswordInputs();
       await refreshPasswordStatus();
@@ -133,7 +133,7 @@ export function GeneralSettings({
     setPasswordInfo(null);
     setPasswordBusy(true);
     try {
-      await backendClient.removeProjectPassword(projectDir, currentPassword);
+      await backendClient.removeProjectPassword(currentPassword);
       setPasswordInfo("Password protection removed. File is no longer encrypted.");
       clearPasswordInputs();
       await refreshPasswordStatus();

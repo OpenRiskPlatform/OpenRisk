@@ -129,38 +129,6 @@ pub fn configure_plugin(plugin_id: &str, new_settings: Value) -> Result<(), Stri
     fs::write(&path, data).map_err(|e| format!("Failed to write settings {:?}: {}", path, e))
 }
 
-/// Execute a named entrypoint of an installed plugin with the given inputs and optional settings override.
-pub fn execute_plugin_with_settings(
-    plugin_id: &str,
-    inputs: Value,
-    settings_override: Option<Value>,
-) -> Result<Value, String> {
-    let dir = plugin_dir(plugin_id)?;
-    let manifest = read_manifest(&dir)?;
-    let settings = match settings_override {
-        Some(value) if value.is_object() => value,
-        Some(_) => return Err("Plugin settings must be a JSON object".to_string()),
-        None => read_settings(&dir, &manifest)?,
-    };
-
-    let code_path = dir.join(manifest.entrypoint.to_string());
-    let code = fs::read_to_string(&code_path)
-        .map_err(|e| format!("Failed to read plugin code {:?}: {}", code_path, e))?;
-
-    let mut merged = match inputs {
-        Value::Object(m) => m,
-        _ => serde_json::Map::new(),
-    };
-    if let Value::Object(s) = settings {
-        for (k, v) in s {
-            merged.insert(k, v);
-        }
-    }
-
-    let (result, _logs) = runtime::run_plugin_module(code, Value::Object(merged), "default")?;
-    Ok(result)
-}
-
 /// Execute plugin source code directly (used by the scan runner with code stored in the DB).
 ///
 /// Returns `(result, logs)`.

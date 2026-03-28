@@ -107,6 +107,7 @@ interface ProjectPageProps {
 export function ProjectPage({ projectDir }: ProjectPageProps) {
     const backendClient = useBackendClient();
     const navigate = useNavigate();
+    const [projectSessionReady, setProjectSessionReady] = useState(false);
 
     const [settingsData, setSettingsData] = useState<ProjectSettingsPayload | null>(null);
     const [settingsError, setSettingsError] = useState<string | null>(null);
@@ -164,13 +165,42 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     useEffect(() => {
         let cancelled = false;
         if (!projectDir) {
+            setProjectSessionReady(false);
+            return;
+        }
+
+        backendClient
+            .openProject(projectDir)
+            .then(() => {
+                if (!cancelled) {
+                    setProjectSessionReady(true);
+                }
+            })
+            .catch((err) => {
+                if (!cancelled) {
+                    setProjectSessionReady(false);
+                    const message = err instanceof Error ? err.message : String(err);
+                    setSettingsError(message);
+                    setScansError(message);
+                    setDetailError(message);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [projectDir, backendClient]);
+
+    useEffect(() => {
+        let cancelled = false;
+        if (!projectDir || !projectSessionReady) {
             setSettingsData(null);
             setScans([]);
             setSelectedScanId(null);
             return;
         }
 
-        Promise.all([backendClient.loadSettings(projectDir), backendClient.listScans(projectDir)])
+        Promise.all([backendClient.loadSettings(), backendClient.listScans()])
             .then(([settings, scansList]) => {
                 if (cancelled) {
                     return;
@@ -194,7 +224,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
         return () => {
             cancelled = true;
         };
-    }, [projectDir, backendClient]);
+    }, [projectDir, projectSessionReady, backendClient]);
 
     useEffect(() => {
         const fallback = projectDir?.split(/[\\/]/).filter(Boolean).pop() || "Project";
@@ -235,13 +265,13 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     }, [leftPanelWidth]);
 
     useEffect(() => {
-        if (!projectDir) {
+        if (!projectDir || !projectSessionReady) {
             return;
         }
 
         const handler = () => {
             backendClient
-                .loadSettings(projectDir)
+                .loadSettings()
                 .then((settings) => setSettingsData(settings))
                 .catch((err) => {
                     setSettingsError(err instanceof Error ? err.message : String(err));
@@ -252,17 +282,17 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
         return () => {
             window.removeEventListener("openrisk:plugins-updated", handler);
         };
-    }, [projectDir, backendClient]);
+    }, [projectDir, projectSessionReady, backendClient]);
 
     useEffect(() => {
         let cancelled = false;
-        if (!projectDir || !selectedScanId) {
+        if (!projectDir || !projectSessionReady || !selectedScanId) {
             setScanDetail(null);
             return;
         }
 
         backendClient
-            .getScan(projectDir, selectedScanId)
+            .getScan(selectedScanId)
             .then((detail) => {
                 if (cancelled) {
                     return;
@@ -294,16 +324,16 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
         return () => {
             cancelled = true;
         };
-    }, [projectDir, selectedScanId, backendClient]);
+    }, [projectDir, projectSessionReady, selectedScanId, backendClient]);
 
     const createScan = async () => {
-        if (!projectDir) {
+        if (!projectDir || !projectSessionReady) {
             return;
         }
         setCreatingScan(true);
         setScansError(null);
         try {
-            const created = await backendClient.createScan(projectDir);
+            const created = await backendClient.createScan();
             setScans((prev) => [created, ...prev]);
             setSelectedScanId(created.id);
         } catch (err) {
@@ -319,7 +349,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     };
 
     const commitRename = async () => {
-        if (!projectDir || !renamingScanId) {
+        if (!projectDir || !projectSessionReady || !renamingScanId) {
             return;
         }
 
@@ -330,7 +360,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
         }
 
         try {
-            const updated = await backendClient.updateScanPreview(projectDir, renamingScanId, value);
+            const updated = await backendClient.updateScanPreview(renamingScanId, value);
             setScans((prev) =>
                 prev.map((scan) => (scan.id === updated.id ? { ...scan, preview: updated.preview } : scan))
             );
@@ -356,7 +386,13 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     };
 
     const runScan = async () => {
-        if (!projectDir || !selectedScanId || !scanDetail || scanDetail.status !== "Draft") {
+        if (
+            !projectDir ||
+            !projectSessionReady ||
+            !selectedScanId ||
+            !scanDetail ||
+            scanDetail.status !== "Draft"
+        ) {
             return;
         }
 
@@ -377,14 +413,13 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
 
         try {
             const updatedScan = await backendClient.runScan(
-                projectDir,
                 selectedScanId,
                 selectedPlugins,
                 pluginInputs
             );
 
             setScans((prev) => prev.map((scan) => (scan.id === updatedScan.id ? updatedScan : scan)));
-            const freshDetail = await backendClient.getScan(projectDir, selectedScanId);
+            const freshDetail = await backendClient.getScan(selectedScanId);
             setScanDetail(freshDetail);
         } catch (err) {
             setDetailError(err instanceof Error ? err.message : String(err));
@@ -404,7 +439,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     };
 
     const renameProject = async () => {
-        if (!projectDir) {
+        if (!projectDir || !projectSessionReady) {
             return;
         }
         const nextName = renameProjectValue.trim();
@@ -415,7 +450,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
 
         setRenameProjectSaving(true);
         try {
-            const updated = await backendClient.updateProjectName(projectDir, nextName);
+            const updated = await backendClient.updateProjectName(nextName);
             setProjectName(updated.name);
             setSettingsData((prev) =>
                 prev
@@ -437,6 +472,11 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     };
 
     const goBack = async () => {
+        try {
+            await backendClient.closeProject();
+        } catch {
+            // Ignore close errors on navigation back; the entry page can open again.
+        }
         await navigate({ to: "/", search: { mode: undefined } });
     };
 

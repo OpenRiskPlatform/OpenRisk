@@ -74,9 +74,6 @@ export function EntryPage({ initialMode }: EntryPageProps) {
         return message;
     };
 
-    const keepInRecent = (message: string): boolean =>
-        isLockedError(message) || isLegacyError(message) || isOutdatedError(message);
-
     const startUnlockFlow = (path: string, message?: string) => {
         setUnlockPath(path);
         setUnlockPassword("");
@@ -111,45 +108,6 @@ export function EntryPage({ initialMode }: EntryPageProps) {
             setRecentProjects([]);
         }
     }, []);
-
-    useEffect(() => {
-        let cancelled = false;
-
-        const pruneRecent = async () => {
-            if (!recentProjects.length) {
-                return;
-            }
-
-            const valid: string[] = [];
-            for (const projectPathValue of recentProjects) {
-                try {
-                    await backendClient.openProject(projectPathValue);
-                    valid.push(projectPathValue);
-                } catch (err) {
-                    const message = err instanceof Error ? err.message : String(err);
-                    // Keep encrypted, legacy and outdated files in recent list — they exist on disk.
-                    if (keepInRecent(message)) {
-                        valid.push(projectPathValue);
-                    }
-                }
-            }
-
-            if (cancelled) {
-                return;
-            }
-
-            if (valid.length !== recentProjects.length) {
-                setRecentProjects(valid);
-                localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(valid));
-            }
-        };
-
-        void pruneRecent();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [backendClient, recentProjects]);
 
     const saveRecent = (projectPathValue: string) => {
         const next = [
@@ -276,8 +234,7 @@ export function EntryPage({ initialMode }: EntryPageProps) {
         setUnlockError(null);
         setUnlockBusy(true);
         try {
-            await backendClient.unlockProject(unlockPath, unlockPassword);
-            const project = await backendClient.openProject(unlockPath);
+            const project = await backendClient.openProject(unlockPath, unlockPassword);
             localStorage.setItem(LAST_PROJECT_DIR_KEY, project.directory);
             saveRecent(project.directory);
             setUnlockOpen(false);

@@ -1,8 +1,17 @@
 //! SQLite persistence layer for projects.
 //!
-//! Defines the [`ProjectPersistence`] trait, which abstracts all project storage operations
-//! so that alternative implementations (e.g. in-memory SQLite for tests) can be swapped in.
-//! [`SqliteProjectPersistence`] is the production implementation backed by SQLCipher.
+//! Defines the [`ProjectPersistence`] trait, which models all operations on an *open* project
+//! session. Implementations can be swapped for testing (e.g., in-memory SQLite).
+//!
+//! [`SqliteProjectPersistence`] is the production implementation backed by SQLCipher. It holds a
+//! single shared connection for the lifetime of the session — the connection is opened once, not
+//! per-operation. Password-change operations temporarily drop and reopen the connection while
+//! holding the internal mutex, serialising all concurrent access.
+//!
+//! # Opening a project
+//! Use [`SqliteProjectPersistence::create`] for new projects, [`SqliteProjectPersistence::open`]
+//! for existing ones, or [`SqliteProjectPersistence::open_with_password`] for encrypted ones.
+//! Use [`SqliteProjectPersistence::check_lock_status`] as a pre-open probe (no instance needed).
 
 use super::plugins::{
     build_default_settings, discover_local_plugins, extract_manifest_id,
@@ -10,6 +19,7 @@ use super::plugins::{
 };
 use super::security::{
     cache_key, clear_cached_key, escape_sql_literal, get_cached_key, lock_error,
+    validate_non_empty_password, validate_password,
 };
 use super::types::{
     PersistenceError, PluginEntrypointSelection, PluginSettingsPayload, ProjectLockStatus,
@@ -19,17 +29,17 @@ use super::types::{
 use async_trait::async_trait;
 use serde_json::{json, Map, Value};
 use sqlx::{sqlite::SqliteConnectOptions, Connection, SqliteConnection};
-use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 const DB_FILE_NAME: &str = "project.db";
-const CURRENT_SCHEMA_VERSION: i64 = 5;
-/// The minimum schema version that can be migrated to current.
-/// Projects with version < MIN_SUPPORTED_SCHEMA_VERSION are rejected.
+const CURRENT_SCHEMA_VERSION: i64 = 6;
+/// The minimum schema version that can be migrated to the current version.
 const MIN_SUPPORTED_SCHEMA_VERSION: i64 = 4;
 
 const PROJECT_LEGACY_ERROR_PREFIX: &str = "PROJECT_LEGACY:";
@@ -102,46 +112,31 @@ CREATE TABLE IF NOT EXISTS ScanPluginResult (
 // Trait
 // ---------------------------------------------------------------------------
 
-/// Complete abstraction over project storage.
+/// Abstraction over all operations on an *open* project session.
 ///
-/// All project, scan, and security operations are expressed as trait methods so that
-/// alternative implementations (e.g. in-memory SQLite) can be injected for testing.
+/// Creating or opening a project is done via the factory methods on
+/// [`SqliteProjectPersistence`], which initialise the connection and return a ready instance.
+/// Alternative implementations (e.g. in-memory SQLite for tests) implement this trait directly.
 #[async_trait]
 pub trait ProjectPersistence: Send + Sync {
-    /// Create a new project database at `parent_dir`.
-    async fn create_project(
-        &self,
-        name: &str,
-        parent_dir: &Path,
-    ) -> Result<ProjectSummary, PersistenceError>;
-
-    /// Open an existing project database at `project_dir`.
-    async fn open_project(&self, project_dir: &Path) -> Result<ProjectSummary, PersistenceError>;
+    /// Canonical path to the open project database file.
+    fn project_path(&self) -> &Path;
 
     /// Load the full settings snapshot (project + global settings + all plugin configs).
-    async fn load_settings(
-        &self,
-        project_dir: &Path,
-    ) -> Result<ProjectSettingsPayload, PersistenceError>;
+    async fn load_settings(&self) -> Result<ProjectSettingsPayload, PersistenceError>;
 
     /// Update the project-wide theme setting.
     async fn update_project_settings(
         &self,
-        project_dir: &Path,
         theme: Option<String>,
     ) -> Result<ProjectSettingsRecord, PersistenceError>;
 
     /// Rename the project.
-    async fn update_project_name(
-        &self,
-        project_dir: &Path,
-        name: &str,
-    ) -> Result<ProjectSummary, PersistenceError>;
+    async fn update_project_name(&self, name: &str) -> Result<ProjectSummary, PersistenceError>;
 
     /// Persist updated settings for one plugin within this project.
     async fn update_project_plugin_settings(
         &self,
-        project_dir: &Path,
         plugin_id: &str,
         settings: Value,
     ) -> Result<PluginSettingsPayload, PersistenceError>;
@@ -149,7 +144,6 @@ pub trait ProjectPersistence: Send + Sync {
     /// Register or refresh a plugin from a directory on disk into this project.
     async fn upsert_project_plugin_from_dir(
         &self,
-        project_dir: &Path,
         plugin_dir: &Path,
         replace_plugin_id: Option<String>,
     ) -> Result<PluginSettingsPayload, PersistenceError>;
@@ -157,27 +151,20 @@ pub trait ProjectPersistence: Send + Sync {
     /// Create a new scan in Draft status.
     async fn create_scan(
         &self,
-        project_dir: &Path,
         preview: Option<String>,
     ) -> Result<ScanSummaryRecord, PersistenceError>;
 
     /// List all scans for the project, newest first.
-    async fn list_scans(
-        &self,
-        project_dir: &Path,
-    ) -> Result<Vec<ScanSummaryRecord>, PersistenceError>;
+    async fn list_scans(&self) -> Result<Vec<ScanSummaryRecord>, PersistenceError>;
 
     /// Fetch full details of a single scan including all plugin results.
-    async fn get_scan(
-        &self,
-        project_dir: &Path,
-        scan_id: &str,
-    ) -> Result<ScanDetailRecord, PersistenceError>;
+    async fn get_scan(&self, scan_id: &str) -> Result<ScanDetailRecord, PersistenceError>;
 
-    /// Execute a scan: run the selected plugins and persist results.
+    /// Execute a scan: run all selected plugin entrypoints and persist results.
+    ///
+    /// Plugin code is read exclusively from the database (synced on project open).
     async fn run_scan(
         &self,
-        project_dir: &Path,
         scan_id: &str,
         selected_plugins: Vec<PluginEntrypointSelection>,
         inputs: Value,
@@ -186,35 +173,22 @@ pub trait ProjectPersistence: Send + Sync {
     /// Update the preview (display name) of a scan.
     async fn update_scan_preview(
         &self,
-        project_dir: &Path,
         scan_id: &str,
         preview: String,
     ) -> Result<ScanSummaryRecord, PersistenceError>;
 
-    /// Return the encryption / unlock state of the project database.
-    async fn get_project_lock_status(
-        &self,
-        project_dir: &Path,
-    ) -> Result<ProjectLockStatus, PersistenceError>;
+    /// Return the encryption / lock state of the open project database.
+    async fn get_project_lock_status(&self) -> Result<ProjectLockStatus, PersistenceError>;
 
-    /// Attempt to unlock the project with the given password and cache the key.
-    async fn unlock_project(
-        &self,
-        project_dir: &Path,
-        password: String,
-    ) -> Result<ProjectLockStatus, PersistenceError>;
-
-    /// Encrypt an unencrypted project database with `new_password`.
+    /// Encrypt an unencrypted project with `new_password`.
     async fn set_project_password(
         &self,
-        project_dir: &Path,
         new_password: String,
     ) -> Result<ProjectLockStatus, PersistenceError>;
 
-    /// Re-encrypt a database, replacing the current password with a new one.
+    /// Re-encrypt the database, replacing the current password with `new_password`.
     async fn change_project_password(
         &self,
-        project_dir: &Path,
         current_password: String,
         new_password: String,
     ) -> Result<ProjectLockStatus, PersistenceError>;
@@ -222,7 +196,6 @@ pub trait ProjectPersistence: Send + Sync {
     /// Remove encryption from the project database.
     async fn remove_project_password(
         &self,
-        project_dir: &Path,
         current_password: String,
     ) -> Result<ProjectLockStatus, PersistenceError>;
 }
@@ -232,16 +205,199 @@ pub trait ProjectPersistence: Send + Sync {
 // ---------------------------------------------------------------------------
 
 /// Production SQLite/SQLCipher-backed project store.
-pub struct SqliteProjectPersistence;
+///
+/// Holds a single shared connection for the lifetime of the project session. All operations
+/// serialise through an internal [`Mutex`]. During re-encryption the connection slot is briefly
+/// set to `None` while the file is rewritten, then a new connection is placed back.
+///
+/// # Construction
+/// - [`Self::create`] — new project
+/// - [`Self::open`] — existing unencrypted project (or cached key present)
+/// - [`Self::open_with_password`] — existing encrypted project
+/// - [`Self::check_lock_status`] — pre-open probe (no instance needed)
+pub struct SqliteProjectPersistence {
+    /// Canonical path to the `.orproj` database file.
+    pub db_path: PathBuf,
+    /// Shared connection slot. `None` only during re-encryption.
+    conn: Arc<Mutex<Option<SqliteConnection>>>,
+}
 
 impl SqliteProjectPersistence {
-    pub fn new() -> Self {
-        Self
+    // --- factories -----------------------------------------------------------
+
+    /// Create a new project database at `project_path` and return an open instance.
+    ///
+    /// If `project_path` is a directory the file is named `<name>.orproj` inside it.
+    /// Built-in local plugins are synced into the new database.
+    pub async fn create(
+        name: &str,
+        project_path: &Path,
+    ) -> Result<(ProjectSummary, Self), PersistenceError> {
+        let trimmed_name = name.trim();
+        if trimmed_name.is_empty() {
+            return Err(PersistenceError::Validation(
+                "Project name must not be empty".into(),
+            ));
+        }
+
+        let db_path = Self::create_db_path(project_path, trimmed_name);
+        if db_path.exists() {
+            return Err(PersistenceError::Validation(format!(
+                "Project file {:?} already exists. Rename project or open existing one.",
+                db_path
+            )));
+        }
+
+        let parent = db_path.parent().ok_or_else(|| {
+            PersistenceError::Validation(format!("Invalid project file path: {:?}", db_path))
+        })?;
+        if !parent.exists() || !parent.is_dir() {
+            return Err(PersistenceError::Validation(format!(
+                "Project parent directory does not exist: {:?}",
+                parent
+            )));
+        }
+
+        let mut conn = Self::connect(&db_path, true, None).await?;
+        Self::apply_schema(&mut conn).await?;
+        sqlx::query("INSERT INTO SchemaVersion (id, version) VALUES (1, ?1)")
+            .bind(CURRENT_SCHEMA_VERSION)
+            .execute(&mut conn)
+            .await?;
+
+        let project_settings_id = Uuid::new_v4().to_string();
+        sqlx::query(
+            "INSERT INTO ProjectSettings (id, description, locale, theme) VALUES (?1, ?2, ?3, ?4)",
+        )
+        .bind(&project_settings_id)
+        .bind("")
+        .bind("en-US")
+        .bind("system")
+        .execute(&mut conn)
+        .await?;
+
+        let project_id = Uuid::new_v4().to_string();
+        sqlx::query(
+            "INSERT INTO Project (id, name, audit, project_settings_id) VALUES (?1, ?2, ?3, ?4)",
+        )
+        .bind(&project_id)
+        .bind(trimmed_name)
+        .bind(Option::<String>::None)
+        .bind(&project_settings_id)
+        .execute(&mut conn)
+        .await?;
+
+        Self::sync_local_plugins_on_create(&mut conn, &project_settings_id).await?;
+
+        let summary = ProjectSummary {
+            id: project_id,
+            name: trimmed_name.to_owned(),
+            audit: None,
+            directory: db_path.clone(),
+        };
+        let instance = Self {
+            db_path,
+            conn: Arc::new(Mutex::new(Some(conn))),
+        };
+        Ok((summary, instance))
     }
 
-    // --- connection helpers ---------------------------------------------------
+    /// Open an existing project and return an open instance.
+    ///
+    /// Runs pending migrations and syncs built-in plugin code from disk into the database.
+    /// Returns a lock error when the database is encrypted and no cached key is available.
+    pub async fn open(project_path: &Path) -> Result<(ProjectSummary, Self), PersistenceError> {
+        Self::open_inner(project_path, None).await
+    }
 
-    /// Open a SQLite connection, optionally with a SQLCipher key.
+    /// Open an existing encrypted project with an explicit password.
+    ///
+    /// Equivalent to [`Self::open`] but authenticates with `password` and caches it.
+    pub async fn open_with_password(
+        project_path: &Path,
+        password: String,
+    ) -> Result<(ProjectSummary, Self), PersistenceError> {
+        Self::open_inner(project_path, Some(password)).await
+    }
+
+    /// Probe the lock status of a project file *without* opening it.
+    ///
+    /// Useful for deciding whether to prompt for a password before calling [`Self::open`].
+    pub async fn check_lock_status(
+        project_path: &Path,
+    ) -> Result<ProjectLockStatus, PersistenceError> {
+        let db_path = Self::existing_db_path(project_path)?;
+        Self::read_lock_status(&db_path).await
+    }
+
+    /// Shared open logic for unencrypted and password-protected projects.
+    async fn open_inner(
+        project_path: &Path,
+        password: Option<String>,
+    ) -> Result<(ProjectSummary, Self), PersistenceError> {
+        let db_path = Self::existing_db_path(project_path)?;
+
+        let mut conn = match &password {
+            Some(pw) => Self::connect(&db_path, false, Some(pw.as_str()))
+                .await
+                .map_err(|err| {
+                    if Self::is_encrypted_error(&err) {
+                        PersistenceError::Validation("Invalid password".into())
+                    } else {
+                        err
+                    }
+                })?,
+            None => match Self::connect(&db_path, false, None).await {
+                Ok(c) => c,
+                Err(err) if Self::is_encrypted_error(&err) => {
+                    if let Some(cached_pw) = get_cached_key(&db_path) {
+                        match Self::connect(&db_path, false, Some(cached_pw.as_str())).await {
+                            Ok(c) => c,
+                            Err(_) => {
+                                clear_cached_key(&db_path);
+                                return Err(PersistenceError::Validation(lock_error()));
+                            }
+                        }
+                    } else {
+                        return Err(PersistenceError::Validation(lock_error()));
+                    }
+                }
+                Err(err) => return Err(err),
+            },
+        };
+
+        Self::apply_schema(&mut conn).await?;
+        Self::apply_migrations_to_latest(&mut conn).await?;
+
+        let project_row = sqlx::query_as::<_, ProjectRow>(
+            "SELECT id, name, audit, project_settings_id FROM Project LIMIT 1",
+        )
+        .fetch_one(&mut conn)
+        .await?;
+
+        // Refresh built-in plugin code from disk; preserve user settings already in DB.
+        Self::sync_local_plugins_on_open(&mut conn, &project_row.project_settings_id).await?;
+
+        if let Some(pw) = &password {
+            cache_key(&db_path, pw.clone());
+        }
+
+        let summary = ProjectSummary {
+            id: project_row.id,
+            name: project_row.name,
+            audit: project_row.audit,
+            directory: db_path.clone(),
+        };
+        let instance = Self {
+            db_path,
+            conn: Arc::new(Mutex::new(Some(conn))),
+        };
+        Ok((summary, instance))
+    }
+
+    // --- low-level connection helpers ----------------------------------------
+
+    /// Open a raw SQLite connection, optionally applying a SQLCipher key.
     pub(super) async fn connect(
         db_path: &Path,
         create_if_missing: bool,
@@ -259,7 +415,7 @@ impl SqliteProjectPersistence {
             sqlx::query(&pragma).execute(&mut conn).await?;
         }
 
-        // Force key validation for SQLCipher databases.
+        // Force SQLCipher key validation by reading the schema.
         sqlx::query("SELECT count(1) FROM sqlite_master")
             .fetch_one(&mut conn)
             .await?;
@@ -283,37 +439,6 @@ impl SqliteProjectPersistence {
             }
             _ => false,
         }
-    }
-
-    /// Open an existing project database, using the cached key when available.
-    async fn connect_for_existing_project(
-        db_path: &Path,
-    ) -> Result<SqliteConnection, PersistenceError> {
-        if let Some(password) = get_cached_key(db_path) {
-            match Self::connect(db_path, false, Some(&password)).await {
-                Ok(conn) => return Ok(conn),
-                Err(err) if Self::is_encrypted_error(&err) => {
-                    clear_cached_key(db_path);
-                }
-                Err(err) => return Err(err),
-            }
-        }
-
-        match Self::connect(db_path, false, None).await {
-            Ok(conn) => Ok(conn),
-            Err(err) if Self::is_encrypted_error(&err) => {
-                Err(PersistenceError::Validation(lock_error()))
-            }
-            Err(err) => Err(err),
-        }
-    }
-
-    /// Open, apply schema, and run pending migrations in one call.
-    async fn open_connection(db_path: &Path) -> Result<SqliteConnection, PersistenceError> {
-        let mut conn = Self::connect_for_existing_project(db_path).await?;
-        Self::apply_schema(&mut conn).await?;
-        Self::apply_migrations_to_latest(&mut conn).await?;
-        Ok(conn)
     }
 
     /// Resolve the database path and verify the file exists.
@@ -344,7 +469,7 @@ impl SqliteProjectPersistence {
         }
     }
 
-    // --- schema & migrations --------------------------------------------------
+    // --- schema & migrations -------------------------------------------------
 
     /// Apply the DDL schema (idempotent; uses `CREATE TABLE IF NOT EXISTS`).
     async fn apply_schema(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
@@ -370,17 +495,16 @@ impl SqliteProjectPersistence {
             )));
         }
 
-        let current_version = sqlx::query_scalar::<_, i64>(
-            "SELECT version FROM SchemaVersion WHERE id = 1",
-        )
-        .fetch_optional(&mut *conn)
-        .await?
-        .ok_or_else(|| {
-            PersistenceError::Validation(format!(
-                "{}This file is not a valid OpenRisk project or was created by an incompatible older version.",
-                PROJECT_LEGACY_ERROR_PREFIX
-            ))
-        })?;
+        let current_version =
+            sqlx::query_scalar::<_, i64>("SELECT version FROM SchemaVersion WHERE id = 1")
+                .fetch_optional(&mut *conn)
+                .await?
+                .ok_or_else(|| {
+                    PersistenceError::Validation(format!(
+                        "{}This file is not a valid OpenRisk project or was created by an incompatible older version.",
+                        PROJECT_LEGACY_ERROR_PREFIX
+                    ))
+                })?;
 
         if current_version < MIN_SUPPORTED_SCHEMA_VERSION {
             return Err(PersistenceError::Validation(format!(
@@ -394,6 +518,7 @@ impl SqliteProjectPersistence {
             let next = version + 1;
             match next {
                 5 => Self::migrate_to_v5(conn).await?,
+                6 => Self::migrate_to_v6(conn).await?,
                 _ => {
                     return Err(PersistenceError::Validation(format!(
                         "Missing migration to schema version {}",
@@ -410,10 +535,7 @@ impl SqliteProjectPersistence {
         Ok(())
     }
 
-    /// Migration v4 → v5:
-    /// 1. Add `entrypoint_id` column to `ScanPluginResult`.
-    /// 2. Convert `selected_plugins_json` in all Scan rows from
-    ///    `["pluginId"]` → `[{"pluginId":"...", "entrypointId":"default"}]`.
+    /// Migration v4 → v5: add `entrypoint_id` column and convert `selected_plugins_json`.
     async fn migrate_to_v5(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
         let has_col = Self::column_exists(conn, "ScanPluginResult", "entrypoint_id").await?;
         if !has_col {
@@ -442,10 +564,66 @@ impl SqliteProjectPersistence {
                 Value::Array(arr) => arr,
                 _ => continue,
             };
-            let already_new = items
+            if items
                 .iter()
-                .any(|item| item.is_object() && item.get("pluginId").is_some());
-            if already_new {
+                .any(|item| item.is_object() && item.get("pluginId").is_some())
+            {
+                continue;
+            }
+            let converted: Vec<Value> = items
+                .iter()
+                .filter_map(|item| {
+                    item.as_str()
+                        .map(|s| json!({ "pluginId": s, "entrypointId": "default" }))
+                })
+                .collect();
+            let new_json = serde_json::to_string(&Value::Array(converted))?;
+            sqlx::query("UPDATE Scan SET selected_plugins_json = ?1 WHERE id = ?2")
+                .bind(new_json)
+                .bind(scan_id)
+                .execute(&mut *conn)
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// Migration v5 → v6: add `entrypoint_id` column (same as v5 for DBs that never got it)
+    /// and ensure `selected_plugins_json` uses the `{pluginId, entrypointId}` object format.
+    async fn migrate_to_v6(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
+        // Idempotent: only adds the column when it is genuinely absent.
+        let has_col = Self::column_exists(conn, "ScanPluginResult", "entrypoint_id").await?;
+        if !has_col {
+            sqlx::query(
+                "ALTER TABLE ScanPluginResult ADD COLUMN entrypoint_id TEXT NOT NULL DEFAULT 'default'",
+            )
+            .execute(&mut *conn)
+            .await?;
+        }
+
+        // Convert any remaining string-array Scan.selected_plugins_json rows.
+        let scan_rows: Vec<(String, Option<String>)> =
+            sqlx::query_as("SELECT id, selected_plugins_json FROM Scan")
+                .fetch_all(&mut *conn)
+                .await?;
+
+        for (scan_id, raw_opt) in scan_rows {
+            let raw = match raw_opt {
+                Some(r) if !r.trim().is_empty() => r,
+                _ => continue,
+            };
+            let value: Value = match serde_json::from_str(&raw) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            let items = match &value {
+                Value::Array(arr) => arr,
+                _ => continue,
+            };
+            // Skip rows already in the {pluginId, entrypointId} object format.
+            if items
+                .iter()
+                .any(|item| item.is_object() && item.get("pluginId").is_some())
+            {
                 continue;
             }
             let converted: Vec<Value> = items
@@ -491,10 +669,10 @@ impl SqliteProjectPersistence {
         Ok(exists)
     }
 
-    // --- plugin sync -----------------------------------------------------------
+    // --- plugin sync ---------------------------------------------------------
 
-    /// Sync all built-in local plugins into the project (used on create / open).
-    async fn sync_local_plugins(
+    /// Sync local plugins into a *newly created* project (plain INSERT for settings).
+    async fn sync_local_plugins_on_create(
         conn: &mut SqliteConnection,
         project_settings_id: &str,
     ) -> Result<(), PersistenceError> {
@@ -502,8 +680,8 @@ impl SqliteProjectPersistence {
             Self::insert_plugin(conn, &plugin).await?;
             let settings_json = serde_json::to_string(&build_default_settings(&plugin.manifest))?;
             sqlx::query(
-                "INSERT INTO ProjectPluginSettings (plugin_id, project_settings_id, settings_json) \
-                 VALUES (?1, ?2, ?3)",
+                "INSERT INTO ProjectPluginSettings \
+                 (plugin_id, project_settings_id, settings_json) VALUES (?1, ?2, ?3)",
             )
             .bind(&plugin.id)
             .bind(project_settings_id)
@@ -514,7 +692,31 @@ impl SqliteProjectPersistence {
         Ok(())
     }
 
-    /// Insert or replace a plugin record in the database.
+    /// Sync local plugins into an *existing* project on open.
+    ///
+    /// Uses `INSERT OR REPLACE` for the plugin record (refreshes code from disk) and
+    /// `INSERT OR IGNORE` for settings (preserves user-configured values).
+    async fn sync_local_plugins_on_open(
+        conn: &mut SqliteConnection,
+        project_settings_id: &str,
+    ) -> Result<(), PersistenceError> {
+        for plugin in discover_local_plugins()? {
+            Self::insert_plugin(conn, &plugin).await?;
+            let settings_json = serde_json::to_string(&build_default_settings(&plugin.manifest))?;
+            sqlx::query(
+                "INSERT OR IGNORE INTO ProjectPluginSettings \
+                 (plugin_id, project_settings_id, settings_json) VALUES (?1, ?2, ?3)",
+            )
+            .bind(&plugin.id)
+            .bind(project_settings_id)
+            .bind(settings_json)
+            .execute(&mut *conn)
+            .await?;
+        }
+        Ok(())
+    }
+
+    /// Insert or replace a plugin record (code + metadata) in the database.
     async fn insert_plugin(
         conn: &mut SqliteConnection,
         plugin: &LocalPluginBundle,
@@ -526,9 +728,16 @@ impl SqliteProjectPersistence {
         let manifest_json = serde_json::to_string(&plugin.manifest_json)?;
 
         sqlx::query(
-            "INSERT OR REPLACE INTO Plugin \
+            "INSERT INTO Plugin \
              (id, version, name, input_schema_json, settings_schema_json, code, manifest_json) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) \
+             ON CONFLICT(id) DO UPDATE SET \
+                 version = excluded.version, \
+                 name = excluded.name, \
+                 input_schema_json = excluded.input_schema_json, \
+                 settings_schema_json = excluded.settings_schema_json, \
+                 code = excluded.code, \
+                 manifest_json = excluded.manifest_json",
         )
         .bind(&plugin.id)
         .bind(&version)
@@ -542,7 +751,7 @@ impl SqliteProjectPersistence {
         Ok(())
     }
 
-    // --- path helpers ---------------------------------------------------------
+    // --- path helpers --------------------------------------------------------
 
     fn normalize_theme(value: Option<String>) -> String {
         match value.as_deref() {
@@ -584,7 +793,7 @@ impl SqliteProjectPersistence {
         project_path.join(DB_FILE_NAME)
     }
 
-    // --- encryption helpers ---------------------------------------------------
+    // --- encryption helpers --------------------------------------------------
 
     pub(super) fn cleanup_sidecars(db_path: &Path) {
         let _ = fs::remove_file(sidecar_path(db_path, "-wal"));
@@ -671,6 +880,41 @@ impl SqliteProjectPersistence {
             }
         }
     }
+
+    /// Drop the connection, rewrite the database file, then reconnect.
+    ///
+    /// Holds the connection mutex for the entire operation so that no other command
+    /// can observe the `None` slot or access the file during re-encryption.
+    async fn rewrite_and_reconnect(
+        &self,
+        source_key: Option<String>,
+        target_key: Option<String>,
+    ) -> Result<(), PersistenceError> {
+        let mut guard = self.conn.lock().await;
+
+        // Close the current connection before touching the file.
+        guard.take();
+
+        let result = Self::rewrite_database_with_key(
+            &self.db_path,
+            source_key.as_deref(),
+            target_key.as_deref(),
+        )
+        .await;
+
+        // Reconnect with the new key on success, the old key on failure.
+        let reconnect_key = if result.is_ok() {
+            target_key.as_deref()
+        } else {
+            source_key.as_deref()
+        };
+        if let Ok(new_conn) = Self::connect(&self.db_path, false, reconnect_key).await {
+            *guard = Some(new_conn);
+        }
+        // If reconnect also fails, guard stays None — subsequent calls return conn_unavailable.
+
+        result
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -679,117 +923,25 @@ impl SqliteProjectPersistence {
 
 #[async_trait]
 impl ProjectPersistence for SqliteProjectPersistence {
-    async fn create_project(
-        &self,
-        name: &str,
-        project_path: &Path,
-    ) -> Result<ProjectSummary, PersistenceError> {
-        let trimmed_name = name.trim();
-        if trimmed_name.is_empty() {
-            return Err(PersistenceError::Validation(
-                "Project name must not be empty".into(),
-            ));
-        }
-
-        let db_path = Self::create_db_path(project_path, trimmed_name);
-        if db_path.exists() {
-            return Err(PersistenceError::Validation(format!(
-                "Project file {:?} already exists. Rename project or open existing one.",
-                db_path
-            )));
-        }
-
-        let parent = db_path.parent().ok_or_else(|| {
-            PersistenceError::Validation(format!("Invalid project file path: {:?}", db_path))
-        })?;
-        if !parent.exists() || !parent.is_dir() {
-            return Err(PersistenceError::Validation(format!(
-                "Project parent directory does not exist: {:?}",
-                parent
-            )));
-        }
-
-        let mut conn = Self::connect(&db_path, true, None).await?;
-        Self::apply_schema(&mut conn).await?;
-        sqlx::query("INSERT INTO SchemaVersion (id, version) VALUES (1, ?1)")
-            .bind(CURRENT_SCHEMA_VERSION)
-            .execute(&mut conn)
-            .await?;
-
-        let project_settings_id = Uuid::new_v4().to_string();
-        sqlx::query(
-            "INSERT INTO ProjectSettings (id, description, locale, theme) VALUES (?1, ?2, ?3, ?4)",
-        )
-        .bind(&project_settings_id)
-        .bind("")
-        .bind("en-US")
-        .bind("system")
-        .execute(&mut conn)
-        .await?;
-
-        let project_id = Uuid::new_v4().to_string();
-        sqlx::query(
-            "INSERT INTO Project (id, name, audit, project_settings_id) VALUES (?1, ?2, ?3, ?4)",
-        )
-        .bind(&project_id)
-        .bind(trimmed_name)
-        .bind(Option::<String>::None)
-        .bind(&project_settings_id)
-        .execute(&mut conn)
-        .await?;
-
-        Self::sync_local_plugins(&mut conn, &project_settings_id).await?;
-
-        Ok(ProjectSummary {
-            id: project_id,
-            name: trimmed_name.to_owned(),
-            audit: None,
-            directory: db_path,
-        })
+    fn project_path(&self) -> &Path {
+        &self.db_path
     }
 
-    async fn open_project(&self, project_path: &Path) -> Result<ProjectSummary, PersistenceError> {
-        let db_path = Self::existing_db_path(project_path)?;
-        let mut conn = Self::open_connection(&db_path).await?;
-        let row = sqlx::query_as::<_, ProjectRow>(
-            "SELECT id, name, audit, project_settings_id FROM Project LIMIT 1",
-        )
-        .fetch_one(&mut conn)
-        .await?;
-
-        Ok(ProjectSummary {
-            id: row.id,
-            name: row.name,
-            audit: row.audit,
-            directory: db_path,
-        })
-    }
-
-    async fn load_settings(
-        &self,
-        project_path: &Path,
-    ) -> Result<ProjectSettingsPayload, PersistenceError> {
-        let db_path = Self::existing_db_path(project_path)?;
-        let mut conn = Self::open_connection(&db_path).await?;
+    async fn load_settings(&self) -> Result<ProjectSettingsPayload, PersistenceError> {
+        let mut guard = self.conn.lock().await;
+        let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
         let project_row = sqlx::query_as::<_, ProjectRow>(
             "SELECT id, name, audit, project_settings_id FROM Project LIMIT 1",
         )
-        .fetch_one(&mut conn)
+        .fetch_one(&mut *conn)
         .await?;
-
-        let project = ProjectSummary {
-            id: project_row.id.clone(),
-            name: project_row.name.clone(),
-            audit: project_row.audit.clone(),
-            directory: db_path,
-        };
 
         let settings_row = sqlx::query_as::<_, ProjectSettingsRow>(
             "SELECT id, description, locale, theme FROM ProjectSettings WHERE id = ?1",
         )
         .bind(&project_row.project_settings_id)
-        .fetch_one(&mut conn)
+        .fetch_one(&mut *conn)
         .await?;
 
         let plugin_rows = sqlx::query_as::<_, PluginRow>(
@@ -803,7 +955,7 @@ impl ProjectPersistence for SqliteProjectPersistence {
              WHERE ProjectPluginSettings.project_settings_id = ?1",
         )
         .bind(&settings_row.id)
-        .fetch_all(&mut conn)
+        .fetch_all(&mut *conn)
         .await?;
 
         let mut plugins = Vec::with_capacity(plugin_rows.len());
@@ -812,7 +964,12 @@ impl ProjectPersistence for SqliteProjectPersistence {
         }
 
         Ok(ProjectSettingsPayload {
-            project,
+            project: ProjectSummary {
+                id: project_row.id,
+                name: project_row.name,
+                audit: project_row.audit,
+                directory: self.db_path.clone(),
+            },
             project_settings: settings_row.into_record(),
             plugins,
         })
@@ -820,72 +977,67 @@ impl ProjectPersistence for SqliteProjectPersistence {
 
     async fn update_project_settings(
         &self,
-        project_path: &Path,
         theme: Option<String>,
     ) -> Result<ProjectSettingsRecord, PersistenceError> {
-        let db_path = Self::existing_db_path(project_path)?;
-        let mut conn = Self::open_connection(&db_path).await?;
+        let mut guard = self.conn.lock().await;
+        let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
         let project_row = sqlx::query_as::<_, ProjectRow>(
             "SELECT id, name, audit, project_settings_id FROM Project LIMIT 1",
         )
-        .fetch_one(&mut conn)
+        .fetch_one(&mut *conn)
         .await?;
 
-        let normalized_theme = Self::normalize_theme(theme);
+        let normalized = SqliteProjectPersistence::normalize_theme(theme);
         sqlx::query("UPDATE ProjectSettings SET theme = ?1 WHERE id = ?2")
-            .bind(normalized_theme)
+            .bind(normalized)
             .bind(&project_row.project_settings_id)
-            .execute(&mut conn)
+            .execute(&mut *conn)
             .await?;
 
         sqlx::query_as::<_, ProjectSettingsRow>(
             "SELECT id, description, locale, theme FROM ProjectSettings WHERE id = ?1",
         )
         .bind(&project_row.project_settings_id)
-        .fetch_one(&mut conn)
+        .fetch_one(&mut *conn)
         .await
         .map(|r| r.into_record())
         .map_err(Into::into)
     }
 
-    async fn update_project_name(
-        &self,
-        project_path: &Path,
-        name: &str,
-    ) -> Result<ProjectSummary, PersistenceError> {
+    async fn update_project_name(&self, name: &str) -> Result<ProjectSummary, PersistenceError> {
         let trimmed = name.trim();
         if trimmed.is_empty() {
             return Err(PersistenceError::Validation(
                 "Project name must not be empty".into(),
             ));
         }
-        let db_path = Self::existing_db_path(project_path)?;
-        let mut conn = Self::open_connection(&db_path).await?;
+
+        let mut guard = self.conn.lock().await;
+        let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
         let row = sqlx::query_as::<_, ProjectRow>(
             "SELECT id, name, audit, project_settings_id FROM Project LIMIT 1",
         )
-        .fetch_one(&mut conn)
+        .fetch_one(&mut *conn)
         .await?;
 
         sqlx::query("UPDATE Project SET name = ?1 WHERE id = ?2")
             .bind(trimmed)
             .bind(&row.id)
-            .execute(&mut conn)
+            .execute(&mut *conn)
             .await?;
 
         Ok(ProjectSummary {
             id: row.id,
             name: trimmed.to_owned(),
             audit: row.audit,
-            directory: db_path,
+            directory: self.db_path.clone(),
         })
     }
 
     async fn update_project_plugin_settings(
         &self,
-        project_path: &Path,
         plugin_id: &str,
         settings: Value,
     ) -> Result<PluginSettingsPayload, PersistenceError> {
@@ -894,13 +1046,14 @@ impl ProjectPersistence for SqliteProjectPersistence {
                 "Plugin settings must be a JSON object".into(),
             ));
         }
-        let db_path = Self::existing_db_path(project_path)?;
-        let mut conn = Self::open_connection(&db_path).await?;
+
+        let mut guard = self.conn.lock().await;
+        let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
         let project_row = sqlx::query_as::<_, ProjectRow>(
             "SELECT id, name, audit, project_settings_id FROM Project LIMIT 1",
         )
-        .fetch_one(&mut conn)
+        .fetch_one(&mut *conn)
         .await?;
 
         let settings_json = serde_json::to_string(&settings)?;
@@ -911,7 +1064,7 @@ impl ProjectPersistence for SqliteProjectPersistence {
         .bind(&settings_json)
         .bind(plugin_id)
         .bind(&project_row.project_settings_id)
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await?;
 
         if updated.rows_affected() == 0 {
@@ -933,14 +1086,13 @@ impl ProjectPersistence for SqliteProjectPersistence {
         )
         .bind(&project_row.project_settings_id)
         .bind(plugin_id)
-        .fetch_one(&mut conn)
+        .fetch_one(&mut *conn)
         .await?
         .into_payload()
     }
 
     async fn upsert_project_plugin_from_dir(
         &self,
-        project_path: &Path,
         plugin_dir: &Path,
         replace_plugin_id: Option<String>,
     ) -> Result<PluginSettingsPayload, PersistenceError> {
@@ -949,17 +1101,17 @@ impl ProjectPersistence for SqliteProjectPersistence {
             Some(id) if !id.trim().is_empty() => id.trim().to_string(),
             _ => manifest_id,
         };
-
         let bundle = load_plugin_bundle_with_id(plugin_dir, plugin_id.clone())?;
-        let db_path = Self::existing_db_path(project_path)?;
-        let mut conn = Self::open_connection(&db_path).await?;
+
+        let mut guard = self.conn.lock().await;
+        let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
         let project_settings_id: String =
             sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
-                .fetch_one(&mut conn)
+                .fetch_one(&mut *conn)
                 .await?;
 
-        Self::insert_plugin(&mut conn, &bundle).await?;
+        Self::insert_plugin(conn, &bundle).await?;
 
         let existing_settings: Option<String> = sqlx::query_scalar(
             "SELECT settings_json FROM ProjectPluginSettings \
@@ -967,7 +1119,7 @@ impl ProjectPersistence for SqliteProjectPersistence {
         )
         .bind(&plugin_id)
         .bind(&project_settings_id)
-        .fetch_optional(&mut conn)
+        .fetch_optional(&mut *conn)
         .await?;
 
         let default_settings = build_default_settings(&bundle.manifest);
@@ -994,7 +1146,7 @@ impl ProjectPersistence for SqliteProjectPersistence {
         .bind(&plugin_id)
         .bind(&project_settings_id)
         .bind(merged_json)
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await?;
 
         sqlx::query_as::<_, PluginRow>(
@@ -1009,21 +1161,20 @@ impl ProjectPersistence for SqliteProjectPersistence {
         )
         .bind(&project_settings_id)
         .bind(&plugin_id)
-        .fetch_one(&mut conn)
+        .fetch_one(&mut *conn)
         .await?
         .into_payload()
     }
 
     async fn create_scan(
         &self,
-        project_path: &Path,
         preview: Option<String>,
     ) -> Result<ScanSummaryRecord, PersistenceError> {
-        let db_path = Self::existing_db_path(project_path)?;
-        let mut conn = Self::open_connection(&db_path).await?;
+        let mut guard = self.conn.lock().await;
+        let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
         let project_id: String = sqlx::query_scalar("SELECT id FROM Project LIMIT 1")
-            .fetch_one(&mut conn)
+            .fetch_one(&mut *conn)
             .await?;
 
         let id = Uuid::new_v4().to_string();
@@ -1034,7 +1185,8 @@ impl ProjectPersistence for SqliteProjectPersistence {
             .unwrap_or(fallback);
 
         sqlx::query(
-            "INSERT INTO Scan (id, project_id, status, preview, inputs_json, selected_plugins_json) \
+            "INSERT INTO Scan \
+             (id, project_id, status, preview, inputs_json, selected_plugins_json) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         )
         .bind(&id)
@@ -1043,7 +1195,7 @@ impl ProjectPersistence for SqliteProjectPersistence {
         .bind(&final_preview)
         .bind("{}")
         .bind("[]")
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await?;
 
         Ok(ScanSummaryRecord {
@@ -1053,15 +1205,12 @@ impl ProjectPersistence for SqliteProjectPersistence {
         })
     }
 
-    async fn list_scans(
-        &self,
-        project_path: &Path,
-    ) -> Result<Vec<ScanSummaryRecord>, PersistenceError> {
-        let db_path = Self::existing_db_path(project_path)?;
-        let mut conn = Self::open_connection(&db_path).await?;
+    async fn list_scans(&self) -> Result<Vec<ScanSummaryRecord>, PersistenceError> {
+        let mut guard = self.conn.lock().await;
+        let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
         let project_id: String = sqlx::query_scalar("SELECT id FROM Project LIMIT 1")
-            .fetch_one(&mut conn)
+            .fetch_one(&mut *conn)
             .await?;
 
         let rows = sqlx::query_as::<_, ScanRow>(
@@ -1069,26 +1218,22 @@ impl ProjectPersistence for SqliteProjectPersistence {
              FROM Scan WHERE project_id = ?1 ORDER BY rowid DESC",
         )
         .bind(project_id)
-        .fetch_all(&mut conn)
+        .fetch_all(&mut *conn)
         .await?;
 
         Ok(rows.into_iter().map(|r| r.into_summary()).collect())
     }
 
-    async fn get_scan(
-        &self,
-        project_path: &Path,
-        scan_id: &str,
-    ) -> Result<ScanDetailRecord, PersistenceError> {
-        let db_path = Self::existing_db_path(project_path)?;
-        let mut conn = Self::open_connection(&db_path).await?;
+    async fn get_scan(&self, scan_id: &str) -> Result<ScanDetailRecord, PersistenceError> {
+        let mut guard = self.conn.lock().await;
+        let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
         let scan = sqlx::query_as::<_, ScanRow>(
             "SELECT id, status, preview, inputs_json, selected_plugins_json \
              FROM Scan WHERE id = ?1 LIMIT 1",
         )
         .bind(scan_id)
-        .fetch_one(&mut conn)
+        .fetch_one(&mut *conn)
         .await?;
 
         let inputs = parse_json_text(scan.inputs_json)?;
@@ -1101,22 +1246,44 @@ impl ProjectPersistence for SqliteProjectPersistence {
                 _ => vec![],
             };
 
-        let result_rows = sqlx::query_as::<_, ScanResultRow>(
-            "SELECT plugin_id, entrypoint_id, output_json_ir \
-             FROM ScanPluginResult WHERE scan_id = ?1",
-        )
-        .bind(&scan.id)
-        .fetch_all(&mut conn)
-        .await?;
+        let has_entrypoint = Self::column_exists(conn, "ScanPluginResult", "entrypoint_id").await?;
+        let results = if has_entrypoint {
+            let result_rows = sqlx::query_as::<_, ScanResultRow>(
+                "SELECT plugin_id, entrypoint_id, output_json_ir \
+                 FROM ScanPluginResult WHERE scan_id = ?1",
+            )
+            .bind(&scan.id)
+            .fetch_all(&mut *conn)
+            .await?;
 
-        let mut results = Vec::with_capacity(result_rows.len());
-        for row in result_rows {
-            results.push(ScanPluginResultRecord {
-                plugin_id: row.plugin_id,
-                entrypoint_id: row.entrypoint_id,
-                output: parse_json_text(row.output_json_ir)?,
-            });
-        }
+            let mut results = Vec::with_capacity(result_rows.len());
+            for row in result_rows {
+                results.push(ScanPluginResultRecord {
+                    plugin_id: row.plugin_id,
+                    entrypoint_id: row.entrypoint_id,
+                    output: normalize_scan_output(parse_json_text(row.output_json_ir)?),
+                });
+            }
+            results
+        } else {
+            // Legacy rows had no entrypoint_id; map all of them to `default`.
+            let legacy_rows = sqlx::query_as::<_, LegacyScanResultRow>(
+                "SELECT plugin_id, output_json_ir FROM ScanPluginResult WHERE scan_id = ?1",
+            )
+            .bind(&scan.id)
+            .fetch_all(&mut *conn)
+            .await?;
+
+            let mut results = Vec::with_capacity(legacy_rows.len());
+            for row in legacy_rows {
+                results.push(ScanPluginResultRecord {
+                    plugin_id: row.plugin_id,
+                    entrypoint_id: "default".to_string(),
+                    output: normalize_scan_output(parse_json_text(row.output_json_ir)?),
+                });
+            }
+            results
+        };
 
         Ok(ScanDetailRecord {
             id: scan.id,
@@ -1130,7 +1297,6 @@ impl ProjectPersistence for SqliteProjectPersistence {
 
     async fn run_scan(
         &self,
-        project_path: &Path,
         scan_id: &str,
         selected_plugins: Vec<PluginEntrypointSelection>,
         inputs: Value,
@@ -1141,52 +1307,77 @@ impl ProjectPersistence for SqliteProjectPersistence {
             ));
         }
 
-        let db_path = Self::existing_db_path(project_path)?;
-        let mut conn = Self::open_connection(&db_path).await?;
+        // --- Phase 1: load all data from DB, update status, release lock -----
+        let (scan_preview, plugin_data) = {
+            let mut guard = self.conn.lock().await;
+            let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
-        let scan = sqlx::query_as::<_, ScanRow>(
-            "SELECT id, status, preview, inputs_json, selected_plugins_json \
-             FROM Scan WHERE id = ?1 LIMIT 1",
-        )
-        .bind(scan_id)
-        .fetch_one(&mut conn)
-        .await?;
-
-        if scan.status != "Draft" {
-            return Err(PersistenceError::Validation(
-                "Scan already launched and cannot be rerun".into(),
-            ));
-        }
-
-        let project_settings_id: String =
-            sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
-                .fetch_one(&mut conn)
-                .await?;
-
-        let selected_json = serde_json::to_string(&selected_plugins)?;
-        let inputs_json = serde_json::to_string(&inputs)?;
-
-        sqlx::query(
-            "UPDATE Scan SET status = 'Running', selected_plugins_json = ?1, inputs_json = ?2 \
-             WHERE id = ?3",
-        )
-        .bind(&selected_json)
-        .bind(&inputs_json)
-        .bind(scan_id)
-        .execute(&mut conn)
-        .await?;
-
-        sqlx::query("DELETE FROM ScanPluginResult WHERE scan_id = ?1")
+            let scan = sqlx::query_as::<_, ScanRow>(
+                "SELECT id, status, preview, inputs_json, selected_plugins_json \
+                 FROM Scan WHERE id = ?1 LIMIT 1",
+            )
             .bind(scan_id)
-            .execute(&mut conn)
+            .fetch_one(&mut *conn)
             .await?;
 
-        // Load fresh code from disk so runtime source changes take effect without DB re-sync.
-        let fresh_code: HashMap<String, String> = discover_local_plugins()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|b| (b.id, b.code))
-            .collect();
+            if scan.status != "Draft" {
+                return Err(PersistenceError::Validation(
+                    "Scan already launched and cannot be rerun".into(),
+                ));
+            }
+
+            let project_settings_id: String =
+                sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
+                    .fetch_one(&mut *conn)
+                    .await?;
+
+            sqlx::query(
+                "UPDATE Scan SET status = 'Running', \
+                 selected_plugins_json = ?1, inputs_json = ?2 WHERE id = ?3",
+            )
+            .bind(serde_json::to_string(&selected_plugins)?)
+            .bind(serde_json::to_string(&inputs)?)
+            .bind(scan_id)
+            .execute(&mut *conn)
+            .await?;
+
+            sqlx::query("DELETE FROM ScanPluginResult WHERE scan_id = ?1")
+                .bind(scan_id)
+                .execute(&mut *conn)
+                .await?;
+
+            // Load plugin code + settings from DB — single source of truth.
+            let mut plugin_data: Vec<(
+                String,
+                String,
+                Option<String>,
+                Option<String>,
+                Option<String>,
+            )> = Vec::new();
+            for sel in &selected_plugins {
+                let row = sqlx::query_as::<_, (Option<String>, Option<String>, Option<String>)>(
+                    "SELECT pps.settings_json, p.code, p.manifest_json \
+                     FROM ProjectPluginSettings pps \
+                     INNER JOIN Plugin p ON p.id = pps.plugin_id \
+                     WHERE pps.plugin_id = ?1 AND pps.project_settings_id = ?2 LIMIT 1",
+                )
+                .bind(&sel.plugin_id)
+                .bind(&project_settings_id)
+                .fetch_optional(&mut *conn)
+                .await?;
+
+                let (settings_json, code, manifest_json) = row.unwrap_or((None, None, None));
+                plugin_data.push((
+                    sel.plugin_id.clone(),
+                    sel.entrypoint_id.clone(),
+                    settings_json,
+                    code,
+                    manifest_json,
+                ));
+            }
+
+            (scan.preview, plugin_data)
+        }; // DB lock released
 
         let inputs_obj = if inputs.is_object() {
             inputs
@@ -1194,32 +1385,23 @@ impl ProjectPersistence for SqliteProjectPersistence {
             Value::Object(Map::new())
         };
 
-        for selection in &selected_plugins {
-            let ep_key = format!("{}::{}", selection.plugin_id, selection.entrypoint_id);
+        // --- Phase 2: execute plugins (no DB access) -------------------------
+        let mut envelopes: Vec<(String, String, Value)> = Vec::new();
+
+        for (plugin_id, entrypoint_id, settings_json, plugin_code, manifest_json_raw) in plugin_data
+        {
+            let ep_key = format!("{}::{}", plugin_id, entrypoint_id);
             let plugin_inputs = inputs_obj
                 .get(&ep_key)
                 .cloned()
                 .unwrap_or_else(|| Value::Object(Map::new()));
 
-            let runtime_row = sqlx::query_as::<_, (Option<String>, Option<String>, Option<String>)>(
-                "SELECT ProjectPluginSettings.settings_json, Plugin.code, Plugin.manifest_json \
-                 FROM ProjectPluginSettings \
-                 INNER JOIN Plugin ON Plugin.id = ProjectPluginSettings.plugin_id \
-                 WHERE ProjectPluginSettings.plugin_id = ?1 \
-                   AND ProjectPluginSettings.project_settings_id = ?2 \
-                 LIMIT 1",
-            )
-            .bind(&selection.plugin_id)
-            .bind(&project_settings_id)
-            .fetch_optional(&mut conn)
-            .await?;
-
-            let envelope = match runtime_row {
+            let envelope = match plugin_code.filter(|c| !c.trim().is_empty()) {
                 None => json!({
                     "ok": false,
-                    "error": format!("Plugin '{}' is not registered in this project", selection.plugin_id)
+                    "error": format!("Plugin '{}' not found or has no code in database", plugin_id)
                 }),
-                Some((settings_json, plugin_code, manifest_json_raw)) => {
+                Some(code) => {
                     let plugin_settings = settings_json
                         .as_deref()
                         .filter(|s| !s.trim().is_empty())
@@ -1231,76 +1413,69 @@ impl ProjectPersistence for SqliteProjectPersistence {
                         .and_then(|s| serde_json::from_str(s).ok())
                         .unwrap_or(Value::Null);
 
-                    let entrypoint_fn =
-                        resolve_entrypoint_function(&manifest_val, &selection.entrypoint_id);
+                    let entrypoint_fn = resolve_entrypoint_function(&manifest_val, &entrypoint_id);
 
-                    let code = fresh_code
-                        .get(&selection.plugin_id)
-                        .cloned()
-                        .or(plugin_code)
-                        .filter(|c| !c.trim().is_empty());
+                    let result = tauri::async_runtime::spawn_blocking(move || {
+                        crate::app::plugin::execute_plugin_code_with_settings(
+                            code,
+                            plugin_inputs,
+                            plugin_settings,
+                            Some(entrypoint_fn),
+                        )
+                    })
+                    .await
+                    .map_err(|e| {
+                        PersistenceError::Validation(format!(
+                            "Failed to join plugin execution task: {}",
+                            e
+                        ))
+                    })?;
 
-                    match code {
-                        None => json!({
-                            "ok": false,
-                            "error": format!("Plugin '{}' has no code in project database", selection.plugin_id)
-                        }),
-                        Some(code) => {
-                            let result = tauri::async_runtime::spawn_blocking(move || {
-                                crate::app::plugin::execute_plugin_code_with_settings(
-                                    code,
-                                    plugin_inputs,
-                                    plugin_settings,
-                                    Some(entrypoint_fn),
-                                )
-                            })
-                            .await
-                            .map_err(|e| {
-                                PersistenceError::Validation(format!(
-                                    "Failed to join plugin execution task: {}",
-                                    e
-                                ))
-                            })?;
-
-                            match result {
-                                Ok((output, logs)) => {
-                                    json!({ "ok": true, "data": output, "logs": logs })
-                                }
-                                Err(err) => json!({ "ok": false, "error": err }),
-                            }
-                        }
+                    match result {
+                        Ok((output, logs)) => json!({ "ok": true, "data": output, "logs": logs }),
+                        Err(err) => json!({ "ok": false, "error": err }),
                     }
                 }
             };
 
-            sqlx::query(
-                "INSERT INTO ScanPluginResult (id, plugin_id, entrypoint_id, scan_id, output_json_ir) \
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
-            )
-            .bind(Uuid::new_v4().to_string())
-            .bind(&selection.plugin_id)
-            .bind(&selection.entrypoint_id)
-            .bind(scan_id)
-            .bind(serde_json::to_string(&envelope)?)
-            .execute(&mut conn)
-            .await?;
+            envelopes.push((plugin_id, entrypoint_id, envelope));
         }
 
-        sqlx::query("UPDATE Scan SET status = 'Completed' WHERE id = ?1")
-            .bind(scan_id)
-            .execute(&mut conn)
-            .await?;
+        // --- Phase 3: persist results ----------------------------------------
+        {
+            let mut guard = self.conn.lock().await;
+            let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
+
+            for (plugin_id, entrypoint_id, envelope) in envelopes {
+                sqlx::query(
+                    "INSERT INTO ScanPluginResult \
+                     (id, plugin_id, entrypoint_id, scan_id, output_json_ir) \
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                )
+                .bind(Uuid::new_v4().to_string())
+                .bind(&plugin_id)
+                .bind(&entrypoint_id)
+                .bind(scan_id)
+                .bind(serde_json::to_string(&envelope)?)
+                .execute(&mut *conn)
+                .await?;
+            }
+
+            sqlx::query("UPDATE Scan SET status = 'Completed' WHERE id = ?1")
+                .bind(scan_id)
+                .execute(&mut *conn)
+                .await?;
+        }
 
         Ok(ScanSummaryRecord {
             id: scan_id.to_owned(),
             status: "Completed".to_string(),
-            preview: scan.preview,
+            preview: scan_preview,
         })
     }
 
     async fn update_scan_preview(
         &self,
-        project_path: &Path,
         scan_id: &str,
         preview: String,
     ) -> Result<ScanSummaryRecord, PersistenceError> {
@@ -1310,21 +1485,22 @@ impl ProjectPersistence for SqliteProjectPersistence {
                 "Scan name must not be empty".into(),
             ));
         }
-        let db_path = Self::existing_db_path(project_path)?;
-        let mut conn = Self::open_connection(&db_path).await?;
+
+        let mut guard = self.conn.lock().await;
+        let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
         let current = sqlx::query_as::<_, ScanRow>(
             "SELECT id, status, preview, inputs_json, selected_plugins_json \
              FROM Scan WHERE id = ?1 LIMIT 1",
         )
         .bind(scan_id)
-        .fetch_one(&mut conn)
+        .fetch_one(&mut *conn)
         .await?;
 
         sqlx::query("UPDATE Scan SET preview = ?1 WHERE id = ?2")
             .bind(&next)
             .bind(scan_id)
-            .execute(&mut conn)
+            .execute(&mut *conn)
             .await?;
 
         Ok(ScanSummaryRecord {
@@ -1334,73 +1510,24 @@ impl ProjectPersistence for SqliteProjectPersistence {
         })
     }
 
-    async fn get_project_lock_status(
-        &self,
-        project_path: &Path,
-    ) -> Result<ProjectLockStatus, PersistenceError> {
-        let db_path = Self::existing_db_path(project_path)?;
-        Self::read_lock_status(&db_path).await
-    }
-
-    async fn unlock_project(
-        &self,
-        project_path: &Path,
-        password: String,
-    ) -> Result<ProjectLockStatus, PersistenceError> {
-        let db_path = Self::existing_db_path(project_path)?;
-        let status = Self::read_lock_status(&db_path).await?;
-        if !status.locked {
-            return Ok(ProjectLockStatus {
-                locked: false,
-                unlocked: true,
-            });
-        }
-
-        let mut conn = Self::connect(&db_path, false, Some(&password))
-            .await
-            .map_err(|err| {
-                if Self::is_encrypted_error(&err) {
-                    PersistenceError::Validation("Invalid password".to_string())
-                } else {
-                    err
-                }
-            })?;
-        Self::apply_schema(&mut conn).await?;
-        Self::apply_migrations_to_latest(&mut conn).await?;
-
-        cache_key(&db_path, password);
-        Ok(ProjectLockStatus {
-            locked: true,
-            unlocked: true,
-        })
+    async fn get_project_lock_status(&self) -> Result<ProjectLockStatus, PersistenceError> {
+        SqliteProjectPersistence::read_lock_status(&self.db_path).await
     }
 
     async fn set_project_password(
         &self,
-        project_path: &Path,
         new_password: String,
     ) -> Result<ProjectLockStatus, PersistenceError> {
-        use super::security::validate_password;
         validate_password(&new_password)?;
-
-        let db_path = Self::existing_db_path(project_path)?;
-        let status = Self::read_lock_status(&db_path).await?;
-        if status.locked && !status.unlocked {
-            return Err(PersistenceError::Validation(lock_error()));
+        let status = SqliteProjectPersistence::read_lock_status(&self.db_path).await?;
+        if status.locked {
+            return Err(PersistenceError::Validation(
+                "Project already has a password. Use change_project_password instead.".into(),
+            ));
         }
-
-        let source_key = if status.locked {
-            get_cached_key(&db_path)
-        } else {
-            None
-        };
-        if status.locked && source_key.is_none() {
-            return Err(PersistenceError::Validation(lock_error()));
-        }
-
-        Self::rewrite_database_with_key(&db_path, source_key.as_deref(), Some(&new_password))
+        self.rewrite_and_reconnect(None, Some(new_password.clone()))
             .await?;
-        cache_key(&db_path, new_password);
+        cache_key(&self.db_path, new_password);
         Ok(ProjectLockStatus {
             locked: true,
             unlocked: true,
@@ -1409,18 +1536,14 @@ impl ProjectPersistence for SqliteProjectPersistence {
 
     async fn change_project_password(
         &self,
-        project_path: &Path,
         current_password: String,
         new_password: String,
     ) -> Result<ProjectLockStatus, PersistenceError> {
-        use super::security::{validate_non_empty_password, validate_password};
         validate_password(&new_password)?;
         validate_non_empty_password(&current_password, "Current password")?;
-
-        let db_path = Self::existing_db_path(project_path)?;
-        Self::rewrite_database_with_key(&db_path, Some(&current_password), Some(&new_password))
+        self.rewrite_and_reconnect(Some(current_password), Some(new_password.clone()))
             .await?;
-        cache_key(&db_path, new_password);
+        cache_key(&self.db_path, new_password);
         Ok(ProjectLockStatus {
             locked: true,
             unlocked: true,
@@ -1429,15 +1552,12 @@ impl ProjectPersistence for SqliteProjectPersistence {
 
     async fn remove_project_password(
         &self,
-        project_path: &Path,
         current_password: String,
     ) -> Result<ProjectLockStatus, PersistenceError> {
-        use super::security::validate_non_empty_password;
         validate_non_empty_password(&current_password, "Current password")?;
-
-        let db_path = Self::existing_db_path(project_path)?;
-        Self::rewrite_database_with_key(&db_path, Some(&current_password), None).await?;
-        clear_cached_key(&db_path);
+        self.rewrite_and_reconnect(Some(current_password), None)
+            .await?;
+        clear_cached_key(&self.db_path);
         Ok(ProjectLockStatus {
             locked: false,
             unlocked: true,
@@ -1534,15 +1654,39 @@ struct ScanResultRow {
     output_json_ir: Option<String>,
 }
 
+#[derive(sqlx::FromRow)]
+struct LegacyScanResultRow {
+    plugin_id: String,
+    output_json_ir: Option<String>,
+}
+
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
+
+/// Return a connection-unavailable error (used when the slot is `None` during re-encryption).
+fn conn_unavailable() -> PersistenceError {
+    PersistenceError::Validation(
+        "Project connection is temporarily unavailable during an encryption operation. \
+         Please reopen the project."
+            .into(),
+    )
+}
 
 /// Deserialise an `Option<String>` JSON column, returning `Null` when absent or empty.
 fn parse_json_text(raw: Option<String>) -> Result<Value, PersistenceError> {
     match raw {
         Some(text) if !text.trim().is_empty() => Ok(serde_json::from_str(&text)?),
         _ => Ok(Value::Null),
+    }
+}
+
+/// Normalize legacy scan outputs into the new envelope shape used by the frontend.
+fn normalize_scan_output(value: Value) -> Value {
+    match value {
+        Value::Object(map) if map.contains_key("ok") => Value::Object(map),
+        Value::Null => json!({ "ok": false, "error": "No result payload" }),
+        other => json!({ "ok": true, "data": other, "logs": [] }),
     }
 }
 

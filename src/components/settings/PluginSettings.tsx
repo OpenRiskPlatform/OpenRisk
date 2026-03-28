@@ -55,7 +55,6 @@ export function PluginSettings({
         setImporting(true);
         try {
             const payload = await backendClient.upsertProjectPluginFromDir(
-                projectDir,
                 selected,
                 replacePluginId
             );
@@ -139,7 +138,6 @@ export function PluginSettings({
 }
 
 function PluginSettingsCard({
-    projectDir,
     plugin,
     onPluginUpdated,
     backendClient,
@@ -173,7 +171,6 @@ function PluginSettingsCard({
         setSaving(true);
         try {
             const updated = await backendClient.updateProjectPluginSettings(
-                projectDir,
                 plugin.id,
                 draft
             );
