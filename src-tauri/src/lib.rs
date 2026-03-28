@@ -1,6 +1,6 @@
 mod app;
+mod commands;
 mod plugin_manifest;
-mod transport;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -16,29 +16,32 @@ pub fn run() {
 
     builder
         .invoke_handler(tauri::generate_handler![
-            transport::list_plugins,
-            transport::get_plugin,
-            transport::open_plugin,
-            transport::configure_plugin,
-            transport::execute_plugin,
-            transport::check_plugin_readiness,
-            transport::create_project,
-            transport::open_project,
-            transport::load_settings,
-            transport::update_project_settings,
-            transport::update_project_name,
-            transport::update_project_plugin_settings,
-            transport::create_scan,
-            transport::list_scans,
-            transport::get_scan,
-            transport::run_scan,
-            transport::upsert_project_plugin_from_dir,
-            transport::update_scan_preview,
-            transport::get_project_lock_status,
-            transport::unlock_project,
-            transport::set_project_password,
-            transport::change_project_password,
-            transport::remove_project_password,
+            // Plugin commands
+            commands::plugin::list_plugins,
+            commands::plugin::get_plugin,
+            commands::plugin::open_plugin,
+            commands::plugin::configure_plugin,
+            commands::plugin::execute_plugin,
+            commands::plugin::check_plugin_readiness,
+            // Project & scan commands
+            commands::project::create_project,
+            commands::project::open_project,
+            commands::project::load_settings,
+            commands::project::update_project_settings,
+            commands::project::update_project_name,
+            commands::project::update_project_plugin_settings,
+            commands::project::upsert_project_plugin_from_dir,
+            commands::project::create_scan,
+            commands::project::list_scans,
+            commands::project::get_scan,
+            commands::project::run_scan,
+            commands::project::update_scan_preview,
+            // Security commands
+            commands::security::get_project_lock_status,
+            commands::security::unlock_project,
+            commands::security::set_project_password,
+            commands::security::change_project_password,
+            commands::security::remove_project_password,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
