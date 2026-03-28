@@ -17,6 +17,7 @@
 interface PluginInputs {
     target?: string;
     api_key?: string;
+    output_language?: string;
 }
 
 interface EntityInfo {
@@ -296,7 +297,7 @@ export async function topicReport(inputs: PluginInputs): Promise<DataModelEntity
 
     const topics = await adverseaGet<SingleTopicResponse[]>(
         "/screening/topic-report",
-        { targetName: target },
+        { targetName: target, outputLanguage: inputs.output_language ?? "English" },
         apiKey
     );
 

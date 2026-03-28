@@ -1863,7 +1863,9 @@ pub async fn run_scan(
                         .map_err(|e| format!("Failed to join plugin execution task: {}", e))?;
 
                         match execute_result {
-                            Ok(output) => json!({ "ok": true, "data": output }),
+                            Ok((output, logs)) => {
+                                json!({ "ok": true, "data": output, "logs": logs })
+                            }
                             Err(err) => json!({ "ok": false, "error": err }),
                         }
                     }

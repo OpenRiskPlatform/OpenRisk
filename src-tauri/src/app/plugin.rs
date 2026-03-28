@@ -193,23 +193,42 @@ impl ImportProvider for ScriptImportProvider {
     }
 }
 
-fn run_plugin_module(code: String, merged_inputs: Value, entrypoint_fn: &str) -> Result<Value, String> {
+fn run_plugin_module(
+    code: String,
+    merged_inputs: Value,
+    entrypoint_fn: &str,
+) -> Result<(Value, Value), String> {
     let inputs_json = merged_inputs.to_string();
     let wrapper_code = format!(
         r#"
         import * as __mod__ from "script://main.ts";
         export default async () => {{
+            const __logs__ = [];
+            const __origLog__ = console.log.bind(console);
+            const __origWarn__ = console.warn.bind(console);
+            const __origError__ = console.error.bind(console);
+            console.log = (...args) => {{
+                __logs__.push({{ level: "log", message: args.map(String).join(" ") }});
+                __origLog__(...args);
+            }};
+            console.warn = (...args) => {{
+                __logs__.push({{ level: "warn", message: args.map(String).join(" ") }});
+                __origWarn__(...args);
+            }};
+            console.error = (...args) => {{
+                __logs__.push({{ level: "error", message: args.map(String).join(" ") }});
+                __origError__(...args);
+            }};
             const __fn__ = __mod__["{}"];
             if (typeof __fn__ !== 'function') {{
                 throw new TypeError("Plugin entrypoint '{}' is not exported or is not a function");
             }}
             const inputs = {};
-            return await __fn__(inputs);
+            const __result__ = await __fn__(inputs);
+            return {{ __result__: __result__, __logs__: __logs__ }};
         }}
         "#,
-        entrypoint_fn,
-        entrypoint_fn,
-        inputs_json
+        entrypoint_fn, entrypoint_fn, inputs_json
     );
 
     let wrapper = Module::new("wrapper.js", &wrapper_code);
@@ -221,9 +240,17 @@ fn run_plugin_module(code: String, merged_inputs: Value, entrypoint_fn: &str) ->
     .expect("Failed to create runtime");
 
     match runtime.load_module(&wrapper) {
-        Ok(handle) => runtime
-            .call_entrypoint::<Value>(&handle, &())
-            .map_err(|e| e.to_string()),
+        Ok(handle) => {
+            let returned = runtime
+                .call_entrypoint::<Value>(&handle, &())
+                .map_err(|e| e.to_string())?;
+            let logs = returned
+                .get("__logs__")
+                .cloned()
+                .unwrap_or(Value::Array(vec![]));
+            let result = returned.get("__result__").cloned().unwrap_or(Value::Null);
+            Ok((result, logs))
+        }
         Err(err) => Err(err.to_string()),
     }
 }
@@ -233,7 +260,7 @@ pub fn execute_plugin_code_with_settings(
     inputs: Value,
     settings: Value,
     entrypoint_fn: Option<String>,
-) -> Result<Value, String> {
+) -> Result<(Value, Value), String> {
     let mut merged = match inputs {
         Value::Object(m) => m,
         _ => serde_json::Map::new(),
@@ -276,7 +303,8 @@ pub fn execute_plugin_with_settings(
         }
     }
 
-    run_plugin_module(code, Value::Object(merged), "default")
+    let (result, _logs) = run_plugin_module(code, Value::Object(merged), "default")?;
+    Ok(result)
 }
 
 /// Check whether a plugin can run with the given settings by calling its optional

@@ -50,6 +50,20 @@
             "optional": false,
             "title": "Target Name",
             "description": "Full name of the person or organization to screen."
+        },
+        {
+            "name": "output_language",
+            "type": "string",
+            "optional": true,
+            "title": "Output Language",
+            "description": "Language for the generated text output (Topic Report only).",
+            "default": "English",
+            "validation": {
+                "enum": [
+                    "English",
+                    "Slovak"
+                ]
+            }
         }
     ]
 }

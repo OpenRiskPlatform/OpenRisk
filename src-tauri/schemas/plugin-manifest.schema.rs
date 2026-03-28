@@ -150,6 +150,31 @@ pub mod error {
 #[doc = "            \"description\": \"Input data type (supports list[T] and map[K,V] syntax)\","]
 #[doc = "            \"type\": \"string\","]
 #[doc = "            \"pattern\": \"^(string|number|boolean|list\\\\[\\\\w+\\\\]|map\\\\[\\\\w+,\\\\s*\\\\w+\\\\])$\""]
+#[doc = "          },"]
+#[doc = "          \"validation\": {"]
+#[doc = "            \"description\": \"Additional validation rules\","]
+#[doc = "            \"type\": \"object\","]
+#[doc = "            \"properties\": {"]
+#[doc = "              \"enum\": {"]
+#[doc = "                \"type\": \"array\""]
+#[doc = "              },"]
+#[doc = "              \"max\": {"]
+#[doc = "                \"type\": \"number\""]
+#[doc = "              },"]
+#[doc = "              \"maxLength\": {"]
+#[doc = "                \"type\": \"integer\""]
+#[doc = "              },"]
+#[doc = "              \"min\": {"]
+#[doc = "                \"type\": \"number\""]
+#[doc = "              },"]
+#[doc = "              \"minLength\": {"]
+#[doc = "                \"type\": \"integer\""]
+#[doc = "              },"]
+#[doc = "              \"pattern\": {"]
+#[doc = "                \"type\": \"string\""]
+#[doc = "              }"]
+#[doc = "            },"]
+#[doc = "            \"additionalProperties\": false"]
 #[doc = "          }"]
 #[doc = "        },"]
 #[doc = "        \"additionalProperties\": false"]
@@ -735,6 +760,31 @@ impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifestId {
 #[doc = "      \"description\": \"Input data type (supports list[T] and map[K,V] syntax)\","]
 #[doc = "      \"type\": \"string\","]
 #[doc = "      \"pattern\": \"^(string|number|boolean|list\\\\[\\\\w+\\\\]|map\\\\[\\\\w+,\\\\s*\\\\w+\\\\])$\""]
+#[doc = "    },"]
+#[doc = "    \"validation\": {"]
+#[doc = "      \"description\": \"Additional validation rules\","]
+#[doc = "      \"type\": \"object\","]
+#[doc = "      \"properties\": {"]
+#[doc = "        \"enum\": {"]
+#[doc = "          \"type\": \"array\""]
+#[doc = "        },"]
+#[doc = "        \"max\": {"]
+#[doc = "          \"type\": \"number\""]
+#[doc = "        },"]
+#[doc = "        \"maxLength\": {"]
+#[doc = "          \"type\": \"integer\""]
+#[doc = "        },"]
+#[doc = "        \"min\": {"]
+#[doc = "          \"type\": \"number\""]
+#[doc = "        },"]
+#[doc = "        \"minLength\": {"]
+#[doc = "          \"type\": \"integer\""]
+#[doc = "        },"]
+#[doc = "        \"pattern\": {"]
+#[doc = "          \"type\": \"string\""]
+#[doc = "        }"]
+#[doc = "      },"]
+#[doc = "      \"additionalProperties\": false"]
 #[doc = "    }"]
 #[doc = "  },"]
 #[doc = "  \"additionalProperties\": false"]
@@ -760,6 +810,8 @@ pub struct OpenRiskPluginManifestInputsItem {
     #[doc = "Input data type (supports list[T] and map[K,V] syntax)"]
     #[serde(rename = "type")]
     pub type_: OpenRiskPluginManifestInputsItemType,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub validation: ::std::option::Option<OpenRiskPluginManifestInputsItemValidation>,
 }
 #[doc = "Input parameter name (can use *args or **kwargs syntax)"]
 #[doc = r""]
@@ -908,6 +960,78 @@ impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifestInputsItemType {
             .map_err(|e: self::error::ConversionError| {
                 <D::Error as ::serde::de::Error>::custom(e.to_string())
             })
+    }
+}
+#[doc = "Additional validation rules"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"description\": \"Additional validation rules\","]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"enum\": {"]
+#[doc = "      \"type\": \"array\""]
+#[doc = "    },"]
+#[doc = "    \"max\": {"]
+#[doc = "      \"type\": \"number\""]
+#[doc = "    },"]
+#[doc = "    \"maxLength\": {"]
+#[doc = "      \"type\": \"integer\""]
+#[doc = "    },"]
+#[doc = "    \"min\": {"]
+#[doc = "      \"type\": \"number\""]
+#[doc = "    },"]
+#[doc = "    \"minLength\": {"]
+#[doc = "      \"type\": \"integer\""]
+#[doc = "    },"]
+#[doc = "    \"pattern\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": false"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct OpenRiskPluginManifestInputsItemValidation {
+    #[serde(
+        rename = "enum",
+        default,
+        skip_serializing_if = "::std::vec::Vec::is_empty"
+    )]
+    pub enum_: ::std::vec::Vec<::serde_json::Value>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub max: ::std::option::Option<f64>,
+    #[serde(
+        rename = "maxLength",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub max_length: ::std::option::Option<i64>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub min: ::std::option::Option<f64>,
+    #[serde(
+        rename = "minLength",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub min_length: ::std::option::Option<i64>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub pattern: ::std::option::Option<::std::string::String>,
+}
+impl ::std::default::Default for OpenRiskPluginManifestInputsItemValidation {
+    fn default() -> Self {
+        Self {
+            enum_: Default::default(),
+            max: Default::default(),
+            max_length: Default::default(),
+            min: Default::default(),
+            min_length: Default::default(),
+            pattern: Default::default(),
+        }
     }
 }
 #[doc = "SPDX license identifier (e.g., MIT, Apache-2.0, GPL-3.0)"]

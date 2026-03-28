@@ -90,10 +90,16 @@ export interface PluginEntrypointSelection {
   entrypointId: string;
 }
 
+export interface PluginLogEntry {
+  level: "log" | "warn" | "error";
+  message: string;
+}
+
 export interface PluginResultEnvelope {
   ok: boolean;
   data?: unknown;
   error?: string;
+  logs?: PluginLogEntry[];
 }
 
 export interface ScanPluginResult {

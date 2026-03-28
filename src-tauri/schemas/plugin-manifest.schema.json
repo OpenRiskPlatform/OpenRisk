@@ -204,6 +204,31 @@
                     },
                     "default": {
                         "description": "Default value for optional inputs"
+                    },
+                    "validation": {
+                        "type": "object",
+                        "description": "Additional validation rules",
+                        "properties": {
+                            "min": {
+                                "type": "number"
+                            },
+                            "max": {
+                                "type": "number"
+                            },
+                            "minLength": {
+                                "type": "integer"
+                            },
+                            "maxLength": {
+                                "type": "integer"
+                            },
+                            "pattern": {
+                                "type": "string"
+                            },
+                            "enum": {
+                                "type": "array"
+                            }
+                        },
+                        "additionalProperties": false
                     }
                 },
                 "additionalProperties": false
