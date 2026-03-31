@@ -833,6 +833,10 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
 
                                     {scanDetail.status === "Completed" && scanDetail.results.length > 0 ? (
                                         <div className="space-y-3 select-text">
+                                            <ScanRunInputsView
+                                                scanDetail={scanDetail}
+                                                pluginNameById={pluginNameById}
+                                            />
                                             {scanDetail.results.map((result) => {
                                                 const envelope = result.output;
                                                 const parsedData = envelope.ok && envelope.dataJson
@@ -884,7 +888,13 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                                     ) : null}
 
                                     {scanDetail.status === "Failed" ? (
-                                        <p className="text-sm text-red-600">Scan failed. Check plugin settings and inputs.</p>
+                                        <div className="space-y-3">
+                                            <ScanRunInputsView
+                                                scanDetail={scanDetail}
+                                                pluginNameById={pluginNameById}
+                                            />
+                                            <p className="text-sm text-red-600">Scan failed. Check plugin settings and inputs.</p>
+                                        </div>
                                     ) : null}
                                 </div>
                             )}
@@ -940,6 +950,75 @@ function toSettingValue(v: unknown): SettingValue {
     if (typeof v === "boolean") return { type: "boolean", value: v };
     if (typeof v === "number") return { type: "number", value: v };
     return { type: "string", value: String(v) };
+}
+
+function settingValueToText(value: SettingValue): string {
+    switch (value.type) {
+        case "null":
+            return "null";
+        case "boolean":
+            return value.value ? "true" : "false";
+        case "number":
+            return String(value.value);
+        case "string":
+            return value.value;
+        default:
+            return "";
+    }
+}
+
+function ScanRunInputsView({
+    scanDetail,
+    pluginNameById,
+}: {
+    scanDetail: ScanDetailRecord;
+    pluginNameById: Record<string, string>;
+}) {
+    const groupedInputs = new Map<string, ScanEntrypointInput[]>();
+    for (const input of scanDetail.inputs) {
+        const key = `${input.pluginId}::${input.entrypointId}`;
+        const list = groupedInputs.get(key) ?? [];
+        list.push(input);
+        groupedInputs.set(key, list);
+    }
+
+    if (!scanDetail.selectedPlugins.length) {
+        return null;
+    }
+
+    return (
+        <Card className="border-dashed">
+            <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Run inputs</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+                {scanDetail.selectedPlugins.map((sel) => {
+                    const key = `${sel.pluginId}::${sel.entrypointId}`;
+                    const inputs = groupedInputs.get(key) ?? [];
+                    return (
+                        <div key={key} className="rounded border bg-muted/20 p-2">
+                            <p className="font-medium">
+                                {pluginNameById[sel.pluginId] ?? sel.pluginId}
+                                <span className="ml-2 text-xs text-muted-foreground">/{sel.entrypointId}</span>
+                            </p>
+                            {inputs.length ? (
+                                <div className="mt-1 space-y-0.5 text-xs">
+                                    {inputs.map((input) => (
+                                        <div key={`${key}::${input.fieldName}`} className="flex gap-2">
+                                            <span className="text-muted-foreground min-w-28">{input.fieldName}:</span>
+                                            <span className="break-all">{settingValueToText(input.value)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="mt-1 text-xs text-muted-foreground">No input values</p>
+                            )}
+                        </div>
+                    );
+                })}
+            </CardContent>
+        </Card>
+    );
 }
 
 function PluginRunCard({
