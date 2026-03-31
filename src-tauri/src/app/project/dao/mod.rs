@@ -20,13 +20,12 @@ use async_trait::async_trait;
 pub trait ProjectPersistence: Send + Sync {
     /// Load the full settings snapshot (project + global settings + all plugin configs).
     async fn load_settings(&self) -> Result<ProjectSettingsPayload, PersistenceError>;
-    /// Update the project-wide theme setting.
+    /// Update the project-wide theme setting and optionally rename the project.
     async fn update_project_settings(
         &self,
+        name: Option<String>,
         theme: Option<String>,
     ) -> Result<ProjectSettingsRecord, PersistenceError>;
-    /// Rename the project.
-    async fn update_project_name(&self, name: &str) -> Result<ProjectSummary, PersistenceError>;
     /// Set a single plugin setting value.
     async fn set_plugin_setting(
         &self,
@@ -103,12 +102,10 @@ impl ProjectPersistence for SqliteProjectPersistence {
     }
     async fn update_project_settings(
         &self,
+        name: Option<String>,
         theme: Option<String>,
     ) -> Result<ProjectSettingsRecord, PersistenceError> {
-        settings_dao::update_project_settings(self, theme).await
-    }
-    async fn update_project_name(&self, name: &str) -> Result<ProjectSummary, PersistenceError> {
-        settings_dao::update_project_name(self, name).await
+        settings_dao::update_project_settings(self, name, theme).await
     }
     async fn set_plugin_setting(
         &self,

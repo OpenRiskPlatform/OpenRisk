@@ -65,10 +65,24 @@ pub(super) async fn load_settings(
 
 pub(super) async fn update_project_settings(
     this: &SqliteProjectPersistence,
+    name: Option<String>,
     theme: Option<String>,
 ) -> Result<ProjectSettingsRecord, PersistenceError> {
+    if matches!(&name, Some(n) if n.trim().is_empty()) {
+        return Err(PersistenceError::Validation(
+            "Project name must not be empty".into(),
+        ));
+    }
+
     let mut guard = this.conn.lock().await;
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
+
+    if let Some(ref n) = name {
+        sqlx::query("UPDATE Project SET name = ?1")
+            .bind(n.trim())
+            .execute(&mut *conn)
+            .await?;
+    }
 
     let psid: String = sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
         .fetch_one(&mut *conn)
@@ -101,44 +115,6 @@ pub(super) async fn update_project_settings(
         description: row.description.unwrap_or_default(),
         locale: row.locale.unwrap_or_else(|| "en-US".to_string()),
         theme: normalize_theme(row.theme),
-    })
-}
-
-pub(super) async fn update_project_name(
-    this: &SqliteProjectPersistence,
-    name: &str,
-) -> Result<ProjectSummary, PersistenceError> {
-    let trimmed = name.trim();
-    if trimmed.is_empty() {
-        return Err(PersistenceError::Validation(
-            "Project name must not be empty".into(),
-        ));
-    }
-
-    let mut guard = this.conn.lock().await;
-    let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
-
-    #[derive(sqlx::FromRow)]
-    struct Row {
-        id: String,
-        audit: Option<String>,
-    }
-
-    let row = sqlx::query_as::<_, Row>("SELECT id, audit FROM Project LIMIT 1")
-        .fetch_one(&mut *conn)
-        .await?;
-
-    sqlx::query("UPDATE Project SET name = ?1 WHERE id = ?2")
-        .bind(trimmed)
-        .bind(&row.id)
-        .execute(&mut *conn)
-        .await?;
-
-    Ok(ProjectSummary {
-        id: row.id,
-        name: trimmed.to_owned(),
-        audit: row.audit,
-        directory: this.db_path.clone(),
     })
 }
 

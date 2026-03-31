@@ -53,7 +53,7 @@ export function GeneralSettings({
 
     setSavingTheme(true);
     try {
-      const updated = await unwrap(backendClient.updateProjectSettings(value)) as unknown as ProjectSettingsRecord;
+      const updated = await unwrap(backendClient.updateProjectSettings(null, value));
       onProjectSettingsUpdated(updated);
       await updateGlobalSettings({ theme: updated.theme as "light" | "dark" | "system" });
     } finally {

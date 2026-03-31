@@ -470,15 +470,15 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
 
         setRenameProjectSaving(true);
         try {
-            const updated = await unwrap(backendClient.updateProjectName(nextName));
-            setProjectName(updated.name);
+            await unwrap(backendClient.updateProjectSettings(nextName, null));
+            setProjectName(nextName);
             setSettingsData((prev) =>
                 prev
                     ? {
                         ...prev,
                         project: {
                             ...prev.project,
-                            name: updated.name,
+                            name: nextName,
                         },
                     }
                     : prev

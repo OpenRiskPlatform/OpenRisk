@@ -21,7 +21,6 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::project::close_project,
         commands::project::load_settings,
         commands::project::update_project_settings,
-        commands::project::update_project_name,
         commands::project::set_plugin_setting,
         commands::project::upsert_project_plugin_from_dir,
         commands::project::upsert_project_plugin_from_zip,

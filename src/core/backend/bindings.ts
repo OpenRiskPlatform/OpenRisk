@@ -30,12 +30,7 @@ export const commands = {
 	 *  Update the project-wide theme setting.
 	 *  #
 	 */
-	updateProjectSettings: (theme: string | null) => typedError<ProjectSettingsRecord, AppError>(__TAURI_INVOKE("update_project_settings", { theme })),
-	/**
-	 *  Rename the active project.
-	 *  #
-	 */
-	updateProjectName: (name: string) => typedError<ProjectSummary, AppError>(__TAURI_INVOKE("update_project_name", { name })),
+	updateProjectSettings: (name: string | null, theme: string | null) => typedError<ProjectSettingsRecord, AppError>(__TAURI_INVOKE("update_project_settings", { name, theme })),
 	/**
 	 *  Set one plugin setting value within the active project.
 	 *  #

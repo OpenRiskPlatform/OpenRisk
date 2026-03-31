@@ -89,27 +89,13 @@ pub async fn load_settings(
 #[tauri::command]
 #[specta::specta]
 pub async fn update_project_settings(
+    name: Option<String>,
     theme: Option<String>,
     state: tauri::State<'_, ProjectState>,
 ) -> Result<ProjectSettingsRecord, AppError> {
     let project = get_open_project(&state).await?;
     project
-        .update_project_settings(theme)
-        .await
-        .map_err(AppError::from)
-}
-
-/// Rename the active project.
-/// #
-#[tauri::command]
-#[specta::specta]
-pub async fn update_project_name(
-    name: String,
-    state: tauri::State<'_, ProjectState>,
-) -> Result<ProjectSummary, AppError> {
-    let project = get_open_project(&state).await?;
-    project
-        .update_project_name(&name)
+        .update_project_settings(name, theme)
         .await
         .map_err(AppError::from)
 }
