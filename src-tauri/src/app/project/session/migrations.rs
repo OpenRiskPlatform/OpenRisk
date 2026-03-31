@@ -11,7 +11,7 @@ use uuid::Uuid;
 // Schema & version constants
 // ---------------------------------------------------------------------------
 
-pub(super) const CURRENT_SCHEMA_VERSION: i64 = 12;
+pub(super) const CURRENT_SCHEMA_VERSION: i64 = 15;
 const MIN_SUPPORTED_SCHEMA_VERSION: i64 = 4;
 
 pub(super) const PROJECT_LEGACY_ERROR_PREFIX: &str = "PROJECT_LEGACY:";
@@ -42,14 +42,6 @@ CREATE TABLE IF NOT EXISTS Project (
 
 CREATE TABLE IF NOT EXISTS Plugin (
     id TEXT PRIMARY KEY,
-    version TEXT NOT NULL,
-    name TEXT NOT NULL,
-    description TEXT,
-    license TEXT,
-    authors_json TEXT,
-    icon TEXT,
-    homepage TEXT,
-    code TEXT,
     current_revision_id TEXT
 );
 
@@ -68,51 +60,16 @@ CREATE TABLE IF NOT EXISTS PluginRevision (
     FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS PluginEntrypoint (
+CREATE TABLE IF NOT EXISTS ProjectPlugin (
+    project_id TEXT NOT NULL,
     plugin_id TEXT NOT NULL,
-    id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    function_name TEXT NOT NULL,
-    description TEXT,
-    PRIMARY KEY (plugin_id, id),
-    FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS PluginInputDef (
-    plugin_id TEXT NOT NULL,
-    entrypoint_id TEXT NOT NULL DEFAULT 'default',
-    name TEXT NOT NULL,
-    title TEXT NOT NULL,
-    type_ TEXT NOT NULL,
-    type_json TEXT NOT NULL,
-    enum_values_json TEXT,
-    optional INTEGER NOT NULL DEFAULT 0,
-    description TEXT,
-    default_value_json TEXT,
-    PRIMARY KEY (plugin_id, entrypoint_id, name),
-    FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS PluginSettingDef (
-    plugin_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    title TEXT NOT NULL,
-    type_ TEXT NOT NULL,
-    type_json TEXT NOT NULL,
-    enum_values_json TEXT,
-    description TEXT,
-    required INTEGER NOT NULL DEFAULT 0,
-    default_value_json TEXT,
-    PRIMARY KEY (plugin_id, name),
-    FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS ProjectPluginSettings (
-    plugin_id TEXT NOT NULL,
-    project_settings_id TEXT NOT NULL,
-    PRIMARY KEY (plugin_id, project_settings_id),
+    pinned_revision_id TEXT,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (project_id, plugin_id),
+    FOREIGN KEY (project_id) REFERENCES Project(id) ON DELETE CASCADE,
     FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE,
-    FOREIGN KEY (project_settings_id) REFERENCES ProjectSettings(id) ON DELETE CASCADE
+    FOREIGN KEY (pinned_revision_id) REFERENCES PluginRevision(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS ProjectPluginSettingValue (
@@ -138,35 +95,39 @@ CREATE TABLE IF NOT EXISTS Scan (
 CREATE TABLE IF NOT EXISTS ScanSelectedPlugin (
     scan_id TEXT NOT NULL,
     plugin_id TEXT NOT NULL,
-    plugin_revision_id TEXT,
+    plugin_revision_id TEXT NOT NULL,
     entrypoint_id TEXT NOT NULL,
-    PRIMARY KEY (scan_id, plugin_id, entrypoint_id),
+    PRIMARY KEY (scan_id, plugin_revision_id, entrypoint_id),
     FOREIGN KEY (scan_id) REFERENCES Scan(id) ON DELETE CASCADE,
-    FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE
+    FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE,
+    FOREIGN KEY (plugin_revision_id) REFERENCES PluginRevision(id) ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS ScanEntrypointInput (
     scan_id TEXT NOT NULL,
     plugin_id TEXT NOT NULL,
-    plugin_revision_id TEXT,
+    plugin_revision_id TEXT NOT NULL,
     entrypoint_id TEXT NOT NULL,
     field_name TEXT NOT NULL,
     value_json TEXT NOT NULL DEFAULT 'null',
-    PRIMARY KEY (scan_id, plugin_id, entrypoint_id, field_name),
-    FOREIGN KEY (scan_id) REFERENCES Scan(id) ON DELETE CASCADE
+    PRIMARY KEY (scan_id, plugin_revision_id, entrypoint_id, field_name),
+    FOREIGN KEY (scan_id) REFERENCES Scan(id) ON DELETE CASCADE,
+    FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE,
+    FOREIGN KEY (plugin_revision_id) REFERENCES PluginRevision(id) ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS ScanPluginResult (
     id TEXT PRIMARY KEY,
     plugin_id TEXT NOT NULL,
-    plugin_revision_id TEXT,
+    plugin_revision_id TEXT NOT NULL,
     entrypoint_id TEXT NOT NULL DEFAULT 'default',
     scan_id TEXT NOT NULL,
     ok INTEGER NOT NULL DEFAULT 0,
     data_json TEXT,
     error TEXT,
     FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE,
-    FOREIGN KEY (scan_id) REFERENCES Scan(id) ON DELETE CASCADE
+    FOREIGN KEY (scan_id) REFERENCES Scan(id) ON DELETE CASCADE,
+    FOREIGN KEY (plugin_revision_id) REFERENCES PluginRevision(id) ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS ScanPluginLog (
@@ -273,6 +234,9 @@ pub(super) async fn apply_migrations_to_latest(
             10 => migrate_to_v10(conn).await?,
             11 => migrate_to_v11(conn).await?,
             12 => migrate_to_v12(conn).await?,
+            13 => migrate_to_v13(conn).await?,
+            14 => migrate_to_v14(conn).await?,
+            15 => migrate_to_v15(conn).await?,
             _ => {
                 return Err(PersistenceError::Validation(format!(
                     "Missing migration to schema version {}",
@@ -709,6 +673,287 @@ async fn migrate_to_v12(conn: &mut SqliteConnection) -> Result<(), PersistenceEr
             .await?;
         }
     }
+
+    Ok(())
+}
+
+/// Introduce normalized project<->plugin link table and backfill existing links.
+async fn migrate_to_v13(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
+    if !table_exists(conn, "ProjectPlugin").await? {
+        sqlx::query(
+            "CREATE TABLE ProjectPlugin (\
+             project_id TEXT NOT NULL,\
+             plugin_id TEXT NOT NULL,\
+             pinned_revision_id TEXT,\
+             enabled INTEGER NOT NULL DEFAULT 1,\
+             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\
+             PRIMARY KEY (project_id, plugin_id),\
+             FOREIGN KEY (project_id) REFERENCES Project(id) ON DELETE CASCADE,\
+             FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE,\
+             FOREIGN KEY (pinned_revision_id) REFERENCES PluginRevision(id) ON DELETE SET NULL\
+             )",
+        )
+        .execute(&mut *conn)
+        .await?;
+    }
+
+    // Backfill from existing links (ProjectPluginSettings) for single-project DBs.
+    sqlx::query(
+        "INSERT OR IGNORE INTO ProjectPlugin (project_id, plugin_id, pinned_revision_id, enabled) \
+         SELECT p.id, pps.plugin_id, pl.current_revision_id, 1 \
+         FROM ProjectPluginSettings pps \
+         JOIN Project p ON p.project_settings_id = pps.project_settings_id \
+         LEFT JOIN Plugin pl ON pl.id = pps.plugin_id",
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    // Ensure all known plugins are linked to the current project.
+    sqlx::query(
+        "INSERT OR IGNORE INTO ProjectPlugin (project_id, plugin_id, pinned_revision_id, enabled) \
+         SELECT p.id, pl.id, pl.current_revision_id, 1 \
+         FROM Project p, Plugin pl",
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    Ok(())
+}
+
+/// Enforce revision-first scan schema and remove legacy current-view plugin tables.
+async fn migrate_to_v14(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
+    // Ensure revision id is present before adding NOT NULL constraints.
+    sqlx::query(
+        "UPDATE ScanSelectedPlugin \
+         SET plugin_revision_id = (SELECT current_revision_id FROM Plugin WHERE Plugin.id = ScanSelectedPlugin.plugin_id) \
+         WHERE plugin_revision_id IS NULL",
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    sqlx::query(
+        "UPDATE ScanEntrypointInput \
+         SET plugin_revision_id = (SELECT current_revision_id FROM Plugin WHERE Plugin.id = ScanEntrypointInput.plugin_id) \
+         WHERE plugin_revision_id IS NULL",
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    sqlx::query(
+        "UPDATE ScanPluginResult \
+         SET plugin_revision_id = (SELECT current_revision_id FROM Plugin WHERE Plugin.id = ScanPluginResult.plugin_id) \
+         WHERE plugin_revision_id IS NULL",
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    // Rebuild ScanSelectedPlugin with revision-first PK and strict FK.
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS ScanSelectedPlugin_new (\
+         scan_id TEXT NOT NULL,\
+         plugin_id TEXT NOT NULL,\
+         plugin_revision_id TEXT NOT NULL,\
+         entrypoint_id TEXT NOT NULL,\
+         PRIMARY KEY (scan_id, plugin_revision_id, entrypoint_id),\
+         FOREIGN KEY (scan_id) REFERENCES Scan(id) ON DELETE CASCADE,\
+         FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE,\
+         FOREIGN KEY (plugin_revision_id) REFERENCES PluginRevision(id) ON DELETE RESTRICT\
+         )",
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    sqlx::query(
+        "INSERT OR IGNORE INTO ScanSelectedPlugin_new \
+         (scan_id, plugin_id, plugin_revision_id, entrypoint_id) \
+         SELECT scan_id, plugin_id, plugin_revision_id, entrypoint_id \
+         FROM ScanSelectedPlugin \
+         WHERE plugin_revision_id IS NOT NULL",
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    sqlx::query("DROP TABLE ScanSelectedPlugin")
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query("ALTER TABLE ScanSelectedPlugin_new RENAME TO ScanSelectedPlugin")
+        .execute(&mut *conn)
+        .await?;
+
+    // Rebuild ScanEntrypointInput with revision-first PK and strict FK.
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS ScanEntrypointInput_new (\
+         scan_id TEXT NOT NULL,\
+         plugin_id TEXT NOT NULL,\
+         plugin_revision_id TEXT NOT NULL,\
+         entrypoint_id TEXT NOT NULL,\
+         field_name TEXT NOT NULL,\
+         value_json TEXT NOT NULL DEFAULT 'null',\
+         PRIMARY KEY (scan_id, plugin_revision_id, entrypoint_id, field_name),\
+         FOREIGN KEY (scan_id) REFERENCES Scan(id) ON DELETE CASCADE,\
+         FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE,\
+         FOREIGN KEY (plugin_revision_id) REFERENCES PluginRevision(id) ON DELETE RESTRICT\
+         )",
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    sqlx::query(
+        "INSERT OR IGNORE INTO ScanEntrypointInput_new \
+         (scan_id, plugin_id, plugin_revision_id, entrypoint_id, field_name, value_json) \
+         SELECT scan_id, plugin_id, plugin_revision_id, entrypoint_id, field_name, value_json \
+         FROM ScanEntrypointInput \
+         WHERE plugin_revision_id IS NOT NULL",
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    sqlx::query("DROP TABLE ScanEntrypointInput")
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query("ALTER TABLE ScanEntrypointInput_new RENAME TO ScanEntrypointInput")
+        .execute(&mut *conn)
+        .await?;
+
+    // Preserve logs before rebuilding ScanPluginResult (FK dependency).
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS ScanPluginLog_new (\
+         id TEXT PRIMARY KEY,\
+         scan_result_id TEXT NOT NULL,\
+         level TEXT NOT NULL CHECK (level IN ('log', 'warn', 'error')),\
+         message TEXT NOT NULL\
+         )",
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    sqlx::query(
+        "INSERT OR IGNORE INTO ScanPluginLog_new (id, scan_result_id, level, message) \
+         SELECT id, scan_result_id, level, message FROM ScanPluginLog",
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    let _ = sqlx::query("DROP TABLE ScanPluginLog")
+        .execute(&mut *conn)
+        .await;
+
+    // Rebuild ScanPluginResult with NOT NULL revision FK.
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS ScanPluginResult_new (\
+         id TEXT PRIMARY KEY,\
+         plugin_id TEXT NOT NULL,\
+         plugin_revision_id TEXT NOT NULL,\
+         entrypoint_id TEXT NOT NULL DEFAULT 'default',\
+         scan_id TEXT NOT NULL,\
+         ok INTEGER NOT NULL DEFAULT 0,\
+         data_json TEXT,\
+         error TEXT,\
+         FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE,\
+         FOREIGN KEY (scan_id) REFERENCES Scan(id) ON DELETE CASCADE,\
+         FOREIGN KEY (plugin_revision_id) REFERENCES PluginRevision(id) ON DELETE RESTRICT\
+         )",
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    sqlx::query(
+        "INSERT OR IGNORE INTO ScanPluginResult_new \
+         (id, plugin_id, plugin_revision_id, entrypoint_id, scan_id, ok, data_json, error) \
+         SELECT id, plugin_id, plugin_revision_id, entrypoint_id, scan_id, ok, data_json, error \
+         FROM ScanPluginResult \
+         WHERE plugin_revision_id IS NOT NULL",
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    sqlx::query("DROP TABLE ScanPluginResult")
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query("ALTER TABLE ScanPluginResult_new RENAME TO ScanPluginResult")
+        .execute(&mut *conn)
+        .await?;
+
+    // Restore ScanPluginLog with FK to rebuilt ScanPluginResult.
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS ScanPluginLog (\
+         id TEXT PRIMARY KEY,\
+         scan_result_id TEXT NOT NULL,\
+         level TEXT NOT NULL CHECK (level IN ('log', 'warn', 'error')),\
+         message TEXT NOT NULL,\
+         FOREIGN KEY (scan_result_id) REFERENCES ScanPluginResult(id) ON DELETE CASCADE\
+         )",
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    sqlx::query(
+        "INSERT OR IGNORE INTO ScanPluginLog (id, scan_result_id, level, message) \
+         SELECT l.id, l.scan_result_id, l.level, l.message \
+         FROM ScanPluginLog_new l \
+         WHERE EXISTS (SELECT 1 FROM ScanPluginResult r WHERE r.id = l.scan_result_id)",
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    let _ = sqlx::query("DROP TABLE IF EXISTS ScanPluginLog_new")
+        .execute(&mut *conn)
+        .await;
+
+    // Remove legacy current-view metadata tables after revision snapshot migration is complete.
+    let _ = sqlx::query("DROP TABLE IF EXISTS PluginEntrypoint")
+        .execute(&mut *conn)
+        .await;
+    let _ = sqlx::query("DROP TABLE IF EXISTS PluginInputDef")
+        .execute(&mut *conn)
+        .await;
+    let _ = sqlx::query("DROP TABLE IF EXISTS PluginSettingDef")
+        .execute(&mut *conn)
+        .await;
+    let _ = sqlx::query("DROP TABLE IF EXISTS ProjectPluginSettings")
+        .execute(&mut *conn)
+        .await;
+
+    Ok(())
+}
+
+/// Remove duplicated plugin metadata from `Plugin`.
+/// After this step `Plugin` is only logical identity + current revision pointer.
+async fn migrate_to_v15(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
+    // Idempotency: if legacy metadata columns are already absent, skip.
+    if !column_exists(conn, "Plugin", "version").await? {
+        return Ok(());
+    }
+
+    // Rebuild Plugin table with minimal shape.
+    sqlx::query("PRAGMA foreign_keys = OFF")
+        .execute(&mut *conn)
+        .await?;
+
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS Plugin_new (\
+         id TEXT PRIMARY KEY,\
+         current_revision_id TEXT\
+         )",
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    sqlx::query(
+        "INSERT OR IGNORE INTO Plugin_new (id, current_revision_id) \
+         SELECT id, current_revision_id FROM Plugin",
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    sqlx::query("DROP TABLE Plugin").execute(&mut *conn).await?;
+    sqlx::query("ALTER TABLE Plugin_new RENAME TO Plugin")
+        .execute(&mut *conn)
+        .await?;
+
+    sqlx::query("PRAGMA foreign_keys = ON")
+        .execute(&mut *conn)
+        .await?;
 
     Ok(())
 }

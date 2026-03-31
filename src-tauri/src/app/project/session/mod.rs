@@ -330,6 +330,17 @@ impl SqliteProjectPersistence {
         let authors_json = serde_json::to_string(&plugin.manifest.authors)?;
 
         sqlx::query(
+            "INSERT INTO Plugin \
+             (id, current_revision_id) \
+             VALUES (?1, NULL) \
+             ON CONFLICT(id) DO UPDATE SET \
+                 id = excluded.id",
+        )
+        .bind(&plugin.id)
+        .execute(&mut *conn)
+        .await?;
+
+        sqlx::query(
             "INSERT INTO PluginRevision \
              (id, plugin_id, version, name, description, license, authors_json, icon, homepage, code) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
@@ -347,49 +358,39 @@ impl SqliteProjectPersistence {
         .execute(&mut *conn)
         .await?;
 
-        sqlx::query(
-            "INSERT INTO Plugin \
-             (id, version, name, description, license, authors_json, icon, homepage, code, current_revision_id) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) \
-             ON CONFLICT(id) DO UPDATE SET \
-                 version = excluded.version, \
-                 name = excluded.name, \
-                 description = excluded.description, \
-                 license = excluded.license, \
-                 authors_json = excluded.authors_json, \
-                 icon = excluded.icon, \
-                 homepage = excluded.homepage, \
-                 code = excluded.code, \
-                 current_revision_id = excluded.current_revision_id",
-        )
-        .bind(&plugin.id)
-        .bind(&version)
-        .bind(&name)
-        .bind(&description)
-        .bind(&license)
-        .bind(&authors_json)
-        .bind(&icon)
-        .bind(&homepage)
-        .bind(&plugin.code)
-        .bind(&revision_id)
-        .execute(&mut *conn)
-        .await?;
-
-        // Upsert entrypoints. First delete existing to replace cleanly.
-        sqlx::query("DELETE FROM PluginEntrypoint WHERE plugin_id = ?1")
+        sqlx::query("UPDATE Plugin SET current_revision_id = ?1 WHERE id = ?2")
+            .bind(&revision_id)
             .bind(&plugin.id)
             .execute(&mut *conn)
             .await?;
+
+        let project_id: Option<String> = sqlx::query_scalar("SELECT id FROM Project LIMIT 1")
+            .fetch_optional(&mut *conn)
+            .await?;
+        if let Some(project_id) = project_id {
+            sqlx::query(
+                "INSERT INTO ProjectPlugin (project_id, plugin_id, pinned_revision_id, enabled) \
+                 VALUES (?1, ?2, ?3, 1) \
+                 ON CONFLICT(project_id, plugin_id) DO UPDATE SET \
+                     pinned_revision_id = excluded.pinned_revision_id, \
+                     enabled = excluded.enabled",
+            )
+            .bind(&project_id)
+            .bind(&plugin.id)
+            .bind(&revision_id)
+            .execute(&mut *conn)
+            .await?;
+        }
 
         for ep in &plugin.manifest.entrypoints {
             let ep_id: String = ep.id.clone().into();
             let ep_name: String = ep.name.clone().into();
             let ep_fn: String = ep.function.clone().into();
             sqlx::query(
-                "INSERT INTO PluginEntrypoint (plugin_id, id, name, function_name, description) \
+                "INSERT INTO PluginRevisionEntrypoint (revision_id, id, name, function_name, description) \
                  VALUES (?1, ?2, ?3, ?4, ?5)",
             )
-            .bind(&plugin.id)
+            .bind(&revision_id)
             .bind(&ep_id)
             .bind(&ep_name)
             .bind(&ep_fn)
@@ -397,12 +398,6 @@ impl SqliteProjectPersistence {
             .execute(&mut *conn)
             .await?;
         }
-
-        // Upsert input definitions.
-        sqlx::query("DELETE FROM PluginInputDef WHERE plugin_id = ?1")
-            .bind(&plugin.id)
-            .execute(&mut *conn)
-            .await?;
 
         for ep in &plugin.manifest.entrypoints {
             let ep_id: String = ep.id.clone().into();
@@ -434,11 +429,11 @@ impl SqliteProjectPersistence {
                     .as_ref()
                     .map(|v| serde_json::to_string(v).unwrap_or_default());
                 sqlx::query(
-                    "INSERT INTO PluginInputDef \
-                     (plugin_id, entrypoint_id, name, title, type_, type_json, enum_values_json, optional, description, default_value_json) \
+                    "INSERT INTO PluginRevisionInputDef \
+                     (revision_id, entrypoint_id, name, title, type_, type_json, enum_values_json, optional, description, default_value_json) \
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 )
-                .bind(&plugin.id)
+                .bind(&revision_id)
                 .bind(&ep_id)
                 .bind(&name_str)
                 .bind(&title_str)
@@ -452,12 +447,6 @@ impl SqliteProjectPersistence {
                 .await?;
             }
         }
-
-        // Upsert setting definitions.
-        sqlx::query("DELETE FROM PluginSettingDef WHERE plugin_id = ?1")
-            .bind(&plugin.id)
-            .execute(&mut *conn)
-            .await?;
 
         for setting in &plugin.manifest.settings {
             let name_str: String = setting.name.clone().into();
@@ -486,11 +475,11 @@ impl SqliteProjectPersistence {
                 .as_ref()
                 .map(|v| serde_json::to_string(v).unwrap_or_default());
             sqlx::query(
-                "INSERT INTO PluginSettingDef \
-                 (plugin_id, name, title, type_, type_json, enum_values_json, description, required, default_value_json) \
+                "INSERT INTO PluginRevisionSettingDef \
+                 (revision_id, name, title, type_, type_json, enum_values_json, description, required, default_value_json) \
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             )
-            .bind(&plugin.id)
+            .bind(&revision_id)
             .bind(&name_str)
             .bind(&title_str)
             .bind(&type_str)
@@ -502,46 +491,6 @@ impl SqliteProjectPersistence {
             .execute(&mut *conn)
             .await?;
         }
-
-        // Snapshot this revision's full metadata into immutable revision-scoped tables.
-        // We SELECT from the plugin tables we just populated above, so there is no
-        // need to repeat the type-extraction logic.
-        sqlx::query(
-            "INSERT OR IGNORE INTO PluginRevisionEntrypoint \
-             (revision_id, id, name, function_name, description) \
-             SELECT ?1, id, name, function_name, description \
-             FROM PluginEntrypoint WHERE plugin_id = ?2",
-        )
-        .bind(&revision_id)
-        .bind(&plugin.id)
-        .execute(&mut *conn)
-        .await?;
-
-        sqlx::query(
-            "INSERT OR IGNORE INTO PluginRevisionInputDef \
-             (revision_id, entrypoint_id, name, title, type_, type_json, \
-              enum_values_json, optional, description, default_value_json) \
-             SELECT ?1, entrypoint_id, name, title, type_, type_json, \
-                    enum_values_json, optional, description, default_value_json \
-             FROM PluginInputDef WHERE plugin_id = ?2",
-        )
-        .bind(&revision_id)
-        .bind(&plugin.id)
-        .execute(&mut *conn)
-        .await?;
-
-        sqlx::query(
-            "INSERT OR IGNORE INTO PluginRevisionSettingDef \
-             (revision_id, name, title, type_, type_json, \
-              enum_values_json, description, required, default_value_json) \
-             SELECT ?1, name, title, type_, type_json, \
-                    enum_values_json, description, required, default_value_json \
-             FROM PluginSettingDef WHERE plugin_id = ?2",
-        )
-        .bind(&revision_id)
-        .bind(&plugin.id)
-        .execute(&mut *conn)
-        .await?;
 
         Ok(())
     }

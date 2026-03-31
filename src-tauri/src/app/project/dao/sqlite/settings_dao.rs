@@ -35,15 +35,15 @@ pub(super) async fn load_settings(
     let psid = proj.project_settings_id.clone();
 
     let plugin_ids: Vec<(String,)> = sqlx::query_as(
-        "SELECT plugin_id FROM ProjectPluginSettings WHERE project_settings_id = ?1",
+        "SELECT plugin_id FROM ProjectPlugin WHERE project_id = ?1 AND enabled = 1",
     )
-    .bind(&psid)
+    .bind(&proj.id)
     .fetch_all(&mut *conn)
     .await?;
 
     let mut plugins = Vec::new();
     for (pid,) in &plugin_ids {
-        plugins.push(load_plugin_record(conn, pid, &psid).await?);
+        plugins.push(load_plugin_record(conn, pid, &proj.id, &psid).await?);
     }
 
     Ok(ProjectSettingsPayload {
@@ -130,13 +130,17 @@ pub(super) async fn set_plugin_setting(
     let psid: String = sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
         .fetch_one(&mut *conn)
         .await?;
+    let project_id: String = sqlx::query_scalar("SELECT id FROM Project LIMIT 1")
+        .fetch_one(&mut *conn)
+        .await?;
 
     sqlx::query(
-        "INSERT OR IGNORE INTO ProjectPluginSettings (plugin_id, project_settings_id) \
-         VALUES (?1, ?2)",
+        "INSERT INTO ProjectPlugin (project_id, plugin_id, pinned_revision_id, enabled) \
+         VALUES (?1, ?2, (SELECT current_revision_id FROM Plugin WHERE id = ?2), 1) \
+         ON CONFLICT(project_id, plugin_id) DO UPDATE SET enabled = 1",
     )
+    .bind(&project_id)
     .bind(plugin_id)
-    .bind(&psid)
     .execute(&mut *conn)
     .await?;
 
@@ -155,7 +159,7 @@ pub(super) async fn set_plugin_setting(
     .execute(&mut *conn)
     .await?;
 
-    load_plugin_record(conn, plugin_id, &psid).await
+    load_plugin_record(conn, plugin_id, &project_id, &psid).await
 }
 
 pub(super) async fn save_plugin(
@@ -209,13 +213,17 @@ pub(super) async fn save_plugin_setting_values(
     let psid: String = sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
         .fetch_one(&mut *conn)
         .await?;
+    let project_id: String = sqlx::query_scalar("SELECT id FROM Project LIMIT 1")
+        .fetch_one(&mut *conn)
+        .await?;
 
     sqlx::query(
-        "INSERT OR IGNORE INTO ProjectPluginSettings (plugin_id, project_settings_id) \
-         VALUES (?1, ?2)",
+        "INSERT INTO ProjectPlugin (project_id, plugin_id, pinned_revision_id, enabled) \
+         VALUES (?1, ?2, (SELECT current_revision_id FROM Plugin WHERE id = ?2), 1) \
+         ON CONFLICT(project_id, plugin_id) DO UPDATE SET enabled = 1",
     )
+    .bind(&project_id)
     .bind(plugin_id)
-    .bind(&psid)
     .execute(&mut *conn)
     .await?;
 
@@ -248,6 +256,9 @@ pub(super) async fn get_plugin_record(
     let psid: String = sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
         .fetch_one(&mut *conn)
         .await?;
+    let project_id: String = sqlx::query_scalar("SELECT id FROM Project LIMIT 1")
+        .fetch_one(&mut *conn)
+        .await?;
 
-    load_plugin_record(conn, plugin_id, &psid).await
+    load_plugin_record(conn, plugin_id, &project_id, &psid).await
 }

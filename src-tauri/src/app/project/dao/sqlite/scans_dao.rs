@@ -223,6 +223,9 @@ pub(super) async fn begin_scan_run(
     let psid: String = sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
         .fetch_one(&mut *conn)
         .await?;
+    let project_id: String = sqlx::query_scalar("SELECT id FROM Project LIMIT 1")
+        .fetch_one(&mut *conn)
+        .await?;
 
     sqlx::query("UPDATE Scan SET status = 'Running' WHERE id = ?1")
         .bind(scan_id)
@@ -236,12 +239,18 @@ pub(super) async fn begin_scan_run(
 
     let mut selected_revision_map: HashMap<(String, String), String> = HashMap::new();
     for sel in selected_plugins {
-        let revision_id: Option<String> =
-            sqlx::query_scalar("SELECT current_revision_id FROM Plugin WHERE id = ?1 LIMIT 1")
-                .bind(&sel.plugin_id)
-                .fetch_optional(&mut *conn)
-                .await?
-                .flatten();
+        let revision_id: Option<String> = sqlx::query_scalar(
+            "SELECT COALESCE(pp.pinned_revision_id, p.current_revision_id) \
+             FROM Plugin p \
+             LEFT JOIN ProjectPlugin pp ON pp.plugin_id = p.id AND pp.project_id = ?2 \
+             WHERE p.id = ?1 \
+             LIMIT 1",
+        )
+        .bind(&sel.plugin_id)
+        .bind(&project_id)
+        .fetch_optional(&mut *conn)
+        .await?
+        .flatten();
 
         let revision_id = revision_id.ok_or_else(|| {
             PersistenceError::Validation(format!(
@@ -378,6 +387,13 @@ pub(super) async fn end_scan_run(
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
     for result in &results {
+        let plugin_revision_id = result.plugin_revision_id.clone().ok_or_else(|| {
+            PersistenceError::Validation(format!(
+                "Plugin result '{}::{}' is missing plugin revision id",
+                result.plugin_id, result.entrypoint_id
+            ))
+        })?;
+
         let rid = Uuid::new_v4().to_string();
         sqlx::query(
             "INSERT INTO ScanPluginResult \
@@ -386,7 +402,7 @@ pub(super) async fn end_scan_run(
         )
         .bind(&rid)
         .bind(&result.plugin_id)
-        .bind(result.plugin_revision_id.as_deref())
+        .bind(&plugin_revision_id)
         .bind(&result.entrypoint_id)
         .bind(scan_id)
         .bind(result.output.ok as i64)

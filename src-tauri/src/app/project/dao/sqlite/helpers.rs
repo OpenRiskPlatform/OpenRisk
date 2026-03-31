@@ -25,7 +25,7 @@ pub(super) async fn load_scan_logs(
 ) -> Result<Vec<LogEntry>, PersistenceError> {
     let rows: Vec<(String, String)> = sqlx::query_as(
         "SELECT level, message FROM ScanPluginLog \
-         WHERE scan_result_id = ?1 ORDER BY rowid",
+            WHERE scan_result_id = ?1 ORDER BY ScanPluginLog.rowid",
     )
     .bind(scan_result_id)
     .fetch_all(&mut *conn)
@@ -47,6 +47,7 @@ pub(super) async fn load_scan_logs(
 pub(super) async fn load_plugin_record(
     conn: &mut SqliteConnection,
     plugin_id: &str,
+    project_id: &str,
     project_settings_id: &str,
 ) -> Result<PluginRecord, PersistenceError> {
     #[derive(sqlx::FromRow)]
@@ -62,10 +63,15 @@ pub(super) async fn load_plugin_record(
     }
 
     let row = sqlx::query_as::<_, PluginRow>(
-        "SELECT id, name, version, description, license, authors_json, icon, homepage \
-         FROM Plugin WHERE id = ?1 LIMIT 1",
+        "SELECT p.id, pr.name, pr.version, pr.description, pr.license, pr.authors_json, pr.icon, pr.homepage \
+         FROM Plugin p \
+         LEFT JOIN ProjectPlugin pp ON pp.plugin_id = p.id AND pp.project_id = ?2 \
+         INNER JOIN PluginRevision pr ON pr.id = COALESCE(pp.pinned_revision_id, p.current_revision_id) \
+         WHERE p.id = ?1 \
+         LIMIT 1",
     )
     .bind(plugin_id)
+    .bind(project_id)
     .fetch_optional(&mut *conn)
     .await?
     .ok_or_else(|| PersistenceError::Validation(format!("Plugin '{}' not found", plugin_id)))?;
@@ -96,10 +102,15 @@ pub(super) async fn load_plugin_record(
     }
 
     let ep_rows = sqlx::query_as::<_, EpRow>(
-        "SELECT id, name, function_name, description \
-         FROM PluginEntrypoint WHERE plugin_id = ?1 ORDER BY rowid",
+        "SELECT pre.id, pre.name, pre.function_name, pre.description \
+         FROM Plugin p \
+         LEFT JOIN ProjectPlugin pp ON pp.plugin_id = p.id AND pp.project_id = ?2 \
+         INNER JOIN PluginRevisionEntrypoint pre ON pre.revision_id = COALESCE(pp.pinned_revision_id, p.current_revision_id) \
+         WHERE p.id = ?1 \
+            ORDER BY pre.rowid",
     )
     .bind(plugin_id)
+    .bind(project_id)
     .fetch_all(&mut *conn)
     .await?;
 
@@ -124,10 +135,16 @@ pub(super) async fn load_plugin_record(
         Option<String>,
     )> =
         sqlx::query_as(
-            "SELECT entrypoint_id, name, title, type_json, enum_values_json, optional, description, default_value_json \
-             FROM PluginInputDef WHERE plugin_id = ?1 ORDER BY rowid",
+            "SELECT prid.entrypoint_id, prid.name, prid.title, prid.type_json, prid.enum_values_json, \
+                    prid.optional, prid.description, prid.default_value_json \
+             FROM Plugin p \
+             LEFT JOIN ProjectPlugin pp ON pp.plugin_id = p.id AND pp.project_id = ?2 \
+             INNER JOIN PluginRevisionInputDef prid ON prid.revision_id = COALESCE(pp.pinned_revision_id, p.current_revision_id) \
+             WHERE p.id = ?1 \
+               ORDER BY prid.rowid",
         )
         .bind(plugin_id)
+        .bind(project_id)
         .fetch_all(&mut *conn)
         .await?;
 
@@ -184,10 +201,16 @@ pub(super) async fn load_plugin_record(
         Option<String>,
     )> =
         sqlx::query_as(
-            "SELECT name, title, type_json, enum_values_json, description, required, default_value_json \
-             FROM PluginSettingDef WHERE plugin_id = ?1 ORDER BY rowid",
+            "SELECT prs.name, prs.title, prs.type_json, prs.enum_values_json, prs.description, \
+                    prs.required, prs.default_value_json \
+             FROM Plugin p \
+             LEFT JOIN ProjectPlugin pp ON pp.plugin_id = p.id AND pp.project_id = ?2 \
+             INNER JOIN PluginRevisionSettingDef prs ON prs.revision_id = COALESCE(pp.pinned_revision_id, p.current_revision_id) \
+             WHERE p.id = ?1 \
+               ORDER BY prs.rowid",
         )
         .bind(plugin_id)
+        .bind(project_id)
         .fetch_all(&mut *conn)
         .await?;
 
