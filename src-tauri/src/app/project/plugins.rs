@@ -9,6 +9,7 @@ use crate::plugin_manifest::{parse_manifest, OpenRiskPluginManifest};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use super::types::PersistenceError;
@@ -18,7 +19,6 @@ use super::types::PersistenceError;
 pub struct LocalPluginBundle {
     pub id: String,
     pub manifest: OpenRiskPluginManifest,
-    pub manifest_json: Value,
     pub code: String,
 }
 
@@ -86,7 +86,6 @@ pub fn load_plugin_bundle(dir: &Path) -> Result<LocalPluginBundle, PersistenceEr
     let manifest_raw = fs::read_to_string(&manifest_path)?;
     let manifest =
         parse_manifest(&manifest_raw).map_err(|e| PersistenceError::Validation(e.to_string()))?;
-    let manifest_json = serde_json::to_value(&manifest)?;
 
     let code_path = dir.join(manifest.entrypoint.clone().to_string());
     if !code_path.exists() {
@@ -100,12 +99,9 @@ pub fn load_plugin_bundle(dir: &Path) -> Result<LocalPluginBundle, PersistenceEr
     Ok(LocalPluginBundle {
         id: plugin_id,
         manifest,
-        manifest_json,
         code,
     })
 }
-
-/// Load a [`LocalPluginBundle`] from a directory with an explicitly provided plugin ID.
 ///
 /// Uses relaxed manifest validation to tolerate missing optional fields; suited for user imports.
 pub fn load_plugin_bundle_with_id(
@@ -123,7 +119,6 @@ pub fn load_plugin_bundle_with_id(
     let manifest_raw = fs::read_to_string(&manifest_path)?;
     let manifest = parse_manifest_relaxed(&manifest_raw)
         .map_err(|e| PersistenceError::Validation(e.to_string()))?;
-    let manifest_json = serde_json::to_value(&manifest)?;
 
     let code_path = dir.join(manifest.entrypoint.clone().to_string());
     if !code_path.exists() {
@@ -137,7 +132,64 @@ pub fn load_plugin_bundle_with_id(
     Ok(LocalPluginBundle {
         id: plugin_id,
         manifest,
-        manifest_json,
+        code,
+    })
+}
+
+/// Load a [`LocalPluginBundle`] from a `.zip` archive.
+///
+/// The zip must contain `plugin.json` and the entrypoint file at its root.
+/// Pass `plugin_id_override` to replace the id embedded in the manifest.
+pub fn load_plugin_bundle_from_zip(
+    zip_path: &Path,
+    plugin_id_override: Option<String>,
+) -> Result<LocalPluginBundle, PersistenceError> {
+    let file = fs::File::open(zip_path)?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| PersistenceError::Validation(format!("Invalid zip archive: {}", e)))?;
+
+    let manifest_raw = {
+        let mut entry = archive
+            .by_name("plugin.json")
+            .map_err(|_| PersistenceError::Validation("Zip is missing plugin.json".into()))?;
+        let mut s = String::new();
+        entry.read_to_string(&mut s)?;
+        s
+    };
+
+    let manifest =
+        parse_manifest_relaxed(&manifest_raw).map_err(|e| PersistenceError::Validation(e))?;
+
+    let plugin_id = plugin_id_override.unwrap_or_else(|| {
+        serde_json::from_str::<Value>(&manifest_raw)
+            .ok()
+            .and_then(|v| {
+                v.get("id")
+                    .and_then(|s| s.as_str())
+                    .map(|s| s.trim().to_string())
+            })
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| {
+                zip_path
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "plugin".to_string())
+            })
+    });
+
+    let entrypoint = manifest.entrypoint.clone().to_string();
+    let code = {
+        let mut entry = archive.by_name(&entrypoint).map_err(|_| {
+            PersistenceError::Validation(format!("Zip is missing entrypoint file: {}", entrypoint))
+        })?;
+        let mut s = String::new();
+        entry.read_to_string(&mut s)?;
+        s
+    };
+
+    Ok(LocalPluginBundle {
+        id: plugin_id,
+        manifest,
         code,
     })
 }
@@ -163,16 +215,22 @@ pub fn extract_manifest_id(dir: &Path) -> Result<String, PersistenceError> {
         })
 }
 
-/// Build a `{ key: default_value }` settings map from a manifest's `settings` array.
-pub fn build_default_settings(manifest: &OpenRiskPluginManifest) -> Value {
-    let mut map = serde_json::Map::new();
-    for setting in &manifest.settings {
-        map.insert(
-            setting.name.to_string(),
-            setting.default.clone().unwrap_or(Value::Null),
-        );
-    }
-    Value::Object(map)
+/// Build a list of default setting values from a manifest's `settings` array.
+pub fn build_default_settings(
+    manifest: &OpenRiskPluginManifest,
+) -> Vec<super::types::PluginSettingValue> {
+    manifest
+        .settings
+        .iter()
+        .map(|s| {
+            let value =
+                super::types::SettingValue::from_json(&s.default.clone().unwrap_or(Value::Null));
+            super::types::PluginSettingValue {
+                name: s.name.to_string(),
+                value,
+            }
+        })
+        .collect()
 }
 
 /// Parse a plugin manifest, filling in commonly missing optional fields when strict validation fails.

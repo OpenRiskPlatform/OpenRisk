@@ -15,12 +15,6 @@ pub type ProjectState = tokio::sync::Mutex<Option<Arc<app::project::SqliteProjec
 
 fn specta_builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new().commands(collect_commands![
-        // Plugin commands
-        commands::plugin::list_plugins,
-        commands::plugin::get_plugin,
-        commands::plugin::open_plugin,
-        commands::plugin::configure_plugin,
-        commands::plugin::check_plugin_readiness,
         // Project & scan commands
         commands::project::create_project,
         commands::project::open_project,
@@ -28,8 +22,9 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::project::load_settings,
         commands::project::update_project_settings,
         commands::project::update_project_name,
-        commands::project::update_project_plugin_settings,
+        commands::project::set_plugin_setting,
         commands::project::upsert_project_plugin_from_dir,
+        commands::project::upsert_project_plugin_from_zip,
         commands::project::create_scan,
         commands::project::list_scans,
         commands::project::get_scan,
@@ -84,4 +79,3 @@ mod tests {
             .expect("Failed to export TypeScript bindings");
     }
 }
-

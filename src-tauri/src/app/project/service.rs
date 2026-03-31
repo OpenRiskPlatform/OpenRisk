@@ -1,20 +1,15 @@
 //! Project service layer — business logic that orchestrates the DAO.
-//!
-//! This module contains operations that involve more than raw DB access:
-//! disk I/O (loading plugin bundles), plugin execution (JS runtime), and
-//! settings-merge logic. The DAO ([`ProjectPersistence`]) is kept free of
-//! these concerns; every function here takes a `&dyn ProjectPersistence` and
-//! calls fine-grained DAO methods.
 
 use super::dao::ProjectPersistence;
 use super::plugins::{
-    build_default_settings, discover_local_plugins, extract_manifest_id, load_plugin_bundle_with_id,
+    build_default_settings, discover_local_plugins, extract_manifest_id,
+    load_plugin_bundle_from_zip, load_plugin_bundle_with_id,
 };
 use super::types::{
-    PersistenceError, PluginEntrypointSelection, PluginSettingsPayload, ScanPluginResultRecord,
-    ScanSummaryRecord,
+    LogEntry, PersistenceError, PluginEntrypointSelection, PluginOutput, PluginRecord,
+    PluginSettingValue, ScanEntrypointInput, ScanPluginResultRecord, ScanSummaryRecord,
 };
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
 use std::path::Path;
 
 // ---------------------------------------------------------------------------
@@ -22,16 +17,13 @@ use std::path::Path;
 // ---------------------------------------------------------------------------
 
 /// Sync built-in plugins for a newly created project.
-///
-/// Writes plugin code + default settings for every discovered bundle.
 pub async fn sync_bundled_plugins_for_new_project(
     dao: &dyn ProjectPersistence,
 ) -> Result<(), PersistenceError> {
     for plugin in discover_local_plugins()? {
         dao.save_plugin(&plugin).await?;
         let defaults = build_default_settings(&plugin.manifest);
-        let defaults_json = serde_json::to_string(&defaults)?;
-        dao.save_plugin_settings_json(&plugin.id, &defaults_json)
+        dao.save_plugin_setting_values(&plugin.id, &defaults)
             .await?;
     }
     Ok(())
@@ -39,20 +31,16 @@ pub async fn sync_bundled_plugins_for_new_project(
 
 /// Sync built-in plugins for an existing project opened from disk.
 ///
-/// Preserves user-configured values while adding any new defaults from manifests.
+/// Preserves user-configured values; fills in missing keys from the manifest defaults.
 pub async fn sync_bundled_plugins_for_existing_project(
     dao: &dyn ProjectPersistence,
 ) -> Result<(), PersistenceError> {
     for plugin in discover_local_plugins()? {
         dao.save_plugin(&plugin).await?;
-        let existing_raw = dao.get_plugin_settings_json(&plugin.id).await?;
-        let merged = merge_with_defaults(
-            existing_raw.as_deref(),
-            build_default_settings(&plugin.manifest),
-        );
-        let merged_json = serde_json::to_string(&merged)?;
-        dao.save_plugin_settings_json(&plugin.id, &merged_json)
-            .await?;
+        let existing = dao.get_plugin_setting_values(&plugin.id).await?;
+        let defaults = build_default_settings(&plugin.manifest);
+        let merged = merge_with_defaults(existing, defaults);
+        dao.save_plugin_setting_values(&plugin.id, &merged).await?;
     }
     Ok(())
 }
@@ -62,14 +50,11 @@ pub async fn sync_bundled_plugins_for_existing_project(
 // ---------------------------------------------------------------------------
 
 /// Execute a scan: load plugin data from the DAO, run all entrypoints, persist results.
-///
-/// This is the only place that touches the JS runtime (`execute_plugin_code_with_settings`).
-/// The DAO sees only clean DB operations on either side.
 pub async fn run_scan(
     dao: &dyn ProjectPersistence,
     scan_id: &str,
     selected_plugins: Vec<PluginEntrypointSelection>,
-    inputs: Value,
+    inputs: Vec<ScanEntrypointInput>,
 ) -> Result<ScanSummaryRecord, PersistenceError> {
     if selected_plugins.is_empty() {
         return Err(PersistenceError::Validation(
@@ -81,41 +66,38 @@ pub async fn run_scan(
         .begin_scan_run(scan_id, &selected_plugins, &inputs)
         .await?;
 
-    let inputs_obj = if inputs.is_object() {
-        inputs
-    } else {
-        Value::Object(Map::new())
-    };
-
     let mut results: Vec<ScanPluginResultRecord> = Vec::with_capacity(ctx.plugins.len());
 
     for load_data in ctx.plugins {
-        let ep_key = format!("{}::{}", load_data.plugin_id, load_data.entrypoint_id);
-        let plugin_inputs = inputs_obj
-            .get(&ep_key)
-            .cloned()
-            .unwrap_or_else(|| Value::Object(Map::new()));
-
         let output = match load_data.code.filter(|c| !c.trim().is_empty()) {
-            None => json!({
-                "ok": false,
-                "error": format!("Plugin '{}' not found or has no code in database", load_data.plugin_id)
-            }),
+            None => PluginOutput {
+                ok: false,
+                data_json: None,
+                error: Some(format!(
+                    "Plugin '{}' not found or has no code in database",
+                    load_data.plugin_id
+                )),
+                logs: vec![],
+            },
             Some(code) => {
-                let plugin_settings = load_data
-                    .settings_json
-                    .as_deref()
-                    .filter(|s| !s.trim().is_empty())
-                    .and_then(|s| serde_json::from_str(s).ok())
-                    .unwrap_or_else(|| Value::Object(Map::new()));
+                // Build settings Value for the JS runtime.
+                let mut settings_map = Map::new();
+                for sv in &load_data.settings {
+                    settings_map.insert(sv.name.clone(), sv.value.to_json());
+                }
+                let plugin_settings = Value::Object(settings_map);
 
-                let manifest_val: Value = load_data
-                    .manifest_json
-                    .as_deref()
-                    .and_then(|s| serde_json::from_str(s).ok())
-                    .unwrap_or(Value::Null);
-
-                let entrypoint_fn = resolve_entrypoint_fn(&manifest_val, &load_data.entrypoint_id);
+                // Build inputs Value for this specific entrypoint.
+                let mut input_map = Map::new();
+                for inp in &inputs {
+                    if inp.plugin_id == load_data.plugin_id
+                        && inp.entrypoint_id == load_data.entrypoint_id
+                    {
+                        input_map.insert(inp.field_name.clone(), inp.value.to_json());
+                    }
+                }
+                let plugin_inputs = Value::Object(input_map);
+                let entrypoint_fn = load_data.entrypoint_function.clone();
 
                 let result = tauri::async_runtime::spawn_blocking(move || {
                     crate::app::plugin::execute_plugin_code_with_settings(
@@ -134,8 +116,24 @@ pub async fn run_scan(
                 })?;
 
                 match result {
-                    Ok((output, logs)) => json!({ "ok": true, "data": output, "logs": logs }),
-                    Err(err) => json!({ "ok": false, "error": err }),
+                    Ok((output_val, logs_val)) => {
+                        let data_json = serde_json::to_string(&output_val)
+                            .ok()
+                            .filter(|s| s != "null");
+                        let logs = parse_logs(&logs_val);
+                        PluginOutput {
+                            ok: true,
+                            data_json,
+                            error: None,
+                            logs,
+                        }
+                    }
+                    Err(err) => PluginOutput {
+                        ok: false,
+                        data_json: None,
+                        error: Some(err),
+                        logs: vec![],
+                    },
                 }
             }
         };
@@ -155,15 +153,11 @@ pub async fn run_scan(
 // ---------------------------------------------------------------------------
 
 /// Register or refresh a plugin from a directory on disk into the project.
-///
-/// Reads the plugin bundle from disk, merges settings with existing values
-/// (new defaults are applied; existing user values are preserved), then
-/// delegates all DB writes to the DAO.
 pub async fn upsert_plugin_from_dir(
     dao: &dyn ProjectPersistence,
     plugin_dir: &Path,
     replace_plugin_id: Option<String>,
-) -> Result<PluginSettingsPayload, PersistenceError> {
+) -> Result<PluginRecord, PersistenceError> {
     let manifest_id = extract_manifest_id(plugin_dir)?;
     let plugin_id = match replace_plugin_id {
         Some(id) if !id.trim().is_empty() => id.trim().to_string(),
@@ -173,53 +167,51 @@ pub async fn upsert_plugin_from_dir(
 
     dao.save_plugin(&bundle).await?;
 
-    let existing_raw = dao.get_plugin_settings_json(&plugin_id).await?;
-    let default_settings = build_default_settings(&bundle.manifest);
-    let merged = merge_with_defaults(existing_raw.as_deref(), default_settings);
-    let merged_json = serde_json::to_string(&merged)?;
+    let existing = dao.get_plugin_setting_values(&plugin_id).await?;
+    let defaults = build_default_settings(&bundle.manifest);
+    let merged = merge_with_defaults(existing, defaults);
+    dao.save_plugin_setting_values(&plugin_id, &merged).await?;
 
-    dao.save_plugin_settings_json(&plugin_id, &merged_json)
-        .await?;
-    dao.get_plugin_payload(&plugin_id).await
+    dao.get_plugin_record(&plugin_id).await
 }
 
-// ---------------------------------------------------------------------------
-// Private helpers
-// ---------------------------------------------------------------------------
+/// Register or refresh a plugin from a `.zip` archive into the project.
+pub async fn upsert_plugin_from_zip(
+    dao: &dyn ProjectPersistence,
+    zip_path: &Path,
+    replace_plugin_id: Option<String>,
+) -> Result<PluginRecord, PersistenceError> {
+    let bundle = load_plugin_bundle_from_zip(zip_path, replace_plugin_id)?;
+    let plugin_id = bundle.id.clone();
 
-/// Merge `existing_raw` JSON with `defaults`, inserting defaults only for missing keys.
-fn merge_with_defaults(existing_raw: Option<&str>, defaults: Value) -> Value {
-    let mut merged = existing_raw
-        .filter(|s| !s.trim().is_empty())
-        .and_then(|s| serde_json::from_str::<Value>(s).ok())
-        .unwrap_or_else(|| Value::Object(Map::new()));
+    dao.save_plugin(&bundle).await?;
 
-    if !merged.is_object() {
-        merged = Value::Object(Map::new());
-    }
+    let existing = dao.get_plugin_setting_values(&plugin_id).await?;
+    let defaults = build_default_settings(&bundle.manifest);
+    let merged = merge_with_defaults(existing, defaults);
+    dao.save_plugin_setting_values(&plugin_id, &merged).await?;
 
-    if let (Value::Object(ref mut m), Value::Object(d)) = (&mut merged, defaults) {
-        for (key, value) in d {
-            m.entry(key).or_insert(value);
+    dao.get_plugin_record(&plugin_id).await
+}
+
+/// Merge existing values with defaults: add defaults only for missing keys.
+fn merge_with_defaults(
+    existing: Vec<PluginSettingValue>,
+    defaults: Vec<PluginSettingValue>,
+) -> Vec<PluginSettingValue> {
+    let mut merged = existing;
+    for def in defaults {
+        if !merged.iter().any(|sv| sv.name == def.name) {
+            merged.push(def);
         }
     }
-
     merged
 }
 
-/// Resolve the TypeScript function name for a given entrypoint ID from a manifest value.
-///
-/// Falls back to the entrypoint ID itself when the manifest has no `entrypoints` array
-/// or the ID is not found.
-fn resolve_entrypoint_fn(manifest: &Value, entrypoint_id: &str) -> String {
-    if let Some(entrypoints) = manifest.get("entrypoints").and_then(|v| v.as_array()) {
-        for ep in entrypoints {
-            if ep.get("id").and_then(|v| v.as_str()) == Some(entrypoint_id) {
-                if let Some(func) = ep.get("function").and_then(|v| v.as_str()) {
-                    return func.to_string();
-                }
-            }
-        }
+/// Parse the logs array returned by the plugin runtime into typed `LogEntry` values.
+fn parse_logs(logs_val: &Value) -> Vec<LogEntry> {
+    match logs_val.as_array() {
+        Some(arr) => arr.iter().filter_map(LogEntry::from_json).collect(),
+        None => vec![],
     }
-    entrypoint_id.to_string()
 }

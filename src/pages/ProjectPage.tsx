@@ -27,10 +27,12 @@ import { useBackendClient } from "@/hooks/useBackendClient";
 import { unwrap } from "@/lib/utils";
 import type {
     PluginEntrypointSelection,
-    PluginSettingsPayload,
+    PluginRecord,
     ProjectSettingsPayload,
     ScanDetailRecord,
+    ScanEntrypointInput,
     ScanSummaryRecord,
+    SettingValue,
 } from "@/core/backend/bindings";
 import { PluginResultView } from "@/components/data-model/PluginResultView";
 import { isDataModelResult } from "@/core/data-model/types";
@@ -309,10 +311,13 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                 }
                 setEnabledPlugins(enabledMap);
 
-                const incomingInputs =
-                    detail.inputs && typeof detail.inputs === "object"
-                        ? (detail.inputs as Record<string, Record<string, unknown>>)
-                        : {};
+                const incomingInputs: Record<string, Record<string, unknown>> = {};
+                for (const input of detail.inputs) {
+                    const key = `${input.pluginId}::${input.entrypointId}`;
+                    incomingInputs[key] ??= {};
+                    incomingInputs[key][input.fieldName] =
+                        input.value.type === "null" ? null : input.value.value;
+                }
                 setPluginInputs(incomingInputs);
             })
             .catch((err) => {
@@ -414,10 +419,23 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
         setDetailError(null);
 
         try {
+            const inputs: ScanEntrypointInput[] = [];
+            for (const sel of selectedPlugins) {
+                const key = `${sel.pluginId}::${sel.entrypointId}`;
+                const fields = pluginInputs[key] ?? {};
+                for (const [fieldName, rawValue] of Object.entries(fields)) {
+                    inputs.push({
+                        pluginId: sel.pluginId,
+                        entrypointId: sel.entrypointId,
+                        fieldName,
+                        value: toSettingValue(rawValue),
+                    });
+                }
+            }
             const updatedScan = await unwrap(backendClient.runScan(
                 selectedScanId,
                 selectedPlugins,
-                pluginInputs as any
+                inputs,
             ));
 
             setScans((prev) => prev.map((scan) => (scan.id === updatedScan.id ? updatedScan : scan)));
@@ -630,9 +648,8 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                                         <>
                                             <div className="space-y-2">
                                                 {(settingsData?.plugins ?? []).map((plugin) => {
-                                                    const entrypoints = getPluginEntrypoints(plugin.manifest);
                                                     const enabledMap: Record<string, boolean> = {};
-                                                    for (const ep of entrypoints) {
+                                                    for (const ep of plugin.entrypoints) {
                                                         enabledMap[ep.id] = Boolean(enabledPlugins[`${plugin.id}::${ep.id}`]);
                                                     }
                                                     return (
@@ -642,7 +659,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                                                             enabledEntrypoints={enabledMap}
                                                             onEntrypointChange={(epId, enabled) => setPluginEnabled(`${plugin.id}::${epId}`, enabled)}
                                                             entrypointInputs={Object.fromEntries(
-                                                                entrypoints.map(ep => [ep.id, pluginInputs[`${plugin.id}::${ep.id}`] ?? {}])
+                                                                plugin.entrypoints.map(ep => [ep.id, pluginInputs[`${plugin.id}::${ep.id}`] ?? {}])
                                                             )}
                                                             onFieldChange={(epId, fieldKey, value) => setPluginField(`${plugin.id}::${epId}`, fieldKey, value)}
                                                         />
@@ -666,9 +683,12 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                                         <div className="space-y-3 select-text">
                                             {scanDetail.results.map((result) => {
                                                 const envelope = result.output;
+                                                const parsedData = envelope.ok && envelope.dataJson
+                                                    ? (() => { try { return JSON.parse(envelope.dataJson); } catch { return null; } })()
+                                                    : null;
                                                 const entities =
-                                                    envelope.ok && isDataModelResult(envelope.data)
-                                                        ? envelope.data
+                                                    parsedData !== null && isDataModelResult(parsedData)
+                                                        ? parsedData
                                                         : null;
                                                 const subtitle =
                                                     result.entrypointId && result.entrypointId !== "default"
@@ -701,7 +721,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                                                             ) : (
                                                                 <>
                                                                     <pre className="rounded bg-muted p-3 text-xs overflow-auto">
-                                                                        {JSON.stringify(envelope.data, null, 2)}
+                                                                        {envelope.dataJson ?? "null"}
                                                                     </pre>
                                                                     <PluginLogsView logs={envelope.logs ?? []} />
                                                                 </>
@@ -765,14 +785,11 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     );
 }
 
-function getPluginEntrypoints(
-    manifest: Record<string, unknown> | null
-): Array<{ id: string; name: string; description?: string }> {
-    const eps = (manifest as any)?.entrypoints;
-    if (Array.isArray(eps) && eps.length > 0) {
-        return eps as Array<{ id: string; name: string; description?: string }>;
-    }
-    return [{ id: "default", name: "Default" }];
+function toSettingValue(v: unknown): SettingValue {
+    if (v === null || v === undefined) return { type: "null" };
+    if (typeof v === "boolean") return { type: "boolean", value: v };
+    if (typeof v === "number") return { type: "number", value: v };
+    return { type: "string", value: String(v) };
 }
 
 function PluginRunCard({
@@ -782,16 +799,14 @@ function PluginRunCard({
     entrypointInputs,
     onFieldChange,
 }: {
-    plugin: PluginSettingsPayload;
+    plugin: PluginRecord;
     enabledEntrypoints: Record<string, boolean>;
     onEntrypointChange: (entrypointId: string, enabled: boolean) => void;
     entrypointInputs: Record<string, Record<string, unknown>>;
     onFieldChange: (entrypointId: string, fieldName: string, value: unknown) => void;
 }) {
-    const entrypoints = getPluginEntrypoints(plugin.manifest);
-    const inputSchema = Array.isArray(plugin.inputSchema)
-        ? (plugin.inputSchema as Array<any>)
-        : [];
+    const entrypoints = plugin.entrypoints;
+    const inputDefs = plugin.inputDefs;
 
     return (
         <div className="rounded-lg border bg-card p-3">
@@ -815,27 +830,20 @@ function PluginRunCard({
                                 onCheckedChange={(enabled) => onEntrypointChange(ep.id, enabled)}
                             />
                         </div>
-                        {Boolean(enabledEntrypoints[ep.id]) && inputSchema.length > 0 ? (
+                        {Boolean(enabledEntrypoints[ep.id]) && inputDefs.length > 0 ? (
                             <div className="mt-2 space-y-2 pl-3 border-l-2 border-border/40">
-                                {inputSchema.map((input) => {
-                                    const name = String(input?.name ?? "");
-                                    if (!name) return null;
-                                    const label = String(input?.title ?? name);
-                                    const type = String(input?.type ?? "string");
-                                    const description =
-                                        input?.description !== undefined ? String(input.description) : "";
-                                    const current = entrypointInputs[ep.id]?.[name];
+                                {inputDefs.map((input) => {
+                                    const current = entrypointInputs[ep.id]?.[input.name];
                                     return (
-                                        <div key={`${ep.id}-${name}`} className="space-y-1">
-                                            <Label className="text-sm">{label}</Label>
-                                            {description ? (
-                                                <p className="text-xs text-muted-foreground">{description}</p>
+                                        <div key={`${ep.id}-${input.name}`} className="space-y-1">
+                                            <Label className="text-sm">{input.title}</Label>
+                                            {input.description ? (
+                                                <p className="text-xs text-muted-foreground">{input.description}</p>
                                             ) : null}
                                             <PluginInputField
-                                                type={type}
+                                                type={input.type}
                                                 value={current}
-                                                options={Array.isArray((input?.validation as any)?.enum) ? (input.validation as any).enum.map(String) : undefined}
-                                                onChange={(value) => onFieldChange(ep.id, name, value)}
+                                                onChange={(value) => onFieldChange(ep.id, input.name, value)}
                                             />
                                         </div>
                                     );

@@ -2,7 +2,7 @@
  * Plugin Settings Panel
  */
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useBackendClient } from "@/hooks/useBackendClient";
 import { unwrap } from "@/lib/utils";
@@ -11,17 +11,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type {
-    PluginSettingsPayload,
+    PluginRecord,
     ProjectSettingsRecord,
+    SettingValue,
 } from "@/core/backend/bindings";
 
 interface PluginSettingsProps {
     projectDir?: string;
     projectSettings: ProjectSettingsRecord | null;
-    plugins: PluginSettingsPayload[];
+    plugins: PluginRecord[];
     loading: boolean;
     error?: string | null;
-    onPluginUpdated: (plugin: PluginSettingsPayload) => void;
+    onPluginUpdated: (plugin: PluginRecord) => void;
 }
 
 export function PluginSettings({
@@ -55,7 +56,36 @@ export function PluginSettings({
 
         setImporting(true);
         try {
-            const payload = await unwrap(backendClient.upsertProjectPluginFromDir(selected, replacePluginId ?? null)) as unknown as PluginSettingsPayload;
+            const payload = await unwrap(backendClient.upsertProjectPluginFromDir(selected, replacePluginId ?? null));
+            onPluginUpdated(payload);
+        } catch (error) {
+            setImportError(error instanceof Error ? error.message : String(error));
+        } finally {
+            setImporting(false);
+        }
+    };
+
+    const pickAndImportPluginZip = async (replacePluginId?: string) => {
+        if (!projectDir) {
+            return;
+        }
+
+        setImportError(null);
+
+        const selected = await open({
+            directory: false,
+            multiple: false,
+            filters: [{ name: "Plugin Archive", extensions: ["zip"] }],
+            title: replacePluginId ? "Select replacement plugin archive" : "Select plugin archive (.zip)",
+        });
+
+        if (!selected || Array.isArray(selected)) {
+            return;
+        }
+
+        setImporting(true);
+        try {
+            const payload = await unwrap(backendClient.upsertProjectPluginFromZip(selected, replacePluginId ?? null));
             onPluginUpdated(payload);
         } catch (error) {
             setImportError(error instanceof Error ? error.message : String(error));
@@ -102,17 +132,26 @@ export function PluginSettings({
 
             {projectDir && !loading && !error && plugins.length > 0 && (
                 <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                         <Button
                             type="button"
                             size="sm"
                             onClick={() => pickAndImportPlugin()}
                             disabled={importing}
                         >
-                            {importing ? "Loading..." : "Load Plugin Folder"}
+                            {importing ? "Loading..." : "Load Folder"}
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => pickAndImportPluginZip()}
+                            disabled={importing}
+                        >
+                            Load ZIP
                         </Button>
                         <p className="text-xs text-muted-foreground">
-                            Replaces or adds plugin from folder with plugin.json and entrypoint.
+                            Add or replace a plugin from a folder or .zip archive.
                         </p>
                     </div>
 
@@ -126,6 +165,7 @@ export function PluginSettings({
                             onPluginUpdated={onPluginUpdated}
                             backendClient={backendClient}
                             onReplaceFromFolder={() => pickAndImportPlugin(plugin.id)}
+                            onReplaceFromZip={() => pickAndImportPluginZip(plugin.id)}
                             isReplacing={importing}
                         />
                     ))}
@@ -135,31 +175,36 @@ export function PluginSettings({
     );
 }
 
+function unknownToSettingValue(v: unknown): SettingValue {
+    if (v === null || v === undefined) return { type: "null" };
+    if (typeof v === "boolean") return { type: "boolean", value: v };
+    if (typeof v === "number") return { type: "number", value: v };
+    return { type: "string", value: String(v) };
+}
+
 function PluginSettingsCard({
     plugin,
     onPluginUpdated,
     backendClient,
     onReplaceFromFolder,
+    onReplaceFromZip,
     isReplacing,
 }: {
     projectDir: string;
-    plugin: PluginSettingsPayload;
-    onPluginUpdated: (plugin: PluginSettingsPayload) => void;
+    plugin: PluginRecord;
+    onPluginUpdated: (plugin: PluginRecord) => void;
     backendClient: ReturnType<typeof useBackendClient>;
     onReplaceFromFolder: () => void;
+    onReplaceFromZip: () => void;
     isReplacing: boolean;
 }) {
-    const manifestSettings = useMemo(
-        () =>
-            Array.isArray((plugin.manifest as any)?.settings)
-                ? ((plugin.manifest as any).settings as Array<any>)
-                : [],
-        [plugin.manifest]
-    );
-
-    const [draft, setDraft] = useState<Record<string, unknown>>(
-        () => ({ ...((plugin.settings ?? {}) as Record<string, unknown>) })
-    );
+    const [draft, setDraft] = useState<Record<string, unknown>>(() => {
+        const r: Record<string, unknown> = {};
+        for (const sv of plugin.settingValues) {
+            r[sv.name] = sv.value.type === "null" ? null : sv.value.value;
+        }
+        return r;
+    });
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -168,11 +213,15 @@ function PluginSettingsCard({
         setSaveError(null);
         setSaving(true);
         try {
-            const updated = await unwrap(backendClient.updateProjectPluginSettings(
-                plugin.id,
-                draft as any
-            )) as unknown as PluginSettingsPayload;
-            onPluginUpdated(updated);
+            let result: PluginRecord | undefined;
+            for (const [name, rawValue] of Object.entries(draft)) {
+                result = await unwrap(backendClient.setPluginSetting(
+                    plugin.id,
+                    name,
+                    unknownToSettingValue(rawValue),
+                ));
+            }
+            if (result) onPluginUpdated(result);
             setSavedAt(Date.now());
         } catch (error) {
             setSaveError(error instanceof Error ? error.message : String(error));
@@ -195,7 +244,7 @@ function PluginSettingsCard({
                     <p className="font-medium text-lg">{plugin.name}</p>
                     <p className="text-sm text-muted-foreground">ID: {plugin.id}</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm text-muted-foreground">v{plugin.version}</p>
                     <Button
                         type="button"
@@ -204,46 +253,47 @@ function PluginSettingsCard({
                         onClick={onReplaceFromFolder}
                         disabled={isReplacing}
                     >
-                        Replace From Folder
+                        Replace Folder
+                    </Button>
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={onReplaceFromZip}
+                        disabled={isReplacing}
+                    >
+                        Replace ZIP
                     </Button>
                 </div>
             </div>
 
-            {manifestSettings.length === 0 ? (
+            {plugin.settingDefs.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                     This plugin does not declare configurable settings.
                 </p>
             ) : (
                 <div className="space-y-4">
-                    {manifestSettings.map((setting: any) => {
-                        const key = String(setting?.name ?? "");
-                        if (!key) {
-                            return null;
-                        }
-
-                        const label = String(setting?.title ?? key);
-                        const description =
-                            setting?.description !== undefined
-                                ? String(setting.description)
-                                : undefined;
+                    {plugin.settingDefs.map((setting) => {
                         const defaultValue =
-                            setting?.default !== undefined ? setting.default : null;
+                            setting.defaultValue === null || setting.defaultValue.type === "null"
+                                ? null
+                                : setting.defaultValue.value;
                         const currentValue =
-                            draft[key] !== undefined ? draft[key] : defaultValue;
+                            draft[setting.name] !== undefined ? draft[setting.name] : defaultValue;
 
                         return (
-                            <div key={`${plugin.id}-${key}`} className="space-y-1">
-                                <Label className="text-sm font-medium">{label}</Label>
-                                {description ? (
-                                    <p className="text-xs text-muted-foreground">{description}</p>
+                            <div key={`${plugin.id}-${setting.name}`} className="space-y-1">
+                                <Label className="text-sm font-medium">{setting.title}</Label>
+                                {setting.description ? (
+                                    <p className="text-xs text-muted-foreground">{setting.description}</p>
                                 ) : null}
                                 <SettingInput
-                                    type={String(setting?.type ?? "string")}
+                                    type={setting.type}
                                     value={currentValue}
-                                    onChange={(value) => setField(key, value)}
+                                    onChange={(value) => setField(setting.name, value)}
                                 />
                                 <p className="text-xs text-muted-foreground">
-                                    Type: {String(setting?.type ?? "unknown")}
+                                    Type: {setting.type}
                                 </p>
                             </div>
                         );

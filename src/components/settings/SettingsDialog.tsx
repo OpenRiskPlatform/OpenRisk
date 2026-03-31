@@ -52,7 +52,7 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
       .then((payload) => {
         if (!cancelled) {
           setSettingsData(payload);
-          updateGlobalSettings({ theme: payload.projectSettings?.theme ?? "system" });
+          updateGlobalSettings({ theme: (payload.projectSettings?.theme ?? "system") as "light" | "dark" | "system" });
         }
       })
       .catch((err) => {

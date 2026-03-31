@@ -1,38 +1,24 @@
 //! Tauri command handlers for project and scan operations.
-//!
-//! All handlers obtain the active project from Tauri managed [`ProjectState`] rather than
-//! accepting a `dir_path` parameter per call. Two exceptions: [`create_project`] and
-//! [`open_project`] which establish the session and store the instance in state.
-//! [`close_project`] tears down the session and drops the connection.
 
 use crate::app::project::{
-    service, PluginEntrypointSelection, PluginSettingsPayload, ProjectPersistence,
-    ProjectSettingsPayload, ProjectSettingsRecord, ProjectSummary, ScanDetailRecord,
-    ScanSummaryRecord, SqliteProjectPersistence,
+    service, AppError, PluginEntrypointSelection, PluginRecord, ProjectLockStatus,
+    ProjectPersistence, ProjectSettingsPayload, ProjectSettingsRecord, ProjectSummary,
+    ScanDetailRecord, ScanEntrypointInput, ScanSummaryRecord, SettingValue,
+    SqliteProjectPersistence,
 };
 use crate::ProjectState;
-use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/// Retrieve the open project from state, returning a clear error when none is open.
 async fn get_open_project(
     state: &tauri::State<'_, ProjectState>,
-) -> Result<Arc<SqliteProjectPersistence>, String> {
-    state
-        .lock()
-        .await
-        .clone()
-        .ok_or_else(|| "No project is open. Call open_project or create_project first.".to_string())
+) -> Result<Arc<SqliteProjectPersistence>, AppError> {
+    state.lock().await.clone().ok_or_else(|| {
+        AppError::Validation(
+            "No project is open. Call open_project or create_project first.".to_string(),
+        )
+    })
 }
-
-// ---------------------------------------------------------------------------
-// Session management
-// ---------------------------------------------------------------------------
 
 /// Create a new project database at `project_path` and open it as the active project.
 /// #
@@ -42,14 +28,14 @@ pub async fn create_project(
     name: String,
     project_path: String,
     state: tauri::State<'_, ProjectState>,
-) -> Result<ProjectSummary, String> {
+) -> Result<ProjectSummary, AppError> {
     let (summary, persistence) =
         SqliteProjectPersistence::create(&name, &PathBuf::from(project_path))
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(AppError::from)?;
     service::sync_bundled_plugins_for_new_project(&persistence)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     *state.lock().await = Some(Arc::new(persistence));
     Ok(summary)
 }
@@ -64,16 +50,16 @@ pub async fn open_project(
     project_path: String,
     password: Option<String>,
     state: tauri::State<'_, ProjectState>,
-) -> Result<ProjectSummary, String> {
+) -> Result<ProjectSummary, AppError> {
     let path = PathBuf::from(project_path);
     let (summary, persistence) = match password {
         Some(pw) => SqliteProjectPersistence::open_with_password(&path, pw).await,
         None => SqliteProjectPersistence::open(&path).await,
     }
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::from)?;
     service::sync_bundled_plugins_for_existing_project(&persistence)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     *state.lock().await = Some(Arc::new(persistence));
     Ok(summary)
 }
@@ -82,14 +68,10 @@ pub async fn open_project(
 /// #
 #[tauri::command]
 #[specta::specta]
-pub async fn close_project(state: tauri::State<'_, ProjectState>) -> Result<(), String> {
+pub async fn close_project(state: tauri::State<'_, ProjectState>) -> Result<(), AppError> {
     *state.lock().await = None;
     Ok(())
 }
-
-// ---------------------------------------------------------------------------
-// Project settings
-// ---------------------------------------------------------------------------
 
 /// Load the full settings snapshot (project + global settings + all plugin configs).
 /// #
@@ -97,9 +79,9 @@ pub async fn close_project(state: tauri::State<'_, ProjectState>) -> Result<(), 
 #[specta::specta]
 pub async fn load_settings(
     state: tauri::State<'_, ProjectState>,
-) -> Result<ProjectSettingsPayload, String> {
+) -> Result<ProjectSettingsPayload, AppError> {
     let project = get_open_project(&state).await?;
-    project.load_settings().await.map_err(|e| e.to_string())
+    project.load_settings().await.map_err(AppError::from)
 }
 
 /// Update the project-wide theme setting.
@@ -109,12 +91,12 @@ pub async fn load_settings(
 pub async fn update_project_settings(
     theme: Option<String>,
     state: tauri::State<'_, ProjectState>,
-) -> Result<ProjectSettingsRecord, String> {
+) -> Result<ProjectSettingsRecord, AppError> {
     let project = get_open_project(&state).await?;
     project
         .update_project_settings(theme)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 /// Rename the active project.
@@ -124,28 +106,29 @@ pub async fn update_project_settings(
 pub async fn update_project_name(
     name: String,
     state: tauri::State<'_, ProjectState>,
-) -> Result<ProjectSummary, String> {
+) -> Result<ProjectSummary, AppError> {
     let project = get_open_project(&state).await?;
     project
         .update_project_name(&name)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
-/// Persist updated settings for one plugin within the active project.
+/// Set one plugin setting value within the active project.
 /// #
 #[tauri::command]
 #[specta::specta]
-pub async fn update_project_plugin_settings(
+pub async fn set_plugin_setting(
     plugin_id: String,
-    settings: Value,
+    setting_name: String,
+    value: SettingValue,
     state: tauri::State<'_, ProjectState>,
-) -> Result<PluginSettingsPayload, String> {
+) -> Result<PluginRecord, AppError> {
     let project = get_open_project(&state).await?;
     project
-        .update_project_plugin_settings(&plugin_id, settings)
+        .set_plugin_setting(&plugin_id, &setting_name, value)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 /// Register or refresh a plugin from a directory on disk into the active project.
@@ -156,7 +139,7 @@ pub async fn upsert_project_plugin_from_dir(
     plugin_dir: String,
     replace_plugin_id: Option<String>,
     state: tauri::State<'_, ProjectState>,
-) -> Result<PluginSettingsPayload, String> {
+) -> Result<PluginRecord, AppError> {
     let project = get_open_project(&state).await?;
     service::upsert_plugin_from_dir(
         project.as_ref(),
@@ -164,12 +147,27 @@ pub async fn upsert_project_plugin_from_dir(
         replace_plugin_id,
     )
     .await
-    .map_err(|e| e.to_string())
+    .map_err(AppError::from)
 }
 
-// ---------------------------------------------------------------------------
-// Scans
-// ---------------------------------------------------------------------------
+/// Register or refresh a plugin from a `.zip` archive into the active project.
+/// #
+#[tauri::command]
+#[specta::specta]
+pub async fn upsert_project_plugin_from_zip(
+    zip_path: String,
+    replace_plugin_id: Option<String>,
+    state: tauri::State<'_, ProjectState>,
+) -> Result<PluginRecord, AppError> {
+    let project = get_open_project(&state).await?;
+    service::upsert_plugin_from_zip(
+        project.as_ref(),
+        &PathBuf::from(zip_path),
+        replace_plugin_id,
+    )
+    .await
+    .map_err(AppError::from)
+}
 
 /// Create a new scan in Draft status.
 /// #
@@ -178,12 +176,9 @@ pub async fn upsert_project_plugin_from_dir(
 pub async fn create_scan(
     preview: Option<String>,
     state: tauri::State<'_, ProjectState>,
-) -> Result<ScanSummaryRecord, String> {
+) -> Result<ScanSummaryRecord, AppError> {
     let project = get_open_project(&state).await?;
-    project
-        .create_scan(preview)
-        .await
-        .map_err(|e| e.to_string())
+    project.create_scan(preview).await.map_err(AppError::from)
 }
 
 /// List all scans for the active project, newest first.
@@ -192,9 +187,9 @@ pub async fn create_scan(
 #[specta::specta]
 pub async fn list_scans(
     state: tauri::State<'_, ProjectState>,
-) -> Result<Vec<ScanSummaryRecord>, String> {
+) -> Result<Vec<ScanSummaryRecord>, AppError> {
     let project = get_open_project(&state).await?;
-    project.list_scans().await.map_err(|e| e.to_string())
+    project.list_scans().await.map_err(AppError::from)
 }
 
 /// Fetch full details of a single scan including all plugin results.
@@ -204,9 +199,9 @@ pub async fn list_scans(
 pub async fn get_scan(
     scan_id: String,
     state: tauri::State<'_, ProjectState>,
-) -> Result<ScanDetailRecord, String> {
+) -> Result<ScanDetailRecord, AppError> {
     let project = get_open_project(&state).await?;
-    project.get_scan(&scan_id).await.map_err(|e| e.to_string())
+    project.get_scan(&scan_id).await.map_err(AppError::from)
 }
 
 /// Execute a scan: run the selected plugins and persist results.
@@ -217,13 +212,13 @@ pub async fn get_scan(
 pub async fn run_scan(
     scan_id: String,
     selected_plugins: Vec<PluginEntrypointSelection>,
-    inputs: Value,
+    inputs: Vec<ScanEntrypointInput>,
     state: tauri::State<'_, ProjectState>,
-) -> Result<ScanSummaryRecord, String> {
+) -> Result<ScanSummaryRecord, AppError> {
     let project = get_open_project(&state).await?;
     service::run_scan(project.as_ref(), &scan_id, selected_plugins, inputs)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 /// Update the preview (display name) of a scan.
@@ -234,10 +229,10 @@ pub async fn update_scan_preview(
     scan_id: String,
     preview: String,
     state: tauri::State<'_, ProjectState>,
-) -> Result<ScanSummaryRecord, String> {
+) -> Result<ScanSummaryRecord, AppError> {
     let project = get_open_project(&state).await?;
     project
         .update_scan_preview(&scan_id, preview)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }

@@ -30,7 +30,7 @@ export function MainLayout({ children, projectDir }: MainLayoutProps) {
     unwrap(backendClient.loadSettings())
       .then((payload) => {
         if (!cancelled) {
-          updateGlobalSettings({ theme: payload.projectSettings?.theme ?? "system" });
+          updateGlobalSettings({ theme: (payload.projectSettings?.theme ?? "system") as "light" | "dark" | "system" });
         }
       })
       .catch(() => {

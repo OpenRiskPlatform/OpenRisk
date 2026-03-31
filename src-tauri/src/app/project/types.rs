@@ -6,6 +6,10 @@ use specta::Type;
 use std::fmt;
 use std::path::PathBuf;
 
+// ---------------------------------------------------------------------------
+// Scan & plugin selection
+// ---------------------------------------------------------------------------
+
 /// One selected `(plugin, entrypoint)` pair submitted when running a scan.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -13,6 +17,10 @@ pub struct PluginEntrypointSelection {
     pub plugin_id: String,
     pub entrypoint_id: String,
 }
+
+// ---------------------------------------------------------------------------
+// Project summary types
+// ---------------------------------------------------------------------------
 
 /// Lightweight project summary returned after open/create.
 #[derive(Debug, Clone, Serialize, Type)]
@@ -33,18 +41,137 @@ pub struct ProjectSettingsRecord {
     pub theme: String,
 }
 
-/// Per-plugin settings payload returned when loading or saving plugin configuration.
+// ---------------------------------------------------------------------------
+// Plugin manifest types
+// ---------------------------------------------------------------------------
+
+/// Author entry from a plugin manifest.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct PluginAuthor {
+    pub name: String,
+    pub email: Option<String>,
+}
+
+/// Core manifest metadata for a plugin.
 #[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
-pub struct PluginSettingsPayload {
+pub struct PluginManifestRecord {
     pub id: String,
     pub name: String,
     pub version: String,
-    pub manifest: Value,
-    pub input_schema: Value,
-    pub settings_schema: Value,
-    pub settings: Value,
+    pub description: String,
+    pub license: String,
+    pub authors: Vec<PluginAuthor>,
+    pub icon: Option<String>,
+    pub homepage: Option<String>,
 }
+
+/// Named entrypoint exposed by a plugin.
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginEntrypointRecord {
+    pub id: String,
+    pub name: String,
+    pub function_name: String,
+    pub description: Option<String>,
+}
+
+/// Definition of one input field declared by a plugin.
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginInputDef {
+    pub name: String,
+    pub title: String,
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub optional: bool,
+    pub description: Option<String>,
+    pub default_value: Option<SettingValue>,
+}
+
+/// Definition of one configurable setting declared by a plugin.
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginSettingDef {
+    pub name: String,
+    pub title: String,
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub description: Option<String>,
+    pub required: bool,
+    pub default_value: Option<SettingValue>,
+}
+
+// ---------------------------------------------------------------------------
+// Setting / input values
+// ---------------------------------------------------------------------------
+
+/// A typed scalar value used for both plugin settings and scan inputs.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(tag = "type", content = "value", rename_all = "lowercase")]
+pub enum SettingValue {
+    String(String),
+    Number(f64),
+    Boolean(bool),
+    Null,
+}
+
+impl SettingValue {
+    pub fn to_json(&self) -> Value {
+        match self {
+            SettingValue::String(s) => Value::String(s.clone()),
+            SettingValue::Number(n) => serde_json::Number::from_f64(*n)
+                .map(Value::Number)
+                .unwrap_or(Value::Null),
+            SettingValue::Boolean(b) => Value::Bool(*b),
+            SettingValue::Null => Value::Null,
+        }
+    }
+
+    pub fn from_json(v: &Value) -> Self {
+        match v {
+            Value::String(s) => SettingValue::String(s.clone()),
+            Value::Number(n) => SettingValue::Number(n.as_f64().unwrap_or(0.0)),
+            Value::Bool(b) => SettingValue::Boolean(*b),
+            _ => SettingValue::Null,
+        }
+    }
+
+    /// Serialise the contained JSON value to a string for DB storage.
+    pub fn to_json_string(&self) -> String {
+        serde_json::to_string(&self.to_json()).unwrap_or_else(|_| "null".to_string())
+    }
+}
+
+/// A named setting value with its typed scalar.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginSettingValue {
+    pub name: String,
+    pub value: SettingValue,
+}
+
+// ---------------------------------------------------------------------------
+// Plugin record (full plugin descriptor + current settings for a project)
+// ---------------------------------------------------------------------------
+
+/// Complete descriptor for a plugin as configured within a project.
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginRecord {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub manifest: PluginManifestRecord,
+    pub entrypoints: Vec<PluginEntrypointRecord>,
+    pub input_defs: Vec<PluginInputDef>,
+    pub setting_defs: Vec<PluginSettingDef>,
+    pub setting_values: Vec<PluginSettingValue>,
+}
+
+// ---------------------------------------------------------------------------
+// Project settings payload
+// ---------------------------------------------------------------------------
 
 /// Full project settings snapshot: project info, global settings, and all plugin configs.
 #[derive(Debug, Clone, Serialize, Type)]
@@ -52,8 +179,12 @@ pub struct PluginSettingsPayload {
 pub struct ProjectSettingsPayload {
     pub project: ProjectSummary,
     pub project_settings: ProjectSettingsRecord,
-    pub plugins: Vec<PluginSettingsPayload>,
+    pub plugins: Vec<PluginRecord>,
 }
+
+// ---------------------------------------------------------------------------
+// Scan types
+// ---------------------------------------------------------------------------
 
 /// Brief scan record used in list views and status responses.
 #[derive(Debug, Clone, Serialize, Type)]
@@ -64,13 +195,72 @@ pub struct ScanSummaryRecord {
     pub preview: Option<String>,
 }
 
+/// A single field value submitted as input to one plugin entrypoint.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanEntrypointInput {
+    pub plugin_id: String,
+    pub entrypoint_id: String,
+    pub field_name: String,
+    pub value: SettingValue,
+}
+
+/// Log severity level emitted by a plugin during execution.
+#[derive(Debug, Clone, Serialize, Type)]
+pub enum LogLevel {
+    #[serde(rename = "log")]
+    Log,
+    #[serde(rename = "warn")]
+    Warn,
+    #[serde(rename = "error")]
+    Error,
+}
+
+/// A single console log entry captured from plugin execution.
+#[derive(Debug, Clone, Serialize, Type)]
+pub struct LogEntry {
+    pub level: LogLevel,
+    pub message: String,
+}
+
+impl LogEntry {
+    /// Parse from a raw JSON log entry produced by the plugin runtime.
+    pub fn from_json(v: &Value) -> Option<Self> {
+        let message = v
+            .get("message")
+            .and_then(|m| m.as_str())
+            .unwrap_or("")
+            .to_string();
+        let level = match v.get("level").and_then(|l| l.as_str()) {
+            Some("warn") => LogLevel::Warn,
+            Some("error") => LogLevel::Error,
+            _ => LogLevel::Log,
+        };
+        Some(LogEntry { level, message })
+    }
+}
+
+/// Structured result of executing one plugin entrypoint.
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginOutput {
+    /// Whether the plugin executed successfully.
+    pub ok: bool,
+    /// JSON-encoded output data (present when `ok` is true).
+    pub data_json: Option<String>,
+    /// Error message (present when `ok` is false).
+    pub error: Option<String>,
+    /// Console log entries captured during execution.
+    pub logs: Vec<LogEntry>,
+}
+
 /// Single plugin result stored in a completed scan.
 #[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanPluginResultRecord {
     pub plugin_id: String,
     pub entrypoint_id: String,
-    pub output: Value,
+    pub output: PluginOutput,
 }
 
 /// Full scan details: metadata, selected plugins, inputs, and all plugin results.
@@ -81,25 +271,23 @@ pub struct ScanDetailRecord {
     pub status: String,
     pub preview: Option<String>,
     pub selected_plugins: Vec<PluginEntrypointSelection>,
-    pub inputs: Value,
+    pub inputs: Vec<ScanEntrypointInput>,
     pub results: Vec<ScanPluginResultRecord>,
 }
 
-/// Encryption and unlock state of a project database file.
-#[derive(Debug, Clone, Serialize, Type)]
-pub struct ProjectLockStatus {
-    pub locked: bool,
-    pub unlocked: bool,
-}
+// ---------------------------------------------------------------------------
+// Internal types (not in the public API)
+// ---------------------------------------------------------------------------
 
 /// Code + settings for one plugin entrypoint loaded from the DB before execution.
 #[derive(Debug, Clone)]
 pub struct PluginLoadData {
     pub plugin_id: String,
     pub entrypoint_id: String,
-    pub settings_json: Option<String>,
+    /// The JavaScript-exported function name to invoke.
+    pub entrypoint_function: String,
+    pub settings: Vec<PluginSettingValue>,
     pub code: Option<String>,
-    pub manifest_json: Option<String>,
 }
 
 /// Everything returned by `begin_scan_run`: context needed to execute all plugins.
@@ -108,6 +296,56 @@ pub struct ScanRunContext {
     pub scan_preview: Option<String>,
     pub plugins: Vec<PluginLoadData>,
 }
+
+// ---------------------------------------------------------------------------
+// Security
+// ---------------------------------------------------------------------------
+
+/// Encryption and unlock state of a project database file.
+#[derive(Debug, Clone, Serialize, Type)]
+pub struct ProjectLockStatus {
+    pub locked: bool,
+    pub unlocked: bool,
+}
+
+// ---------------------------------------------------------------------------
+// App-level error (returned by commands)
+// ---------------------------------------------------------------------------
+
+/// Typed error returned by all Tauri commands.
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(tag = "kind", content = "message", rename_all = "camelCase")]
+pub enum AppError {
+    Validation(String),
+    NotFound(String),
+    Database(String),
+    Internal(String),
+}
+
+impl fmt::Display for AppError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AppError::Validation(msg) => write!(f, "{}", msg),
+            AppError::NotFound(msg) => write!(f, "Not found: {}", msg),
+            AppError::Database(msg) => write!(f, "Database: {}", msg),
+            AppError::Internal(msg) => write!(f, "Internal: {}", msg),
+        }
+    }
+}
+
+impl From<PersistenceError> for AppError {
+    fn from(e: PersistenceError) -> Self {
+        match e {
+            PersistenceError::Validation(msg) => AppError::Validation(msg),
+            PersistenceError::Database(err) => AppError::Database(err.to_string()),
+            PersistenceError::Io(err) => AppError::Internal(err.to_string()),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Internal persistence error
+// ---------------------------------------------------------------------------
 
 /// Unified error type for all persistence operations.
 #[derive(Debug)]

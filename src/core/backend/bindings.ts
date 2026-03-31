@@ -5,98 +5,78 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 /** Commands */
 export const commands = {
 	/**
-	 *  List all installed built-in plugins.
-	 *  #
-	 */
-	listPlugins: () => typedError<PluginSummary[], string>(__TAURI_INVOKE("list_plugins")),
-	/**
-	 *  Get the full detail record (manifest + settings) for a single plugin.
-	 *  #
-	 */
-	getPlugin: (pluginId: string) => typedError<PluginDetail, string>(__TAURI_INVOKE("get_plugin", { pluginId })),
-	/**
-	 *  Parse and validate a manifest file at an arbitrary path (import flow).
-	 *  #
-	 */
-	openPlugin: (filePath: string) => typedError<"Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Value[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: Value } }) & { Array?: never; Bool?: never; Number?: never; String?: never }, string>(__TAURI_INVOKE("open_plugin", { filePath })),
-	/**
-	 *  Persist updated settings for an installed plugin.
-	 *  #
-	 */
-	configurePlugin: (pluginId: string, settings: "Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Value[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: Value } }) & { Array?: never; Bool?: never; Number?: never; String?: never }) => typedError<null, string>(__TAURI_INVOKE("configure_plugin", { pluginId, settings })),
-	/**
-	 *  Call the optional `validate(settings)` export to confirm a plugin is ready to run.
-	 *  #
-	 */
-	checkPluginReadiness: (pluginId: string, settings: "Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: ("Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Vec<Value> }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: Value } }) & { Array?: never; Bool?: never; Number?: never; String?: never })[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: "Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Value[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: Map<string, Value> }) & { Array?: never; Bool?: never; Number?: never; String?: never } } }) & { Array?: never; Bool?: never; Number?: never; String?: never } | null) => typedError<"Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Value[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: Value } }) & { Array?: never; Bool?: never; Number?: never; String?: never }, string>(__TAURI_INVOKE("check_plugin_readiness", { pluginId, settings })),
-	/**
 	 *  Create a new project database at `project_path` and open it as the active project.
 	 *  #
 	 */
-	createProject: (name: string, projectPath: string) => typedError<ProjectSummary, string>(__TAURI_INVOKE("create_project", { name, projectPath })),
+	createProject: (name: string, projectPath: string) => typedError<ProjectSummary, AppError>(__TAURI_INVOKE("create_project", { name, projectPath })),
 	/**
 	 *  Open an existing project file as the active project.
 	 * 
 	 *  Pass `password` when the database is encrypted. This also covers the unlock flow:
 	 *  if a previous `open_project` returned a lock error, call again with the password.
 	 */
-	openProject: (projectPath: string, password: string | null) => typedError<ProjectSummary, string>(__TAURI_INVOKE("open_project", { projectPath, password })),
+	openProject: (projectPath: string, password: string | null) => typedError<ProjectSummary, AppError>(__TAURI_INVOKE("open_project", { projectPath, password })),
 	/**
 	 *  Close the active project and release its database connection.
 	 *  #
 	 */
-	closeProject: () => typedError<null, string>(__TAURI_INVOKE("close_project")),
+	closeProject: () => typedError<null, AppError>(__TAURI_INVOKE("close_project")),
 	/**
 	 *  Load the full settings snapshot (project + global settings + all plugin configs).
 	 *  #
 	 */
-	loadSettings: () => typedError<ProjectSettingsPayload, string>(__TAURI_INVOKE("load_settings")),
+	loadSettings: () => typedError<ProjectSettingsPayload, AppError>(__TAURI_INVOKE("load_settings")),
 	/**
 	 *  Update the project-wide theme setting.
 	 *  #
 	 */
-	updateProjectSettings: (theme: string | null) => typedError<ProjectSettingsRecord, string>(__TAURI_INVOKE("update_project_settings", { theme })),
+	updateProjectSettings: (theme: string | null) => typedError<ProjectSettingsRecord, AppError>(__TAURI_INVOKE("update_project_settings", { theme })),
 	/**
 	 *  Rename the active project.
 	 *  #
 	 */
-	updateProjectName: (name: string) => typedError<ProjectSummary, string>(__TAURI_INVOKE("update_project_name", { name })),
+	updateProjectName: (name: string) => typedError<ProjectSummary, AppError>(__TAURI_INVOKE("update_project_name", { name })),
 	/**
-	 *  Persist updated settings for one plugin within the active project.
+	 *  Set one plugin setting value within the active project.
 	 *  #
 	 */
-	updateProjectPluginSettings: (pluginId: string, settings: "Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Value[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: Value } }) & { Array?: never; Bool?: never; Number?: never; String?: never }) => typedError<PluginSettingsPayload, string>(__TAURI_INVOKE("update_project_plugin_settings", { pluginId, settings })),
+	setPluginSetting: (pluginId: string, settingName: string, value: SettingValue) => typedError<PluginRecord, AppError>(__TAURI_INVOKE("set_plugin_setting", { pluginId, settingName, value })),
 	/**
 	 *  Register or refresh a plugin from a directory on disk into the active project.
 	 *  #
 	 */
-	upsertProjectPluginFromDir: (pluginDir: string, replacePluginId: string | null) => typedError<PluginSettingsPayload, string>(__TAURI_INVOKE("upsert_project_plugin_from_dir", { pluginDir, replacePluginId })),
+	upsertProjectPluginFromDir: (pluginDir: string, replacePluginId: string | null) => typedError<PluginRecord, AppError>(__TAURI_INVOKE("upsert_project_plugin_from_dir", { pluginDir, replacePluginId })),
+	/**
+	 *  Register or refresh a plugin from a `.zip` archive into the active project.
+	 *  #
+	 */
+	upsertProjectPluginFromZip: (zipPath: string, replacePluginId: string | null) => typedError<PluginRecord, AppError>(__TAURI_INVOKE("upsert_project_plugin_from_zip", { zipPath, replacePluginId })),
 	/**
 	 *  Create a new scan in Draft status.
 	 *  #
 	 */
-	createScan: (preview: string | null) => typedError<ScanSummaryRecord, string>(__TAURI_INVOKE("create_scan", { preview })),
+	createScan: (preview: string | null) => typedError<ScanSummaryRecord, AppError>(__TAURI_INVOKE("create_scan", { preview })),
 	/**
 	 *  List all scans for the active project, newest first.
 	 *  #
 	 */
-	listScans: () => typedError<ScanSummaryRecord[], string>(__TAURI_INVOKE("list_scans")),
+	listScans: () => typedError<ScanSummaryRecord[], AppError>(__TAURI_INVOKE("list_scans")),
 	/**
 	 *  Fetch full details of a single scan including all plugin results.
 	 *  #
 	 */
-	getScan: (scanId: string) => typedError<ScanDetailRecord, string>(__TAURI_INVOKE("get_scan", { scanId })),
+	getScan: (scanId: string) => typedError<ScanDetailRecord, AppError>(__TAURI_INVOKE("get_scan", { scanId })),
 	/**
 	 *  Execute a scan: run the selected plugins and persist results.
 	 * 
 	 *  Plugin code is read from the database (synced on project open), not from disk.
 	 */
-	runScan: (scanId: string, selectedPlugins: PluginEntrypointSelection[], inputs: "Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Value[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: Value } }) & { Array?: never; Bool?: never; Number?: never; String?: never }) => typedError<ScanSummaryRecord, string>(__TAURI_INVOKE("run_scan", { scanId, selectedPlugins, inputs })),
+	runScan: (scanId: string, selectedPlugins: PluginEntrypointSelection[], inputs: ScanEntrypointInput[]) => typedError<ScanSummaryRecord, AppError>(__TAURI_INVOKE("run_scan", { scanId, selectedPlugins, inputs })),
 	/**
 	 *  Update the preview (display name) of a scan.
 	 *  #
 	 */
-	updateScanPreview: (scanId: string, preview: string) => typedError<ScanSummaryRecord, string>(__TAURI_INVOKE("update_scan_preview", { scanId, preview })),
+	updateScanPreview: (scanId: string, preview: string) => typedError<ScanSummaryRecord, AppError>(__TAURI_INVOKE("update_scan_preview", { scanId, preview })),
 	/**
 	 *  Probe the lock status of a project file *without* opening it.
 	 * 
@@ -121,11 +101,30 @@ export const commands = {
 };
 
 /* Types */
-// Full plugin record: manifest metadata plus current settings values.
-export type PluginDetail = {
+// Typed error returned by all Tauri commands.
+export type AppError = { kind: "validation"; message: string } | { kind: "notFound"; message: string } | { kind: "database"; message: string } | { kind: "internal"; message: string };
+
+// A single console log entry captured from plugin execution.
+export type LogEntry = {
+	level: LogLevel,
+	message: string,
+};
+
+// Log severity level emitted by a plugin during execution.
+export type LogLevel = "log" | "warn" | "error";
+
+// Author entry from a plugin manifest.
+export type PluginAuthor = {
+	name: string,
+	email: string | null,
+};
+
+// Named entrypoint exposed by a plugin.
+export type PluginEntrypointRecord = {
 	id: string,
-	manifest: "Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Value[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: Value } }) & { Array?: never; Bool?: never; Number?: never; String?: never },
-	settings: "Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Value[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: Value } }) & { Array?: never; Bool?: never; Number?: never; String?: never },
+	name: string,
+	functionName: string,
+	description: string | null,
 };
 
 // One selected `(plugin, entrypoint)` pair submitted when running a scan.
@@ -134,24 +133,66 @@ export type PluginEntrypointSelection = {
 	entrypointId: string,
 };
 
-// Per-plugin settings payload returned when loading or saving plugin configuration.
-export type PluginSettingsPayload = {
-	id: string,
+// Definition of one input field declared by a plugin.
+export type PluginInputDef = {
 	name: string,
-	version: string,
-	manifest: "Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Value[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: Value } }) & { Array?: never; Bool?: never; Number?: never; String?: never },
-	inputSchema: "Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Value[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: Value } }) & { Array?: never; Bool?: never; Number?: never; String?: never },
-	settingsSchema: "Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Value[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: Value } }) & { Array?: never; Bool?: never; Number?: never; String?: never },
-	settings: "Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Value[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: Value } }) & { Array?: never; Bool?: never; Number?: never; String?: never },
+	title: string,
+	type: string,
+	optional: boolean,
+	description: string | null,
+	defaultValue: SettingValue | null,
 };
 
-// Lightweight summary of an installed plugin, shown in list views.
-export type PluginSummary = {
+// Core manifest metadata for a plugin.
+export type PluginManifestRecord = {
 	id: string,
 	name: string,
 	version: string,
 	description: string,
+	license: string,
+	authors: PluginAuthor[],
 	icon: string | null,
+	homepage: string | null,
+};
+
+// Structured result of executing one plugin entrypoint.
+export type PluginOutput = {
+	// Whether the plugin executed successfully.
+	ok: boolean,
+	// JSON-encoded output data (present when `ok` is true).
+	dataJson: string | null,
+	// Error message (present when `ok` is false).
+	error: string | null,
+	// Console log entries captured during execution.
+	logs: LogEntry[],
+};
+
+// Complete descriptor for a plugin as configured within a project.
+export type PluginRecord = {
+	id: string,
+	name: string,
+	version: string,
+	manifest: PluginManifestRecord,
+	entrypoints: PluginEntrypointRecord[],
+	inputDefs: PluginInputDef[],
+	settingDefs: PluginSettingDef[],
+	settingValues: PluginSettingValue[],
+};
+
+// Definition of one configurable setting declared by a plugin.
+export type PluginSettingDef = {
+	name: string,
+	title: string,
+	type: string,
+	description: string | null,
+	required: boolean,
+	defaultValue: SettingValue | null,
+};
+
+// A named setting value with its typed scalar.
+export type PluginSettingValue = {
+	name: string,
+	value: SettingValue,
 };
 
 // Encryption and unlock state of a project database file.
@@ -164,7 +205,7 @@ export type ProjectLockStatus = {
 export type ProjectSettingsPayload = {
 	project: ProjectSummary,
 	projectSettings: ProjectSettingsRecord,
-	plugins: PluginSettingsPayload[],
+	plugins: PluginRecord[],
 };
 
 // Project-wide settings record persisted in the `ProjectSettings` table.
@@ -189,15 +230,23 @@ export type ScanDetailRecord = {
 	status: string,
 	preview: string | null,
 	selectedPlugins: PluginEntrypointSelection[],
-	inputs: "Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Value[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: Value } }) & { Array?: never; Bool?: never; Number?: never; String?: never },
+	inputs: ScanEntrypointInput[],
 	results: ScanPluginResultRecord[],
+};
+
+// A single field value submitted as input to one plugin entrypoint.
+export type ScanEntrypointInput = {
+	pluginId: string,
+	entrypointId: string,
+	fieldName: string,
+	value: SettingValue,
 };
 
 // Single plugin result stored in a completed scan.
 export type ScanPluginResultRecord = {
 	pluginId: string,
 	entrypointId: string,
-	output: "Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Value[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: Value } }) & { Array?: never; Bool?: never; Number?: never; String?: never },
+	output: PluginOutput,
 };
 
 // Brief scan record used in list views and status responses.
@@ -206,6 +255,9 @@ export type ScanSummaryRecord = {
 	status: string,
 	preview: string | null,
 };
+
+// A typed scalar value used for both plugin settings and scan inputs.
+export type SettingValue = { type: "string"; value: string } | { type: "number"; value: number } | { type: "boolean"; value: boolean } | { type: "null" };
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
