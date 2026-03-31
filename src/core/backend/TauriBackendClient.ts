@@ -1,5 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
 import { BackendClient } from "./types";
+import { commands } from "./bindings";
 import type {
   PluginEntrypointSelection,
   ScanDetail,
@@ -11,124 +11,59 @@ import type {
   ProjectSettingsPayload,
 } from "./types";
 
+/** Unwrap a tauri-specta result, throwing on error. */
+async function unwrap<T>(
+  call: Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>
+): Promise<T> {
+  const result = await call;
+  if (result.status === "error") throw new Error(result.error);
+  return result.data;
+}
+
 export class TauriBackendClient extends BackendClient {
   async createProject(name: string, projectPath: string): Promise<ProjectSummary> {
-    try {
-      const result = await invoke<string>("create_project", {
-        name,
-        projectPath,
-      });
-      return JSON.parse(result) as ProjectSummary;
-    } catch (error: any) {
-      console.error("[TauriBackendClient] createProject error:", error);
-      throw new Error(error?.message ?? error?.toString() ?? "Failed to create project");
-    }
+    return unwrap(commands.createProject(name, projectPath));
   }
 
   async openProject(projectPath: string, password?: string): Promise<ProjectSummary> {
-    try {
-      const result = await invoke<string>("open_project", {
-        projectPath,
-        password: password ?? null,
-      });
-      return JSON.parse(result) as ProjectSummary;
-    } catch (error: any) {
-      console.error("[TauriBackendClient] openProject error:", error);
-      throw new Error(error?.message ?? error?.toString() ?? "Failed to open project");
-    }
+    return unwrap(commands.openProject(projectPath, password ?? null));
   }
 
   async closeProject(): Promise<void> {
-    try {
-      await invoke("close_project");
-    } catch (error: any) {
-      console.error("[TauriBackendClient] closeProject error:", error);
-      throw new Error(error?.message ?? error?.toString() ?? "Failed to close project");
-    }
+    await unwrap(commands.closeProject());
   }
 
   async loadSettings(): Promise<ProjectSettingsPayload> {
-    try {
-      const result = await invoke<string>("load_settings");
-      return JSON.parse(result) as ProjectSettingsPayload;
-    } catch (error: any) {
-      console.error("[TauriBackendClient] loadSettings error:", error);
-      throw new Error(error?.message ?? error?.toString() ?? "Failed to load settings");
-    }
+    return unwrap(commands.loadSettings()) as Promise<ProjectSettingsPayload>;
   }
 
   async updateProjectSettings(
     patch: { theme?: "light" | "dark" | "system" }
   ): Promise<ProjectSettingsRecord> {
-    try {
-      const result = await invoke<string>("update_project_settings", {
-        theme: patch.theme,
-      });
-      return JSON.parse(result) as ProjectSettingsRecord;
-    } catch (error: any) {
-      console.error("[TauriBackendClient] updateProjectSettings error:", error);
-      throw new Error(
-        error?.message ?? error?.toString() ?? "Failed to update project settings"
-      );
-    }
+    return unwrap(commands.updateProjectSettings(patch.theme ?? null)) as unknown as Promise<ProjectSettingsRecord>;
   }
 
   async updateProjectName(name: string): Promise<ProjectSummary> {
-    try {
-      const result = await invoke<string>("update_project_name", { name });
-      return JSON.parse(result) as ProjectSummary;
-    } catch (error: any) {
-      console.error("[TauriBackendClient] updateProjectName error:", error);
-      throw new Error(error?.message ?? error?.toString() ?? "Failed to update project name");
-    }
+    return unwrap(commands.updateProjectName(name));
   }
 
   async updateProjectPluginSettings(
     pluginId: string,
     settings: Record<string, unknown>
   ): Promise<PluginSettingsDescriptor> {
-    try {
-      const result = await invoke<string>("update_project_plugin_settings", {
-        pluginId,
-        settingsJson: JSON.stringify(settings),
-      });
-      return JSON.parse(result) as PluginSettingsDescriptor;
-    } catch (error: any) {
-      console.error("[TauriBackendClient] updateProjectPluginSettings error:", error);
-      throw new Error(
-        error?.message ?? error?.toString() ?? "Failed to update plugin settings"
-      );
-    }
+    return unwrap(commands.updateProjectPluginSettings(pluginId, settings as any)) as Promise<PluginSettingsDescriptor>;
   }
 
   async createScan(preview?: string): Promise<ScanSummary> {
-    try {
-      const result = await invoke<string>("create_scan", { preview });
-      return JSON.parse(result) as ScanSummary;
-    } catch (error: any) {
-      console.error("[TauriBackendClient] createScan error:", error);
-      throw new Error(error?.message ?? error?.toString() ?? "Failed to create scan");
-    }
+    return unwrap(commands.createScan(preview ?? null)) as unknown as Promise<ScanSummary>;
   }
 
   async listScans(): Promise<ScanSummary[]> {
-    try {
-      const result = await invoke<string>("list_scans");
-      return JSON.parse(result) as ScanSummary[];
-    } catch (error: any) {
-      console.error("[TauriBackendClient] listScans error:", error);
-      throw new Error(error?.message ?? error?.toString() ?? "Failed to list scans");
-    }
+    return unwrap(commands.listScans()) as Promise<ScanSummary[]>;
   }
 
   async getScan(scanId: string): Promise<ScanDetail> {
-    try {
-      const result = await invoke<string>("get_scan", { scanId });
-      return JSON.parse(result) as ScanDetail;
-    } catch (error: any) {
-      console.error("[TauriBackendClient] getScan error:", error);
-      throw new Error(error?.message ?? error?.toString() ?? "Failed to get scan");
-    }
+    return unwrap(commands.getScan(scanId)) as unknown as Promise<ScanDetail>;
   }
 
   async runScan(
@@ -136,112 +71,46 @@ export class TauriBackendClient extends BackendClient {
     selectedPlugins: PluginEntrypointSelection[],
     inputs: Record<string, unknown>
   ): Promise<ScanSummary> {
-    try {
-      const result = await invoke<string>("run_scan", {
-        scanId,
-        selectedPluginsJson: JSON.stringify(selectedPlugins),
-        inputsJson: JSON.stringify(inputs),
-      });
-      return JSON.parse(result) as ScanSummary;
-    } catch (error: any) {
-      console.error("[TauriBackendClient] runScan error:", error);
-      throw new Error(error?.message ?? error?.toString() ?? "Failed to run scan");
-    }
+    return unwrap(commands.runScan(scanId, selectedPlugins, inputs as any)) as unknown as Promise<ScanSummary>;
   }
 
   async checkPluginReadiness(
     pluginId: string,
     settingsJson?: string
   ): Promise<{ ok: boolean; error?: string }> {
-    try {
-      const result = await invoke<string>("check_plugin_readiness", {
-        pluginId,
-        settingsJson,
-      });
-      return JSON.parse(result) as { ok: boolean; error?: string };
-    } catch (error: any) {
-      console.error("[TauriBackendClient] checkPluginReadiness error:", error);
-      return { ok: false, error: error?.message ?? error?.toString() ?? "Readiness check failed" };
-    }
+    const settings = settingsJson ? JSON.parse(settingsJson) : null;
+    const result = await unwrap(commands.checkPluginReadiness(pluginId, settings as any));
+    return result as unknown as { ok: boolean; error?: string };
   }
 
   async updateScanPreview(scanId: string, preview: string): Promise<ScanSummary> {
-    try {
-      const result = await invoke<string>("update_scan_preview", { scanId, preview });
-      return JSON.parse(result) as ScanSummary;
-    } catch (error: any) {
-      console.error("[TauriBackendClient] updateScanPreview error:", error);
-      throw new Error(error?.message ?? error?.toString() ?? "Failed to rename scan");
-    }
+    return unwrap(commands.updateScanPreview(scanId, preview)) as unknown as Promise<ScanSummary>;
   }
 
   async upsertProjectPluginFromDir(
     pluginDir: string,
     replacePluginId?: string
   ): Promise<PluginSettingsDescriptor> {
-    try {
-      const result = await invoke<string>("upsert_project_plugin_from_dir", {
-        pluginDir,
-        replacePluginId,
-      });
-      return JSON.parse(result) as PluginSettingsDescriptor;
-    } catch (error: any) {
-      console.error("[TauriBackendClient] upsertProjectPluginFromDir error:", error);
-      throw new Error(
-        error?.message ?? error?.toString() ?? "Failed to load plugin from folder"
-      );
-    }
+    return unwrap(commands.upsertProjectPluginFromDir(pluginDir, replacePluginId ?? null)) as Promise<PluginSettingsDescriptor>;
   }
 
   async getProjectLockStatus(projectPath: string): Promise<ProjectLockStatus> {
-    try {
-      const result = await invoke<string>("get_project_lock_status", {
-        projectPath,
-      });
-      return JSON.parse(result) as ProjectLockStatus;
-    } catch (error: any) {
-      console.error("[TauriBackendClient] getProjectLockStatus error:", error);
-      throw new Error(error?.message ?? error?.toString() ?? "Failed to read lock status");
-    }
+    return unwrap(commands.getProjectLockStatus(projectPath));
   }
 
   async setProjectPassword(newPassword: string): Promise<ProjectLockStatus> {
-    try {
-      const result = await invoke<string>("set_project_password", { newPassword });
-      return JSON.parse(result) as ProjectLockStatus;
-    } catch (error: any) {
-      console.error("[TauriBackendClient] setProjectPassword error:", error);
-      throw new Error(error?.message ?? error?.toString() ?? "Failed to set project password");
-    }
+    return unwrap(commands.setProjectPassword(newPassword));
   }
 
   async changeProjectPassword(
     currentPassword: string,
     newPassword: string
   ): Promise<ProjectLockStatus> {
-    try {
-      const result = await invoke<string>("change_project_password", {
-        currentPassword,
-        newPassword,
-      });
-      return JSON.parse(result) as ProjectLockStatus;
-    } catch (error: any) {
-      console.error("[TauriBackendClient] changeProjectPassword error:", error);
-      throw new Error(
-        error?.message ?? error?.toString() ?? "Failed to change project password"
-      );
-    }
+    return unwrap(commands.changeProjectPassword(currentPassword, newPassword));
   }
 
   async removeProjectPassword(currentPassword: string): Promise<ProjectLockStatus> {
-    try {
-      const result = await invoke<string>("remove_project_password", { currentPassword });
-      return JSON.parse(result) as ProjectLockStatus;
-    } catch (error: any) {
-      console.error("[TauriBackendClient] removeProjectPassword error:", error);
-      throw new Error(
-        error?.message ?? error?.toString() ?? "Failed to remove project password"
-      );
-    }
+    return unwrap(commands.removeProjectPassword(currentPassword));
   }
 }
+

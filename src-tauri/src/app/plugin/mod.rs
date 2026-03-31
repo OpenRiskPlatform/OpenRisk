@@ -110,9 +110,10 @@ pub fn get_plugin(plugin_id: &str) -> Result<PluginDetail, String> {
     let dir = plugin_dir(plugin_id)?;
     let manifest = read_manifest(&dir)?;
     let settings = read_settings(&dir, &manifest)?;
+    let manifest_value = serde_json::to_value(&manifest).map_err(|e| e.to_string())?;
     Ok(PluginDetail {
         id: plugin_id.to_string(),
-        manifest,
+        manifest: manifest_value,
         settings,
     })
 }

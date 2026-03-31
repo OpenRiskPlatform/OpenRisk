@@ -2,11 +2,12 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use specta::Type;
 use std::fmt;
 use std::path::PathBuf;
 
 /// One selected `(plugin, entrypoint)` pair submitted when running a scan.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginEntrypointSelection {
     pub plugin_id: String,
@@ -14,7 +15,7 @@ pub struct PluginEntrypointSelection {
 }
 
 /// Lightweight project summary returned after open/create.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Type)]
 pub struct ProjectSummary {
     pub id: String,
     pub name: String,
@@ -23,7 +24,7 @@ pub struct ProjectSummary {
 }
 
 /// Project-wide settings record persisted in the `ProjectSettings` table.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectSettingsRecord {
     pub id: String,
@@ -33,7 +34,7 @@ pub struct ProjectSettingsRecord {
 }
 
 /// Per-plugin settings payload returned when loading or saving plugin configuration.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginSettingsPayload {
     pub id: String,
@@ -46,7 +47,7 @@ pub struct PluginSettingsPayload {
 }
 
 /// Full project settings snapshot: project info, global settings, and all plugin configs.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectSettingsPayload {
     pub project: ProjectSummary,
@@ -55,7 +56,7 @@ pub struct ProjectSettingsPayload {
 }
 
 /// Brief scan record used in list views and status responses.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanSummaryRecord {
     pub id: String,
@@ -64,7 +65,7 @@ pub struct ScanSummaryRecord {
 }
 
 /// Single plugin result stored in a completed scan.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanPluginResultRecord {
     pub plugin_id: String,
@@ -73,7 +74,7 @@ pub struct ScanPluginResultRecord {
 }
 
 /// Full scan details: metadata, selected plugins, inputs, and all plugin results.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanDetailRecord {
     pub id: String,
@@ -85,7 +86,7 @@ pub struct ScanDetailRecord {
 }
 
 /// Encryption and unlock state of a project database file.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Type)]
 pub struct ProjectLockStatus {
     pub locked: bool,
     pub unlocked: bool,
