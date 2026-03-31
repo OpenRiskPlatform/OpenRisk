@@ -67,7 +67,7 @@ export function GeneralSettings() {
           />
         </div>
 
-        {/* Compact Mode */}
+        {/* Compact Mode - disabled for now
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
             <Label>Compact Mode</Label>
@@ -82,6 +82,7 @@ export function GeneralSettings() {
             }
           />
         </div>
+        */}
       </div>
     </div>
   );
