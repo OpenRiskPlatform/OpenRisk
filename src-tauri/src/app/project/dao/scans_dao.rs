@@ -323,10 +323,10 @@ pub(super) async fn begin_scan_run(
                 .filter(|c: &String| !c.trim().is_empty());
 
         let ep_fn: Option<String> = sqlx::query_scalar(
-            "SELECT function_name FROM PluginEntrypoint \
-             WHERE plugin_id = ?1 AND id = ?2 LIMIT 1",
+            "SELECT function_name FROM PluginRevisionEntrypoint \
+             WHERE revision_id = ?1 AND id = ?2 LIMIT 1",
         )
-        .bind(&sel.plugin_id)
+        .bind(&revision_id)
         .bind(&sel.entrypoint_id)
         .fetch_optional(&mut *conn)
         .await?;

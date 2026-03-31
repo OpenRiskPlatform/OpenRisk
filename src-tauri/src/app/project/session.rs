@@ -31,7 +31,7 @@ use uuid::Uuid;
 // Schema & version constants
 // ---------------------------------------------------------------------------
 
-pub(super) const CURRENT_SCHEMA_VERSION: i64 = 11;
+pub(super) const CURRENT_SCHEMA_VERSION: i64 = 12;
 const MIN_SUPPORTED_SCHEMA_VERSION: i64 = 4;
 
 const PROJECT_LEGACY_ERROR_PREFIX: &str = "PROJECT_LEGACY:";
@@ -195,6 +195,45 @@ CREATE TABLE IF NOT EXISTS ScanPluginLog (
     level TEXT NOT NULL CHECK (level IN ('log', 'warn', 'error')),
     message TEXT NOT NULL,
     FOREIGN KEY (scan_result_id) REFERENCES ScanPluginResult(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS PluginRevisionEntrypoint (
+    revision_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    function_name TEXT NOT NULL,
+    description TEXT,
+    PRIMARY KEY (revision_id, id),
+    FOREIGN KEY (revision_id) REFERENCES PluginRevision(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS PluginRevisionInputDef (
+    revision_id TEXT NOT NULL,
+    entrypoint_id TEXT NOT NULL DEFAULT 'default',
+    name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    type_ TEXT NOT NULL,
+    type_json TEXT NOT NULL,
+    enum_values_json TEXT,
+    optional INTEGER NOT NULL DEFAULT 0,
+    description TEXT,
+    default_value_json TEXT,
+    PRIMARY KEY (revision_id, entrypoint_id, name),
+    FOREIGN KEY (revision_id) REFERENCES PluginRevision(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS PluginRevisionSettingDef (
+    revision_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    type_ TEXT NOT NULL,
+    type_json TEXT NOT NULL,
+    enum_values_json TEXT,
+    description TEXT,
+    required INTEGER NOT NULL DEFAULT 0,
+    default_value_json TEXT,
+    PRIMARY KEY (revision_id, name),
+    FOREIGN KEY (revision_id) REFERENCES PluginRevision(id) ON DELETE CASCADE
 );
 "#;
 
@@ -530,6 +569,7 @@ impl SqliteProjectPersistence {
                 9 => Self::migrate_to_v9(conn).await?,
                 10 => Self::migrate_to_v10(conn).await?,
                 11 => Self::migrate_to_v11(conn).await?,
+                12 => Self::migrate_to_v12(conn).await?,
                 _ => {
                     return Err(PersistenceError::Validation(format!(
                         "Missing migration to schema version {}",
@@ -820,6 +860,124 @@ impl SqliteProjectPersistence {
         )
         .execute(&mut *conn)
         .await?;
+
+        Ok(())
+    }
+
+    /// Store plugin entrypoints, input definitions, and setting definitions per revision
+    /// so that historical scan results reference the exact plugin state that was used.
+    async fn migrate_to_v12(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
+        if !Self::table_exists(conn, "PluginRevisionEntrypoint").await? {
+            sqlx::query(
+                "CREATE TABLE PluginRevisionEntrypoint (\
+                 revision_id TEXT NOT NULL,\
+                 id TEXT NOT NULL,\
+                 name TEXT NOT NULL,\
+                 function_name TEXT NOT NULL,\
+                 description TEXT,\
+                 PRIMARY KEY (revision_id, id),\
+                 FOREIGN KEY (revision_id) REFERENCES PluginRevision(id) ON DELETE CASCADE\
+                 )",
+            )
+            .execute(&mut *conn)
+            .await?;
+        }
+
+        if !Self::table_exists(conn, "PluginRevisionInputDef").await? {
+            sqlx::query(
+                "CREATE TABLE PluginRevisionInputDef (\
+                 revision_id TEXT NOT NULL,\
+                 entrypoint_id TEXT NOT NULL DEFAULT 'default',\
+                 name TEXT NOT NULL,\
+                 title TEXT NOT NULL,\
+                 type_ TEXT NOT NULL,\
+                 type_json TEXT NOT NULL,\
+                 enum_values_json TEXT,\
+                 optional INTEGER NOT NULL DEFAULT 0,\
+                 description TEXT,\
+                 default_value_json TEXT,\
+                 PRIMARY KEY (revision_id, entrypoint_id, name),\
+                 FOREIGN KEY (revision_id) REFERENCES PluginRevision(id) ON DELETE CASCADE\
+                 )",
+            )
+            .execute(&mut *conn)
+            .await?;
+        }
+
+        if !Self::table_exists(conn, "PluginRevisionSettingDef").await? {
+            sqlx::query(
+                "CREATE TABLE PluginRevisionSettingDef (\
+                 revision_id TEXT NOT NULL,\
+                 name TEXT NOT NULL,\
+                 title TEXT NOT NULL,\
+                 type_ TEXT NOT NULL,\
+                 type_json TEXT NOT NULL,\
+                 enum_values_json TEXT,\
+                 description TEXT,\
+                 required INTEGER NOT NULL DEFAULT 0,\
+                 default_value_json TEXT,\
+                 PRIMARY KEY (revision_id, name),\
+                 FOREIGN KEY (revision_id) REFERENCES PluginRevision(id) ON DELETE CASCADE\
+                 )",
+            )
+            .execute(&mut *conn)
+            .await?;
+        }
+
+        // Backfill existing plugins: copy their current metadata into revision-scoped tables.
+        let plugins: Vec<(String, String)> = sqlx::query_as(
+            "SELECT id, current_revision_id FROM Plugin WHERE current_revision_id IS NOT NULL",
+        )
+        .fetch_all(&mut *conn)
+        .await?;
+
+        for (plugin_id, revision_id) in &plugins {
+            let ep_count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM PluginRevisionEntrypoint WHERE revision_id = ?1",
+            )
+            .bind(revision_id)
+            .fetch_one(&mut *conn)
+            .await?;
+
+            if ep_count == 0 {
+                sqlx::query(
+                    "INSERT OR IGNORE INTO PluginRevisionEntrypoint \
+                     (revision_id, id, name, function_name, description) \
+                     SELECT ?1, id, name, function_name, description \
+                     FROM PluginEntrypoint WHERE plugin_id = ?2",
+                )
+                .bind(revision_id)
+                .bind(plugin_id)
+                .execute(&mut *conn)
+                .await?;
+
+                sqlx::query(
+                    "INSERT OR IGNORE INTO PluginRevisionInputDef \
+                     (revision_id, entrypoint_id, name, title, type_, type_json, \
+                      enum_values_json, optional, description, default_value_json) \
+                     SELECT ?1, entrypoint_id, name, title, type_, type_json, \
+                            enum_values_json, optional, description, default_value_json \
+                     FROM PluginInputDef WHERE plugin_id = ?2",
+                )
+                .bind(revision_id)
+                .bind(plugin_id)
+                .execute(&mut *conn)
+                .await?;
+
+                sqlx::query(
+                    "INSERT OR IGNORE INTO PluginRevisionSettingDef \
+                     (revision_id, name, title, type_, type_json, \
+                      enum_values_json, description, required, default_value_json) \
+                     SELECT ?1, name, title, type_, type_json, \
+                            enum_values_json, description, required, default_value_json \
+                     FROM PluginSettingDef WHERE plugin_id = ?2",
+                )
+                .bind(revision_id)
+                .bind(plugin_id)
+                .execute(&mut *conn)
+                .await?;
+            }
+        }
 
         Ok(())
     }
@@ -1559,6 +1717,46 @@ CREATE TABLE IF NOT EXISTS ScanPluginLog (
             .execute(&mut *conn)
             .await?;
         }
+
+        // Snapshot this revision's full metadata into immutable revision-scoped tables.
+        // We SELECT from the plugin tables we just populated above, so there is no
+        // need to repeat the type-extraction logic.
+        sqlx::query(
+            "INSERT OR IGNORE INTO PluginRevisionEntrypoint \
+             (revision_id, id, name, function_name, description) \
+             SELECT ?1, id, name, function_name, description \
+             FROM PluginEntrypoint WHERE plugin_id = ?2",
+        )
+        .bind(&revision_id)
+        .bind(&plugin.id)
+        .execute(&mut *conn)
+        .await?;
+
+        sqlx::query(
+            "INSERT OR IGNORE INTO PluginRevisionInputDef \
+             (revision_id, entrypoint_id, name, title, type_, type_json, \
+              enum_values_json, optional, description, default_value_json) \
+             SELECT ?1, entrypoint_id, name, title, type_, type_json, \
+                    enum_values_json, optional, description, default_value_json \
+             FROM PluginInputDef WHERE plugin_id = ?2",
+        )
+        .bind(&revision_id)
+        .bind(&plugin.id)
+        .execute(&mut *conn)
+        .await?;
+
+        sqlx::query(
+            "INSERT OR IGNORE INTO PluginRevisionSettingDef \
+             (revision_id, name, title, type_, type_json, \
+              enum_values_json, description, required, default_value_json) \
+             SELECT ?1, name, title, type_, type_json, \
+                    enum_values_json, description, required, default_value_json \
+             FROM PluginSettingDef WHERE plugin_id = ?2",
+        )
+        .bind(&revision_id)
+        .bind(&plugin.id)
+        .execute(&mut *conn)
+        .await?;
 
         Ok(())
     }
