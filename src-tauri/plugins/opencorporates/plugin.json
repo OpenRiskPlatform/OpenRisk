@@ -1,0 +1,74 @@
+{
+  "$schema": "../../schemas/plugin-manifest.schema.json",
+  "id": "opencorporates",
+  "version": "0.1.0",
+  "name": "OpenCorporates by OpenRiskPlatform",
+  "description": "Searches companies and officers in OpenCorporates and returns normalized OpenRisk entities.",
+  "license": "MIT",
+  "entrypoint": "index.ts",
+  "authors": [
+    {
+      "name": "OpenRiskPlatform",
+      "email": "simemail@gmail.com"
+    }
+  ],
+  "entrypoints": [
+    {
+      "id": "companies",
+      "name": "Company Search",
+      "description": "Searches OpenCorporates companies and returns organization entities.",
+      "function": "searchCompanies"
+    },
+    {
+      "id": "officers",
+      "name": "Officer Search",
+      "description": "Searches OpenCorporates officers and returns person entities.",
+      "function": "searchOfficers"
+    }
+  ],
+  "settings": [
+    {
+      "name": "token",
+      "type": "string",
+      "title": "OpenCorporates API Token",
+      "description": "API token used for authenticated requests to OpenCorporates.",
+      "required": true,
+      "default": null
+    }
+  ],
+  "inputs": [
+    {
+      "name": "search_input",
+      "type": "string",
+      "optional": false,
+      "title": "Search Input",
+      "description": "Free-text company or officer name to search in OpenCorporates."
+    },
+    {
+      "name": "jurisdiction_code",
+      "type": "string",
+      "optional": true,
+      "title": "Jurisdiction Code",
+      "description": "Optional OpenCorporates jurisdiction code such as gb, us_de, or sk."
+    },
+    {
+      "name": "limit",
+      "type": "number",
+      "optional": true,
+      "title": "Result Limit",
+      "description": "Maximum number of results to request per search.",
+      "default": 5,
+      "validation": {
+        "min": 1,
+        "max": 25
+      }
+    },
+    {
+      "name": "inactive",
+      "type": "boolean",
+      "optional": true,
+      "title": "Inactive Filter",
+      "description": "If true, only inactive records are returned. If false, inactive records are excluded. If omitted, OpenCorporates default behavior is used."
+    }
+  ]
+}
