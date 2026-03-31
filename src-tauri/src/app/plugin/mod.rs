@@ -15,12 +15,12 @@ pub fn plugins_root() -> PathBuf {
 /// Execute plugin source code directly (used by the scan runner with code stored in the DB).
 ///
 /// Merges `inputs` and `settings` into a single object and calls `entrypoint_fn`
-/// (defaults to `"default"` if `None`). Returns `(result, logs)`.
+/// and returns `(result, logs)`.
 pub fn execute_plugin_code_with_settings(
     code: String,
     inputs: Value,
     settings: Value,
-    entrypoint_fn: Option<String>,
+    entrypoint_fn: String,
 ) -> Result<(Value, Value), String> {
     let mut merged = match inputs {
         Value::Object(m) => m,
@@ -31,6 +31,5 @@ pub fn execute_plugin_code_with_settings(
             merged.insert(k, v);
         }
     }
-    let fn_name = entrypoint_fn.as_deref().unwrap_or("default");
-    runtime::run_plugin_module(code, Value::Object(merged), fn_name)
+    runtime::run_plugin_module(code, Value::Object(merged), &entrypoint_fn)
 }

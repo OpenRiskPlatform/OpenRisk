@@ -80,13 +80,22 @@ pub struct PluginEntrypointRecord {
 #[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginInputDef {
+    pub entrypoint_id: String,
     pub name: String,
     pub title: String,
     #[serde(rename = "type")]
-    pub type_: String,
+    pub type_: PluginFieldTypeDef,
     pub optional: bool,
     pub description: Option<String>,
     pub default_value: Option<SettingValue>,
+}
+
+/// Structured input/setting type descriptor.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginFieldTypeDef {
+    pub name: String,
+    pub values: Option<Vec<String>>,
 }
 
 /// Definition of one configurable setting declared by a plugin.
@@ -96,7 +105,7 @@ pub struct PluginSettingDef {
     pub name: String,
     pub title: String,
     #[serde(rename = "type")]
-    pub type_: String,
+    pub type_: PluginFieldTypeDef,
     pub description: Option<String>,
     pub required: bool,
     pub default_value: Option<SettingValue>,

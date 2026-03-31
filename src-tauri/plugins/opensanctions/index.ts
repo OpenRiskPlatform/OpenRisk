@@ -405,9 +405,9 @@ function normalizePersonEntity(entity: OpenSanctionsEntity): PersonEntity {
 }
 
 /**
- * Main plugin function - must be default export
+ * Matches a person name against OpenSanctions.
  */
-export default async function (inputs: PluginInputs): Promise<PersonEntity[]> {
+export async function matchPersons(inputs: PluginInputs): Promise<PersonEntity[]> {
   const searchInput = inputs.search_input?.trim();
   const token = inputs.token?.trim();
 

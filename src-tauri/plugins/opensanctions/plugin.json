@@ -5,11 +5,28 @@
   "name": "OpenSanctions by OpenRiskPlatform",
   "description": "Matches a person name against OpenSanctions and returns normalized person entities.",
   "license": "MIT",
-  "entrypoint": "index.ts",
+  "main": "index.ts",
   "authors": [
     {
       "name": "OpenRiskPlatform",
       "email": "simemail@gmail.com"
+    }
+  ],
+  "entrypoints": [
+    {
+      "id": "match-persons",
+      "name": "Match Persons",
+      "description": "Matches a person name against OpenSanctions and returns normalized person entities.",
+      "function": "matchPersons",
+      "inputs": [
+        {
+          "name": "search_input",
+          "type": "string",
+          "optional": false,
+          "title": "Search Input",
+          "description": "Free-text person name to match against OpenSanctions."
+        }
+      ]
     }
   ],
   "settings": [
@@ -19,15 +36,6 @@
       "title": "OpenSanctions API Token",
       "description": "API token used for authenticated requests to OpenSanctions.",
       "default": null
-    }
-  ],
-  "inputs": [
-    {
-      "name": "search_input",
-      "type": "string",
-      "optional": false,
-      "title": "Search Input",
-      "description": "Free-text person name to match against OpenSanctions."
     }
   ]
 }

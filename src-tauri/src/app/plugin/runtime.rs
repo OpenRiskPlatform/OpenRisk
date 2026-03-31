@@ -92,6 +92,9 @@ pub fn run_plugin_module(
                 __logs__.push({{ level: "error", message: args.map(String).join(" ") }});
                 __origError__(...args);
             }};
+            if (Object.prototype.hasOwnProperty.call(__mod__, "default")) {{
+                throw new TypeError("Plugin must not use export default. Use named exports only.");
+            }}
             const __fn__ = __mod__["{}"];
             if (typeof __fn__ !== 'function') {{
                 throw new TypeError("Plugin entrypoint '{}' is not exported or is not a function");
@@ -136,6 +139,9 @@ pub fn run_validate_module(code: String, settings_json: String) -> Result<Value,
         r#"
         import * as __mod__ from "script://main.ts";
         export default async () => {{
+            if (Object.prototype.hasOwnProperty.call(__mod__, "default")) {{
+                throw new TypeError("Plugin must not use export default. Use named exports only.");
+            }}
             if (typeof __mod__.validate !== 'function') {{
                 return {{ ok: true }};
             }}

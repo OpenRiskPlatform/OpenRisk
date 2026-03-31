@@ -407,8 +407,9 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
             .filter(([, enabled]) => enabled)
             .map(([key]) => {
                 const [pluginId, entrypointId] = key.split("::");
-                return { pluginId, entrypointId: entrypointId ?? "default" };
-            });
+                return { pluginId, entrypointId: entrypointId ?? "" };
+            })
+            .filter((sel) => sel.entrypointId.length > 0);
 
         if (!selectedPlugins.length) {
             setDetailError("Enable at least one plugin before run.");
@@ -690,10 +691,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                                                     parsedData !== null && isDataModelResult(parsedData)
                                                         ? parsedData
                                                         : null;
-                                                const subtitle =
-                                                    result.entrypointId && result.entrypointId !== "default"
-                                                        ? `${result.pluginId} / ${result.entrypointId}`
-                                                        : result.pluginId;
+                                                const subtitle = `${result.pluginId} / ${result.entrypointId}`;
                                                 return (
                                                     <div
                                                         key={`${result.pluginId}::${result.entrypointId}`}
@@ -818,38 +816,50 @@ function PluginRunCard({
             <div className="space-y-2">
                 {entrypoints.map((ep) => (
                     <div key={ep.id}>
-                        <div className="flex items-center justify-between gap-2">
-                            <div>
-                                <p className="text-sm">{ep.name}</p>
-                                {ep.description ? (
-                                    <p className="text-xs text-muted-foreground">{ep.description}</p>
-                                ) : null}
-                            </div>
-                            <Switch
-                                checked={Boolean(enabledEntrypoints[ep.id])}
-                                onCheckedChange={(enabled) => onEntrypointChange(ep.id, enabled)}
-                            />
-                        </div>
-                        {Boolean(enabledEntrypoints[ep.id]) && inputDefs.length > 0 ? (
-                            <div className="mt-2 space-y-2 pl-3 border-l-2 border-border/40">
-                                {inputDefs.map((input) => {
-                                    const current = entrypointInputs[ep.id]?.[input.name];
-                                    return (
-                                        <div key={`${ep.id}-${input.name}`} className="space-y-1">
-                                            <Label className="text-sm">{input.title}</Label>
-                                            {input.description ? (
-                                                <p className="text-xs text-muted-foreground">{input.description}</p>
+                        {(() => {
+                            const inputsForEntrypoint = inputDefs.filter((input) => input.entrypointId === ep.id);
+                            return (
+                                <>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div>
+                                            <p className="text-sm">{ep.name}</p>
+                                            {ep.description ? (
+                                                <p className="text-xs text-muted-foreground">{ep.description}</p>
                                             ) : null}
-                                            <PluginInputField
-                                                type={input.type}
-                                                value={current}
-                                                onChange={(value) => onFieldChange(ep.id, input.name, value)}
-                                            />
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        ) : null}
+                                        <Switch
+                                            checked={Boolean(enabledEntrypoints[ep.id])}
+                                            onCheckedChange={(enabled) => onEntrypointChange(ep.id, enabled)}
+                                        />
+                                    </div>
+                                    {Boolean(enabledEntrypoints[ep.id]) && inputsForEntrypoint.length > 0 ? (
+                                        <div className="mt-2 space-y-2 pl-3 border-l-2 border-border/40">
+                                            {inputsForEntrypoint.map((input) => {
+                                                const current = entrypointInputs[ep.id]?.[input.name];
+                                                const options =
+                                                    input.type.name === "enum"
+                                                        ? input.type.values ?? undefined
+                                                        : undefined;
+                                                return (
+                                                    <div key={`${ep.id}-${input.name}`} className="space-y-1">
+                                                        <Label className="text-sm">{input.title}</Label>
+                                                        {input.description ? (
+                                                            <p className="text-xs text-muted-foreground">{input.description}</p>
+                                                        ) : null}
+                                                        <PluginInputField
+                                                            typeName={input.type.name}
+                                                            value={current}
+                                                            options={options}
+                                                            onChange={(value) => onFieldChange(ep.id, input.name, value)}
+                                                        />
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : null}
+                                </>
+                            );
+                        })()}
                     </div>
                 ))}
             </div>
@@ -858,12 +868,12 @@ function PluginRunCard({
 }
 
 function PluginInputField({
-    type,
+    typeName,
     value,
     onChange,
     options,
 }: {
-    type: string;
+    typeName: string;
     value: unknown;
     onChange: (value: unknown) => void;
     options?: string[];
@@ -887,7 +897,7 @@ function PluginInputField({
         );
     }
 
-    if (type === "number") {
+    if (typeName === "number" || typeName === "integer") {
         return (
             <Input
                 type="number"
@@ -905,11 +915,31 @@ function PluginInputField({
         );
     }
 
-    if (type === "boolean") {
+    if (typeName === "boolean") {
         return (
             <div className="pt-1">
                 <Switch checked={Boolean(value)} onCheckedChange={(checked) => onChange(checked)} />
             </div>
+        );
+    }
+
+    if (typeName === "date") {
+        return (
+            <Input
+                type="date"
+                value={value === undefined || value === null ? "" : String(value)}
+                onChange={(event) => onChange(event.target.value)}
+            />
+        );
+    }
+
+    if (typeName === "url") {
+        return (
+            <Input
+                type="url"
+                value={value === undefined || value === null ? "" : String(value)}
+                onChange={(event) => onChange(event.target.value)}
+            />
         );
     }
 

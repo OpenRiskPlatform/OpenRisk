@@ -113,9 +113,18 @@ pub(super) async fn load_plugin_record(
         })
         .collect();
 
-    let input_rows: Vec<(String, String, String, i64, Option<String>, Option<String>)> =
+    let input_rows: Vec<(
+        String,
+        String,
+        String,
+        String,
+        Option<String>,
+        i64,
+        Option<String>,
+        Option<String>,
+    )> =
         sqlx::query_as(
-            "SELECT name, title, type_, optional, description, default_value_json \
+            "SELECT entrypoint_id, name, title, type_json, enum_values_json, optional, description, default_value_json \
              FROM PluginInputDef WHERE plugin_id = ?1 ORDER BY rowid",
         )
         .bind(plugin_id)
@@ -124,26 +133,58 @@ pub(super) async fn load_plugin_record(
 
     let input_defs = input_rows
         .into_iter()
-        .map(|(name, title, type_, optional, description, dvj)| {
-            let default_value = dvj.as_deref().and_then(|s| {
-                serde_json::from_str::<serde_json::Value>(s)
-                    .ok()
-                    .map(|v| SettingValue::from_json(&v))
-            });
-            PluginInputDef {
+        .map(
+            |(
+                entrypoint_id,
                 name,
                 title,
-                type_,
-                optional: optional != 0,
+                type_json,
+                enum_values_json,
+                optional,
                 description,
-                default_value,
-            }
-        })
+                dvj,
+            )| {
+                let mut field_type = serde_json::from_str::<PluginFieldTypeDef>(&type_json)
+                    .unwrap_or(PluginFieldTypeDef {
+                        name: "string".to_string(),
+                        values: None,
+                    });
+                if field_type.values.is_none() {
+                    field_type.values = enum_values_json.as_deref().and_then(|s| {
+                        serde_json::from_str::<Vec<String>>(s)
+                            .ok()
+                            .filter(|v| !v.is_empty())
+                    });
+                }
+                let default_value = dvj.as_deref().and_then(|s| {
+                    serde_json::from_str::<serde_json::Value>(s)
+                        .ok()
+                        .map(|v| SettingValue::from_json(&v))
+                });
+                PluginInputDef {
+                    entrypoint_id,
+                    name,
+                    title,
+                    type_: field_type,
+                    optional: optional != 0,
+                    description,
+                    default_value,
+                }
+            },
+        )
         .collect();
 
-    let sdef_rows: Vec<(String, String, String, Option<String>, i64, Option<String>)> =
+    let sdef_rows: Vec<(
+        String,
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        i64,
+        Option<String>,
+    )> =
         sqlx::query_as(
-            "SELECT name, title, type_, description, required, default_value_json \
+            "SELECT name, title, type_json, enum_values_json, description, required, default_value_json \
              FROM PluginSettingDef WHERE plugin_id = ?1 ORDER BY rowid",
         )
         .bind(plugin_id)
@@ -152,21 +193,35 @@ pub(super) async fn load_plugin_record(
 
     let setting_defs = sdef_rows
         .into_iter()
-        .map(|(name, title, type_, description, required, dvj)| {
-            let default_value = dvj.as_deref().and_then(|s| {
-                serde_json::from_str::<serde_json::Value>(s)
-                    .ok()
-                    .map(|v| SettingValue::from_json(&v))
-            });
-            PluginSettingDef {
-                name,
-                title,
-                type_,
-                description,
-                required: required != 0,
-                default_value,
-            }
-        })
+        .map(
+            |(name, title, type_json, enum_values_json, description, required, dvj)| {
+                let mut field_type = serde_json::from_str::<PluginFieldTypeDef>(&type_json)
+                    .unwrap_or(PluginFieldTypeDef {
+                        name: "string".to_string(),
+                        values: None,
+                    });
+                if field_type.values.is_none() {
+                    field_type.values = enum_values_json.as_deref().and_then(|s| {
+                        serde_json::from_str::<Vec<String>>(s)
+                            .ok()
+                            .filter(|v| !v.is_empty())
+                    });
+                }
+                let default_value = dvj.as_deref().and_then(|s| {
+                    serde_json::from_str::<serde_json::Value>(s)
+                        .ok()
+                        .map(|v| SettingValue::from_json(&v))
+                });
+                PluginSettingDef {
+                    name,
+                    title,
+                    type_: field_type,
+                    description,
+                    required: required != 0,
+                    default_value,
+                }
+            },
+        )
         .collect();
 
     let sv_rows: Vec<(String, String)> = sqlx::query_as(

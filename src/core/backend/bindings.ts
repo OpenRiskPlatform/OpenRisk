@@ -128,11 +128,18 @@ export type PluginEntrypointSelection = {
 	entrypointId: string,
 };
 
+// Structured input/setting type descriptor.
+export type PluginFieldTypeDef = {
+	name: string,
+	values: string[] | null,
+};
+
 // Definition of one input field declared by a plugin.
 export type PluginInputDef = {
+	entrypointId: string,
 	name: string,
 	title: string,
-	type: string,
+	type: PluginFieldTypeDef,
 	optional: boolean,
 	description: string | null,
 	defaultValue: SettingValue | null,
@@ -178,7 +185,7 @@ export type PluginRecord = {
 export type PluginSettingDef = {
 	name: string,
 	title: string,
-	type: string,
+	type: PluginFieldTypeDef,
 	description: string | null,
 	required: boolean,
 	defaultValue: SettingValue | null,

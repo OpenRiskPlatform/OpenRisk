@@ -10,6 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import type {
     PluginRecord,
     ProjectSettingsRecord,
@@ -288,12 +295,13 @@ function PluginSettingsCard({
                                     <p className="text-xs text-muted-foreground">{setting.description}</p>
                                 ) : null}
                                 <SettingInput
-                                    type={setting.type}
+                                    typeName={setting.type.name}
+                                    options={setting.type.name === "enum" ? setting.type.values ?? undefined : undefined}
                                     value={currentValue}
                                     onChange={(value) => setField(setting.name, value)}
                                 />
                                 <p className="text-xs text-muted-foreground">
-                                    Type: {setting.type}
+                                    Type: {setting.type.name}
                                 </p>
                             </div>
                         );
@@ -318,15 +326,33 @@ function PluginSettingsCard({
 }
 
 function SettingInput({
-    type,
+    typeName,
+    options,
     value,
     onChange,
 }: {
-    type: string;
+    typeName: string;
+    options?: string[];
     value: unknown;
     onChange: (value: unknown) => void;
 }) {
-    if (type === "boolean") {
+    if (options && options.length > 0) {
+        const strValue = value === null || value === undefined ? "" : String(value);
+        return (
+            <Select value={strValue || options[0]} onValueChange={(v) => onChange(v)}>
+                <SelectTrigger>
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                    {options.map((opt) => (
+                        <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+        );
+    }
+
+    if (typeName === "boolean") {
         return (
             <div className="pt-1">
                 <Switch
@@ -337,7 +363,7 @@ function SettingInput({
         );
     }
 
-    if (type === "number") {
+    if (typeName === "number" || typeName === "integer") {
         return (
             <Input
                 type="number"
@@ -351,6 +377,26 @@ function SettingInput({
                     const parsed = Number(raw);
                     onChange(Number.isNaN(parsed) ? null : parsed);
                 }}
+            />
+        );
+    }
+
+    if (typeName === "date") {
+        return (
+            <Input
+                type="date"
+                value={value === null || value === undefined ? "" : String(value)}
+                onChange={(event) => onChange(event.target.value)}
+            />
+        );
+    }
+
+    if (typeName === "url") {
+        return (
+            <Input
+                type="url"
+                value={value === null || value === undefined ? "" : String(value)}
+                onChange={(event) => onChange(event.target.value)}
             />
         );
     }

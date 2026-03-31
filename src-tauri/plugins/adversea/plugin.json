@@ -12,25 +12,66 @@
     ],
     "icon": "icon.png",
     "license": "MIT",
-    "entrypoint": "index.ts",
+    "main": "index.ts",
     "entrypoints": [
         {
             "id": "pep-sanctions",
             "name": "PEP & Sanctions Check",
             "description": "Checks PEP exposure and active sanctions datasets for the target name.",
-            "function": "pepSanctionsCheck"
+            "function": "pepSanctionsCheck",
+            "inputs": [
+                {
+                    "name": "target",
+                    "type": "string",
+                    "optional": false,
+                    "title": "Target Name",
+                    "description": "Full name of the person or organization to screen."
+                }
+            ]
         },
         {
             "id": "topic-report",
             "name": "Topic Report",
             "description": "Adverse media analysis grouped by risk topics (corruption, financial crime, etc.).",
-            "function": "topicReport"
+            "function": "topicReport",
+            "inputs": [
+                {
+                    "name": "target",
+                    "type": "string",
+                    "optional": false,
+                    "title": "Target Name",
+                    "description": "Full name of the person or organization to screen."
+                },
+                {
+                    "name": "output_language",
+                    "type": {
+                        "name": "enum",
+                        "values": [
+                            "English",
+                            "Slovak"
+                        ]
+                    },
+                    "optional": true,
+                    "title": "Output Language",
+                    "description": "Language for the generated text output.",
+                    "default": "English"
+                }
+            ]
         },
         {
             "id": "social-media",
             "name": "Social Media",
             "description": "Finds public social media profiles matching the target name.",
-            "function": "socialMediaCheck"
+            "function": "socialMediaCheck",
+            "inputs": [
+                {
+                    "name": "target",
+                    "type": "string",
+                    "optional": false,
+                    "title": "Target Name",
+                    "description": "Full name of the person or organization to screen."
+                }
+            ]
         }
     ],
     "settings": [
@@ -41,29 +82,6 @@
             "description": "Your Adversea API key (X-Adversea-Api-Key header).",
             "required": true,
             "default": null
-        }
-    ],
-    "inputs": [
-        {
-            "name": "target",
-            "type": "string",
-            "optional": false,
-            "title": "Target Name",
-            "description": "Full name of the person or organization to screen."
-        },
-        {
-            "name": "output_language",
-            "type": "string",
-            "optional": true,
-            "title": "Output Language",
-            "description": "Language for the generated text output (Topic Report only).",
-            "default": "English",
-            "validation": {
-                "enum": [
-                    "English",
-                    "Slovak"
-                ]
-            }
         }
     ]
 }

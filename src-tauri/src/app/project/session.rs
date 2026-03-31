@@ -31,7 +31,7 @@ use uuid::Uuid;
 // Schema & version constants
 // ---------------------------------------------------------------------------
 
-pub(super) const CURRENT_SCHEMA_VERSION: i64 = 8;
+pub(super) const CURRENT_SCHEMA_VERSION: i64 = 9;
 const MIN_SUPPORTED_SCHEMA_VERSION: i64 = 4;
 
 const PROJECT_LEGACY_ERROR_PREFIX: &str = "PROJECT_LEGACY:";
@@ -84,13 +84,16 @@ CREATE TABLE IF NOT EXISTS PluginEntrypoint (
 
 CREATE TABLE IF NOT EXISTS PluginInputDef (
     plugin_id TEXT NOT NULL,
+    entrypoint_id TEXT NOT NULL DEFAULT 'default',
     name TEXT NOT NULL,
     title TEXT NOT NULL,
     type_ TEXT NOT NULL,
+    type_json TEXT NOT NULL,
+    enum_values_json TEXT,
     optional INTEGER NOT NULL DEFAULT 0,
     description TEXT,
     default_value_json TEXT,
-    PRIMARY KEY (plugin_id, name),
+    PRIMARY KEY (plugin_id, entrypoint_id, name),
     FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE
 );
 
@@ -99,6 +102,8 @@ CREATE TABLE IF NOT EXISTS PluginSettingDef (
     name TEXT NOT NULL,
     title TEXT NOT NULL,
     type_ TEXT NOT NULL,
+    type_json TEXT NOT NULL,
+    enum_values_json TEXT,
     description TEXT,
     required INTEGER NOT NULL DEFAULT 0,
     default_value_json TEXT,
@@ -501,6 +506,7 @@ impl SqliteProjectPersistence {
                 6 => Self::migrate_to_v6(conn).await?,
                 7 => Self::migrate_to_v7(conn).await?,
                 8 => Self::migrate_to_v8(conn).await?,
+                9 => Self::migrate_to_v9(conn).await?,
                 _ => {
                     return Err(PersistenceError::Validation(format!(
                         "Missing migration to schema version {}",
@@ -536,6 +542,99 @@ impl SqliteProjectPersistence {
         Ok(())
     }
 
+    /// Normalize plugin definition tables to support structured field types and per-entrypoint inputs.
+    async fn migrate_to_v9(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
+        if Self::table_exists(conn, "PluginInputDef").await? {
+            sqlx::query("ALTER TABLE PluginInputDef RENAME TO PluginInputDef_old")
+                .execute(&mut *conn)
+                .await?;
+
+            sqlx::query(
+                "CREATE TABLE PluginInputDef (\
+                 plugin_id TEXT NOT NULL,\
+                 entrypoint_id TEXT NOT NULL DEFAULT 'default',\
+                 name TEXT NOT NULL,\
+                 title TEXT NOT NULL,\
+                 type_ TEXT NOT NULL,\
+                 type_json TEXT NOT NULL,\
+                 enum_values_json TEXT,\
+                 optional INTEGER NOT NULL DEFAULT 0,\
+                 description TEXT,\
+                 default_value_json TEXT,\
+                 PRIMARY KEY (plugin_id, entrypoint_id, name),\
+                 FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE\
+                 )",
+            )
+            .execute(&mut *conn)
+            .await?;
+
+            let has_default =
+                Self::column_exists(conn, "PluginInputDef_old", "default_value_json").await?;
+            let default_json_expr = if has_default {
+                "default_value_json"
+            } else {
+                "NULL"
+            };
+
+            sqlx::query(&format!(
+                "INSERT INTO PluginInputDef \
+                 (plugin_id, entrypoint_id, name, title, type_, type_json, enum_values_json, optional, description, default_value_json) \
+                 SELECT plugin_id, 'default', name, title, type_, \
+                        json_object('name', COALESCE(NULLIF(type_, ''), 'string')), \
+                        NULL, optional, description, {} \
+                 FROM PluginInputDef_old",
+                default_json_expr
+            ))
+            .execute(&mut *conn)
+            .await?;
+
+            sqlx::query("DROP TABLE PluginInputDef_old")
+                .execute(&mut *conn)
+                .await?;
+        }
+
+        if Self::table_exists(conn, "PluginSettingDef").await? {
+            sqlx::query("ALTER TABLE PluginSettingDef RENAME TO PluginSettingDef_old")
+                .execute(&mut *conn)
+                .await?;
+
+            sqlx::query(
+                "CREATE TABLE PluginSettingDef (\
+                 plugin_id TEXT NOT NULL,\
+                 name TEXT NOT NULL,\
+                 title TEXT NOT NULL,\
+                 type_ TEXT NOT NULL,\
+                 type_json TEXT NOT NULL,\
+                 enum_values_json TEXT,\
+                 description TEXT,\
+                 required INTEGER NOT NULL DEFAULT 0,\
+                 default_value_json TEXT,\
+                 PRIMARY KEY (plugin_id, name),\
+                 FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE\
+                 )",
+            )
+            .execute(&mut *conn)
+            .await?;
+
+            sqlx::query(
+                "INSERT INTO PluginSettingDef \
+                 (plugin_id, name, title, type_, type_json, enum_values_json, description, required, default_value_json) \
+                 SELECT plugin_id, name, title, type_, \
+                        json_object('name', COALESCE(NULLIF(type_, ''), 'string')), \
+                        NULL, description, required, default_value_json \
+                 FROM PluginSettingDef_old",
+            )
+            .execute(&mut *conn)
+            .await?;
+
+            sqlx::query("DROP TABLE PluginSettingDef_old")
+                .execute(&mut *conn)
+                .await?;
+        }
+
+        Ok(())
+    }
+
     /// Full relational schema migration: replace all JSON columns with proper tables.
     async fn migrate_to_v7(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
         // 1. Create new relational tables (if not already present from partial runs).
@@ -562,13 +661,16 @@ CREATE TABLE IF NOT EXISTS PluginInputDef (
 );
 CREATE TABLE IF NOT EXISTS PluginSettingDef (
     plugin_id TEXT NOT NULL,
+    entrypoint_id TEXT NOT NULL DEFAULT 'default',
     name TEXT NOT NULL,
     title TEXT NOT NULL,
     type_ TEXT NOT NULL,
+    type_json TEXT NOT NULL,
+    enum_values_json TEXT,
     description TEXT,
     required INTEGER NOT NULL DEFAULT 0,
     default_value_json TEXT,
-    PRIMARY KEY (plugin_id, name),
+    PRIMARY KEY (plugin_id, entrypoint_id, name),
     FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS ProjectPluginSettingValue (
@@ -577,6 +679,8 @@ CREATE TABLE IF NOT EXISTS ProjectPluginSettingValue (
     setting_name TEXT NOT NULL,
     value_json TEXT NOT NULL DEFAULT 'null',
     PRIMARY KEY (plugin_id, project_settings_id, setting_name),
+    type_json TEXT NOT NULL,
+    enum_values_json TEXT,
     FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE,
     FOREIGN KEY (project_settings_id) REFERENCES ProjectSettings(id) ON DELETE CASCADE
 );
@@ -725,6 +829,18 @@ CREATE TABLE IF NOT EXISTS ScanPluginLog (
                             .get("type")
                             .and_then(|v| v.as_str())
                             .unwrap_or("string");
+                        let type_json = serde_json::json!({ "name": type_ }).to_string();
+                        let enum_values_json = item
+                            .get("validation")
+                            .and_then(|v| v.get("enum"))
+                            .and_then(|v| v.as_array())
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|v| v.as_str().map(ToOwned::to_owned))
+                                    .collect::<Vec<String>>()
+                            })
+                            .filter(|v| !v.is_empty())
+                            .map(|v| serde_json::to_string(&v).unwrap_or_default());
                         let optional = item
                             .get("optional")
                             .and_then(|v| v.as_bool())
@@ -735,13 +851,15 @@ CREATE TABLE IF NOT EXISTS ScanPluginLog (
                             .map(|v| serde_json::to_string(v).unwrap_or_default());
                         sqlx::query(
                             "INSERT OR IGNORE INTO PluginInputDef \
-                             (plugin_id, name, title, type_, optional, description, default_value_json) \
-                             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                                (plugin_id, entrypoint_id, name, title, type_, type_json, enum_values_json, optional, description, default_value_json) \
+                                VALUES (?1, 'default', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                         )
                         .bind(plugin_id)
                         .bind(name)
                         .bind(title)
                         .bind(type_)
+                            .bind(&type_json)
+                            .bind(enum_values_json.as_deref())
                         .bind(optional)
                         .bind(description)
                         .bind(default_json.as_deref())
@@ -764,6 +882,18 @@ CREATE TABLE IF NOT EXISTS ScanPluginLog (
                             .get("type")
                             .and_then(|v| v.as_str())
                             .unwrap_or("string");
+                        let type_json = serde_json::json!({ "name": type_ }).to_string();
+                        let enum_values_json = item
+                            .get("validation")
+                            .and_then(|v| v.get("enum"))
+                            .and_then(|v| v.as_array())
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|v| v.as_str().map(ToOwned::to_owned))
+                                    .collect::<Vec<String>>()
+                            })
+                            .filter(|v| !v.is_empty())
+                            .map(|v| serde_json::to_string(&v).unwrap_or_default());
                         let description = item.get("description").and_then(|v| v.as_str());
                         let required = item
                             .get("required")
@@ -774,13 +904,15 @@ CREATE TABLE IF NOT EXISTS ScanPluginLog (
                             .map(|v| serde_json::to_string(v).unwrap_or_default());
                         sqlx::query(
                             "INSERT OR IGNORE INTO PluginSettingDef \
-                             (plugin_id, name, title, type_, description, required, default_value_json) \
-                             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                                (plugin_id, name, title, type_, type_json, enum_values_json, description, required, default_value_json) \
+                                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                         )
                         .bind(plugin_id)
                         .bind(name)
                         .bind(title)
                         .bind(type_)
+                            .bind(&type_json)
+                            .bind(enum_values_json.as_deref())
                         .bind(description)
                         .bind(required)
                         .bind(default_json.as_deref())
@@ -1096,32 +1228,21 @@ CREATE TABLE IF NOT EXISTS ScanPluginLog (
             .execute(&mut *conn)
             .await?;
 
-        if plugin.manifest.entrypoints.is_empty() {
-            // Implicit single "default" entrypoint using the default export.
+        for ep in &plugin.manifest.entrypoints {
+            let ep_id: String = ep.id.clone().into();
+            let ep_name: String = ep.name.clone().into();
+            let ep_fn: String = ep.function.clone().into();
             sqlx::query(
                 "INSERT INTO PluginEntrypoint (plugin_id, id, name, function_name, description) \
-                 VALUES (?1, 'default', 'Default', 'default', NULL)",
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
             )
             .bind(&plugin.id)
+            .bind(&ep_id)
+            .bind(&ep_name)
+            .bind(&ep_fn)
+            .bind(&ep.description)
             .execute(&mut *conn)
             .await?;
-        } else {
-            for ep in &plugin.manifest.entrypoints {
-                let ep_id: String = ep.id.clone().into();
-                let ep_name: String = ep.name.clone().into();
-                let ep_fn: String = ep.function.clone().into();
-                sqlx::query(
-                    "INSERT INTO PluginEntrypoint (plugin_id, id, name, function_name, description) \
-                     VALUES (?1, ?2, ?3, ?4, ?5)",
-                )
-                .bind(&plugin.id)
-                .bind(&ep_id)
-                .bind(&ep_name)
-                .bind(&ep_fn)
-                .bind(&ep.description)
-                .execute(&mut *conn)
-                .await?;
-            }
         }
 
         // Upsert input definitions.
@@ -1130,29 +1251,53 @@ CREATE TABLE IF NOT EXISTS ScanPluginLog (
             .execute(&mut *conn)
             .await?;
 
-        for input in &plugin.manifest.inputs {
-            let name_str: String = input.name.clone().into();
-            let title_str: String = input.title.clone().into();
-            let type_str: String = input.type_.clone().into();
-            let optional = input.optional as i64;
-            let default_json = input
-                .default
-                .as_ref()
-                .map(|v| serde_json::to_string(v).unwrap_or_default());
-            sqlx::query(
-                "INSERT INTO PluginInputDef \
-                 (plugin_id, name, title, type_, optional, description, default_value_json) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            )
-            .bind(&plugin.id)
-            .bind(&name_str)
-            .bind(&title_str)
-            .bind(&type_str)
-            .bind(optional)
-            .bind(&input.description)
-            .bind(default_json.as_deref())
-            .execute(&mut *conn)
-            .await?;
+        for ep in &plugin.manifest.entrypoints {
+            let ep_id: String = ep.id.clone().into();
+            let inputs = &ep.inputs;
+            for input in inputs {
+                let name_str: String = input.name.clone().into();
+                let title_str = input.title.clone();
+                let type_str = input.type_.name().to_string();
+                let type_json = serde_json::to_string(&input.type_.to_json_value())
+                    .unwrap_or_else(|_| "{\"name\":\"string\"}".to_string());
+                let enum_values_json = input
+                    .type_
+                    .enum_values()
+                    .map(|v| v.to_vec())
+                    .or_else(|| {
+                        input.validation.as_ref().and_then(|v| {
+                            if v.enum_.is_empty() {
+                                None
+                            } else {
+                                Some(v.enum_.clone())
+                            }
+                        })
+                    })
+                    .filter(|v| !v.is_empty())
+                    .map(|v| serde_json::to_string(&v).unwrap_or_default());
+                let optional = input.optional as i64;
+                let default_json = input
+                    .default
+                    .as_ref()
+                    .map(|v| serde_json::to_string(v).unwrap_or_default());
+                sqlx::query(
+                    "INSERT INTO PluginInputDef \
+                     (plugin_id, entrypoint_id, name, title, type_, type_json, enum_values_json, optional, description, default_value_json) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                )
+                .bind(&plugin.id)
+                .bind(&ep_id)
+                .bind(&name_str)
+                .bind(&title_str)
+                .bind(&type_str)
+                .bind(&type_json)
+                .bind(enum_values_json.as_deref())
+                .bind(optional)
+                .bind(&input.description)
+                .bind(default_json.as_deref())
+                .execute(&mut *conn)
+                .await?;
+            }
         }
 
         // Upsert setting definitions.
@@ -1163,8 +1308,25 @@ CREATE TABLE IF NOT EXISTS ScanPluginLog (
 
         for setting in &plugin.manifest.settings {
             let name_str: String = setting.name.clone().into();
-            let title_str: String = setting.title.clone().into();
-            let type_str: String = setting.type_.to_string();
+            let title_str = setting.title.clone();
+            let type_str = setting.type_.name().to_string();
+            let type_json = serde_json::to_string(&setting.type_.to_json_value())
+                .unwrap_or_else(|_| "{\"name\":\"string\"}".to_string());
+            let enum_values_json = setting
+                .type_
+                .enum_values()
+                .map(|v| v.to_vec())
+                .or_else(|| {
+                    setting.validation.as_ref().and_then(|v| {
+                        if v.enum_.is_empty() {
+                            None
+                        } else {
+                            Some(v.enum_.clone())
+                        }
+                    })
+                })
+                .filter(|v| !v.is_empty())
+                .map(|v| serde_json::to_string(&v).unwrap_or_default());
             let required = setting.required as i64;
             let default_json = setting
                 .default
@@ -1172,13 +1334,15 @@ CREATE TABLE IF NOT EXISTS ScanPluginLog (
                 .map(|v| serde_json::to_string(v).unwrap_or_default());
             sqlx::query(
                 "INSERT INTO PluginSettingDef \
-                 (plugin_id, name, title, type_, description, required, default_value_json) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                 (plugin_id, name, title, type_, type_json, enum_values_json, description, required, default_value_json) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             )
             .bind(&plugin.id)
             .bind(&name_str)
             .bind(&title_str)
             .bind(&type_str)
+            .bind(&type_json)
+            .bind(enum_values_json.as_deref())
             .bind(&setting.description)
             .bind(required)
             .bind(default_json.as_deref())

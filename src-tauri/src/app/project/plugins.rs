@@ -87,7 +87,7 @@ pub fn load_plugin_bundle(dir: &Path) -> Result<LocalPluginBundle, PersistenceEr
     let manifest =
         parse_manifest(&manifest_raw).map_err(|e| PersistenceError::Validation(e.to_string()))?;
 
-    let code_path = dir.join(manifest.entrypoint.clone().to_string());
+    let code_path = dir.join(manifest.main.clone().to_string());
     if !code_path.exists() {
         return Err(PersistenceError::Validation(format!(
             "Missing plugin entrypoint file: {:?}",
@@ -120,7 +120,7 @@ pub fn load_plugin_bundle_with_id(
     let manifest = parse_manifest_relaxed(&manifest_raw)
         .map_err(|e| PersistenceError::Validation(e.to_string()))?;
 
-    let code_path = dir.join(manifest.entrypoint.clone().to_string());
+    let code_path = dir.join(manifest.main.clone().to_string());
     if !code_path.exists() {
         return Err(PersistenceError::Validation(format!(
             "Missing plugin entrypoint file: {:?}",
@@ -177,7 +177,7 @@ pub fn load_plugin_bundle_from_zip(
             })
     });
 
-    let entrypoint = manifest.entrypoint.clone().to_string();
+    let entrypoint = manifest.main.clone().to_string();
     let code = {
         let mut entry = archive.by_name(&entrypoint).map_err(|_| {
             PersistenceError::Validation(format!("Zip is missing entrypoint file: {}", entrypoint))
@@ -235,7 +235,8 @@ pub fn build_default_settings(
 
 /// Parse a plugin manifest, filling in commonly missing optional fields when strict validation fails.
 ///
-/// Tolerates manifests that omit `license`, `authors`, `entrypoint`, `settings`, or `inputs`.
+/// Tolerates manifests that omit `license`, `authors`, `main`, or `settings`.
+/// Entrypoints remain mandatory and must be explicitly declared in plugin.json.
 pub fn parse_manifest_relaxed(raw: &str) -> Result<OpenRiskPluginManifest, String> {
     if let Ok(parsed) = parse_manifest(raw) {
         return Ok(parsed);
@@ -250,17 +251,14 @@ pub fn parse_manifest_relaxed(raw: &str) -> Result<OpenRiskPluginManifest, Strin
     if !obj.contains_key("license") {
         obj.insert("license".to_string(), Value::String("MIT".to_string()));
     }
-    if !obj.contains_key("entrypoint") {
-        obj.insert(
-            "entrypoint".to_string(),
-            Value::String("index.ts".to_string()),
-        );
+    if !obj.contains_key("main") {
+        obj.insert("main".to_string(), Value::String("index.ts".to_string()));
     }
     if !obj.contains_key("settings") {
         obj.insert("settings".to_string(), Value::Array(vec![]));
     }
-    if !obj.contains_key("inputs") {
-        obj.insert("inputs".to_string(), Value::Array(vec![]));
+    if !obj.contains_key("entrypoints") {
+        obj.insert("entrypoints".to_string(), Value::Array(vec![]));
     }
     if !obj.contains_key("authors") {
         obj.insert(

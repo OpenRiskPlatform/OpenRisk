@@ -104,7 +104,7 @@ pub async fn run_scan(
                         code,
                         plugin_inputs,
                         plugin_settings,
-                        Some(entrypoint_fn),
+                        entrypoint_fn,
                     )
                 })
                 .await

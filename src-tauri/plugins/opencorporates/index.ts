@@ -96,8 +96,8 @@ interface OpenCorporatesCompany {
   opencorporates_url?: string | null;
   previous_names?: OpenCorporatesPreviousName[] | null;
   alternative_names?:
-    | Array<string | OpenCorporatesAlternativeNameObject>
-    | null;
+  | Array<string | OpenCorporatesAlternativeNameObject>
+  | null;
   source?: OpenCorporatesSource | null;
   registered_address?: OpenCorporatesAddress | null;
   registered_address_in_full?: string | null;
@@ -631,4 +631,3 @@ export async function searchOfficers(
     .map((officer) => normalizeOfficerEntity(officer, url));
 }
 
-export default searchCompanies;

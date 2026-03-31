@@ -25,3 +25,18 @@ Bindings are also regenerated automatically every time the app starts in **debug
 - Adding, removing or renaming a `#[tauri::command]`
 - Changing argument or return types of a command
 - Adding `#[derive(specta::Type)]` to a new struct/enum used in commands
+
+## Plugin Manifest Types
+
+Plugin manifest contract is defined in `src-tauri/schemas/plugin-manifest.schema.json`.
+
+- `src-tauri/schemas/plugin-manifest.schema.rs` is generated from that schema via `cargo typify`.
+- `src-tauri/src/plugin_manifest.rs` uses generated types and performs runtime JSON Schema validation.
+
+### Regenerate generated Rust types after schema changes
+
+```bash
+cd src-tauri && cargo typify --no-builder schemas/plugin-manifest.schema.json -o schemas/plugin-manifest.schema.rs
+```
+
+Do not edit `src-tauri/schemas/plugin-manifest.schema.rs` manually.
