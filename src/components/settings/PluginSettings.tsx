@@ -131,13 +131,7 @@ export function PluginSettings({
                 <div className="text-center py-12 text-red-600 text-sm">{error}</div>
             )}
 
-            {projectDir && !loading && !error && plugins.length === 0 && (
-                <div className="text-center py-12 text-muted-foreground">
-                    No plugins found in this project.
-                </div>
-            )}
-
-            {projectDir && !loading && !error && plugins.length > 0 && (
+            {projectDir && !loading && !error && (
                 <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-2">
                     <div className="flex items-center gap-2 flex-wrap">
                         <Button
@@ -163,6 +157,12 @@ export function PluginSettings({
                     </div>
 
                     {importError ? <p className="text-sm text-red-600">{importError}</p> : null}
+
+                    {plugins.length === 0 ? (
+                        <div className="text-center py-12 text-muted-foreground">
+                            No plugins found in this project.
+                        </div>
+                    ) : null}
 
                     {plugins.map((plugin) => (
                         <PluginSettingsCard

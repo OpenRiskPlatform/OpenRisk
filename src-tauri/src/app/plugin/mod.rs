@@ -3,14 +3,6 @@
 mod runtime;
 
 use serde_json::Value;
-use std::path::PathBuf;
-
-/// Root directory that contains all built-in plugin subdirectories.
-pub fn plugins_root() -> PathBuf {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("plugins");
-    path
-}
 
 /// Execute plugin source code directly (used by the scan runner with code stored in the DB).
 ///

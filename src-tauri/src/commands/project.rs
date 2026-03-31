@@ -33,9 +33,6 @@ pub async fn create_project(
         SqliteProjectPersistence::create(&name, &PathBuf::from(project_path))
             .await
             .map_err(AppError::from)?;
-    service::sync_bundled_plugins_for_new_project(&persistence)
-        .await
-        .map_err(AppError::from)?;
     *state.lock().await = Some(Arc::new(persistence));
     Ok(summary)
 }
@@ -57,9 +54,6 @@ pub async fn open_project(
         None => SqliteProjectPersistence::open(&path).await,
     }
     .map_err(AppError::from)?;
-    service::sync_bundled_plugins_for_existing_project(&persistence)
-        .await
-        .map_err(AppError::from)?;
     *state.lock().await = Some(Arc::new(persistence));
     Ok(summary)
 }

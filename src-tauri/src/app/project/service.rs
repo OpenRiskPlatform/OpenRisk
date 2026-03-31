@@ -2,8 +2,8 @@
 
 use super::dao::ProjectPersistence;
 use super::plugins::{
-    build_default_settings, discover_local_plugins, extract_manifest_id,
-    load_plugin_bundle_from_zip, load_plugin_bundle_with_id,
+    build_default_settings, extract_manifest_id, load_plugin_bundle_from_zip,
+    load_plugin_bundle_with_id,
 };
 use super::types::{
     LogEntry, PersistenceError, PluginEntrypointSelection, PluginOutput, PluginRecord,
@@ -11,39 +11,6 @@ use super::types::{
 };
 use serde_json::{Map, Value};
 use std::path::Path;
-
-// ---------------------------------------------------------------------------
-// Built-in plugin sync
-// ---------------------------------------------------------------------------
-
-/// Sync built-in plugins for a newly created project.
-pub async fn sync_bundled_plugins_for_new_project(
-    dao: &dyn ProjectPersistence,
-) -> Result<(), PersistenceError> {
-    for plugin in discover_local_plugins()? {
-        dao.save_plugin(&plugin).await?;
-        let defaults = build_default_settings(&plugin.manifest);
-        dao.save_plugin_setting_values(&plugin.id, &defaults)
-            .await?;
-    }
-    Ok(())
-}
-
-/// Sync built-in plugins for an existing project opened from disk.
-///
-/// Preserves user-configured values; fills in missing keys from the manifest defaults.
-pub async fn sync_bundled_plugins_for_existing_project(
-    dao: &dyn ProjectPersistence,
-) -> Result<(), PersistenceError> {
-    for plugin in discover_local_plugins()? {
-        dao.save_plugin(&plugin).await?;
-        let existing = dao.get_plugin_setting_values(&plugin.id).await?;
-        let defaults = build_default_settings(&plugin.manifest);
-        let merged = merge_with_defaults(existing, defaults);
-        dao.save_plugin_setting_values(&plugin.id, &merged).await?;
-    }
-    Ok(())
-}
 
 // ---------------------------------------------------------------------------
 // Scan execution
