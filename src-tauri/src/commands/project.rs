@@ -207,6 +207,7 @@ pub async fn update_scan_preview(
 }
 
 /// Mark a scan as archived or active without deleting it from the database.
+/// #
 #[tauri::command]
 #[specta::specta]
 pub async fn set_scan_archived(
@@ -222,6 +223,7 @@ pub async fn set_scan_archived(
 }
 
 /// Persist the explicit UI ordering for all scans in the active project.
+/// #
 #[tauri::command]
 #[specta::specta]
 pub async fn reorder_scans(

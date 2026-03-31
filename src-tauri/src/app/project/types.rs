@@ -270,6 +270,7 @@ pub struct PluginOutput {
 #[serde(rename_all = "camelCase")]
 pub struct ScanPluginResultRecord {
     pub plugin_id: String,
+    pub plugin_revision_id: Option<String>,
     pub entrypoint_id: String,
     pub output: PluginOutput,
 }
@@ -294,6 +295,7 @@ pub struct ScanDetailRecord {
 #[derive(Debug, Clone)]
 pub struct PluginLoadData {
     pub plugin_id: String,
+    pub plugin_revision_id: String,
     pub entrypoint_id: String,
     /// The JavaScript-exported function name to invoke.
     pub entrypoint_function: String,

@@ -3,6 +3,7 @@
 use super::helpers::{conn_unavailable, load_scan_logs};
 use crate::app::project::session::SqliteProjectPersistence;
 use crate::app::project::types::*;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(sqlx::FromRow)]
@@ -51,12 +52,12 @@ pub(super) async fn create_scan(
         "INSERT INTO Scan (id, project_id, status, preview, is_archived, sort_order) \
          VALUES (?1, ?2, ?3, ?4, 0, 0)",
     )
-        .bind(&id)
-        .bind(&project_id)
-        .bind("Draft")
-        .bind(&final_preview)
-        .execute(&mut *conn)
-        .await?;
+    .bind(&id)
+    .bind(&project_id)
+    .bind("Draft")
+    .bind(&final_preview)
+    .execute(&mut *conn)
+    .await?;
 
     Ok(ScanSummaryRecord {
         id,
@@ -151,6 +152,7 @@ pub(super) async fn get_scan(
     struct ResultRow {
         id: String,
         plugin_id: String,
+        plugin_revision_id: Option<String>,
         entrypoint_id: String,
         ok: i64,
         error: Option<String>,
@@ -158,7 +160,7 @@ pub(super) async fn get_scan(
     }
 
     let result_rows = sqlx::query_as::<_, ResultRow>(
-        "SELECT id, plugin_id, entrypoint_id, ok, error, data_json \
+        "SELECT id, plugin_id, plugin_revision_id, entrypoint_id, ok, error, data_json \
          FROM ScanPluginResult WHERE scan_id = ?1",
     )
     .bind(scan_id)
@@ -170,6 +172,7 @@ pub(super) async fn get_scan(
         let logs = load_scan_logs(conn, &row.id).await?;
         results.push(ScanPluginResultRecord {
             plugin_id: row.plugin_id,
+            plugin_revision_id: row.plugin_revision_id,
             entrypoint_id: row.entrypoint_id,
             output: PluginOutput {
                 ok: row.ok != 0,
@@ -230,16 +233,38 @@ pub(super) async fn begin_scan_run(
         .bind(scan_id)
         .execute(&mut *conn)
         .await?;
+
+    let mut selected_revision_map: HashMap<(String, String), String> = HashMap::new();
     for sel in selected_plugins {
+        let revision_id: Option<String> =
+            sqlx::query_scalar("SELECT current_revision_id FROM Plugin WHERE id = ?1 LIMIT 1")
+                .bind(&sel.plugin_id)
+                .fetch_optional(&mut *conn)
+                .await?
+                .flatten();
+
+        let revision_id = revision_id.ok_or_else(|| {
+            PersistenceError::Validation(format!(
+                "Plugin '{}' has no active revision",
+                sel.plugin_id
+            ))
+        })?;
+
         sqlx::query(
             "INSERT OR IGNORE INTO ScanSelectedPlugin \
-             (scan_id, plugin_id, entrypoint_id) VALUES (?1, ?2, ?3)",
+             (scan_id, plugin_id, plugin_revision_id, entrypoint_id) VALUES (?1, ?2, ?3, ?4)",
         )
         .bind(scan_id)
         .bind(&sel.plugin_id)
+        .bind(&revision_id)
         .bind(&sel.entrypoint_id)
         .execute(&mut *conn)
         .await?;
+
+        selected_revision_map.insert(
+            (sel.plugin_id.clone(), sel.entrypoint_id.clone()),
+            revision_id,
+        );
     }
 
     sqlx::query("DELETE FROM ScanEntrypointInput WHERE scan_id = ?1")
@@ -248,13 +273,23 @@ pub(super) async fn begin_scan_run(
         .await?;
     for inp in inputs {
         let vj = inp.value.to_json_string();
+        let revision_id = selected_revision_map
+            .get(&(inp.plugin_id.clone(), inp.entrypoint_id.clone()))
+            .cloned()
+            .ok_or_else(|| {
+                PersistenceError::Validation(format!(
+                    "Input references unselected plugin entrypoint '{}::{}'",
+                    inp.plugin_id, inp.entrypoint_id
+                ))
+            })?;
         sqlx::query(
             "INSERT OR IGNORE INTO ScanEntrypointInput \
-             (scan_id, plugin_id, entrypoint_id, field_name, value_json) \
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+             (scan_id, plugin_id, plugin_revision_id, entrypoint_id, field_name, value_json) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         )
         .bind(scan_id)
         .bind(&inp.plugin_id)
+        .bind(&revision_id)
         .bind(&inp.entrypoint_id)
         .bind(&inp.field_name)
         .bind(&vj)
@@ -269,9 +304,19 @@ pub(super) async fn begin_scan_run(
 
     let mut plugins = Vec::new();
     for sel in selected_plugins {
+        let revision_id = selected_revision_map
+            .get(&(sel.plugin_id.clone(), sel.entrypoint_id.clone()))
+            .cloned()
+            .ok_or_else(|| {
+                PersistenceError::Validation(format!(
+                    "Plugin '{}' is missing selected revision",
+                    sel.plugin_id
+                ))
+            })?;
+
         let code: Option<String> =
-            sqlx::query_scalar("SELECT code FROM Plugin WHERE id = ?1 LIMIT 1")
-                .bind(&sel.plugin_id)
+            sqlx::query_scalar("SELECT code FROM PluginRevision WHERE id = ?1 LIMIT 1")
+                .bind(&revision_id)
                 .fetch_optional(&mut *conn)
                 .await?
                 .flatten()
@@ -309,6 +354,7 @@ pub(super) async fn begin_scan_run(
 
         plugins.push(PluginLoadData {
             plugin_id: sel.plugin_id.clone(),
+            plugin_revision_id: revision_id,
             entrypoint_id: sel.entrypoint_id.clone(),
             entrypoint_function,
             settings,
@@ -335,11 +381,12 @@ pub(super) async fn end_scan_run(
         let rid = Uuid::new_v4().to_string();
         sqlx::query(
             "INSERT INTO ScanPluginResult \
-             (id, plugin_id, entrypoint_id, scan_id, ok, error, data_json) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+               (id, plugin_id, plugin_revision_id, entrypoint_id, scan_id, ok, error, data_json) \
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )
         .bind(&rid)
         .bind(&result.plugin_id)
+        .bind(result.plugin_revision_id.as_deref())
         .bind(&result.entrypoint_id)
         .bind(scan_id)
         .bind(result.output.ok as i64)

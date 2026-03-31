@@ -31,7 +31,7 @@ use uuid::Uuid;
 // Schema & version constants
 // ---------------------------------------------------------------------------
 
-pub(super) const CURRENT_SCHEMA_VERSION: i64 = 10;
+pub(super) const CURRENT_SCHEMA_VERSION: i64 = 11;
 const MIN_SUPPORTED_SCHEMA_VERSION: i64 = 4;
 
 const PROJECT_LEGACY_ERROR_PREFIX: &str = "PROJECT_LEGACY:";
@@ -69,7 +69,23 @@ CREATE TABLE IF NOT EXISTS Plugin (
     authors_json TEXT,
     icon TEXT,
     homepage TEXT,
-    code TEXT
+    code TEXT,
+    current_revision_id TEXT
+);
+
+CREATE TABLE IF NOT EXISTS PluginRevision (
+    id TEXT PRIMARY KEY,
+    plugin_id TEXT NOT NULL,
+    version TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    license TEXT,
+    authors_json TEXT,
+    icon TEXT,
+    homepage TEXT,
+    code TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS PluginEntrypoint (
@@ -142,6 +158,7 @@ CREATE TABLE IF NOT EXISTS Scan (
 CREATE TABLE IF NOT EXISTS ScanSelectedPlugin (
     scan_id TEXT NOT NULL,
     plugin_id TEXT NOT NULL,
+    plugin_revision_id TEXT,
     entrypoint_id TEXT NOT NULL,
     PRIMARY KEY (scan_id, plugin_id, entrypoint_id),
     FOREIGN KEY (scan_id) REFERENCES Scan(id) ON DELETE CASCADE,
@@ -151,6 +168,7 @@ CREATE TABLE IF NOT EXISTS ScanSelectedPlugin (
 CREATE TABLE IF NOT EXISTS ScanEntrypointInput (
     scan_id TEXT NOT NULL,
     plugin_id TEXT NOT NULL,
+    plugin_revision_id TEXT,
     entrypoint_id TEXT NOT NULL,
     field_name TEXT NOT NULL,
     value_json TEXT NOT NULL DEFAULT 'null',
@@ -161,6 +179,7 @@ CREATE TABLE IF NOT EXISTS ScanEntrypointInput (
 CREATE TABLE IF NOT EXISTS ScanPluginResult (
     id TEXT PRIMARY KEY,
     plugin_id TEXT NOT NULL,
+    plugin_revision_id TEXT,
     entrypoint_id TEXT NOT NULL DEFAULT 'default',
     scan_id TEXT NOT NULL,
     ok INTEGER NOT NULL DEFAULT 0,
@@ -510,6 +529,7 @@ impl SqliteProjectPersistence {
                 8 => Self::migrate_to_v8(conn).await?,
                 9 => Self::migrate_to_v9(conn).await?,
                 10 => Self::migrate_to_v10(conn).await?,
+                11 => Self::migrate_to_v11(conn).await?,
                 _ => {
                     return Err(PersistenceError::Validation(format!(
                         "Missing migration to schema version {}",
@@ -663,6 +683,143 @@ impl SqliteProjectPersistence {
                     .await?;
             }
         }
+
+        Ok(())
+    }
+
+    /// Introduce immutable plugin revisions and bind scan rows to exact plugin revisions.
+    async fn migrate_to_v11(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
+        if !Self::table_exists(conn, "PluginRevision").await? {
+            sqlx::query(
+                "CREATE TABLE PluginRevision (\
+                 id TEXT PRIMARY KEY,\
+                 plugin_id TEXT NOT NULL,\
+                 version TEXT NOT NULL,\
+                 name TEXT NOT NULL,\
+                 description TEXT,\
+                 license TEXT,\
+                 authors_json TEXT,\
+                 icon TEXT,\
+                 homepage TEXT,\
+                 code TEXT,\
+                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\
+                 FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE\
+                 )",
+            )
+            .execute(&mut *conn)
+            .await?;
+        }
+
+        if !Self::column_exists(conn, "Plugin", "current_revision_id").await? {
+            sqlx::query("ALTER TABLE Plugin ADD COLUMN current_revision_id TEXT")
+                .execute(&mut *conn)
+                .await?;
+        }
+
+        if !Self::column_exists(conn, "ScanSelectedPlugin", "plugin_revision_id").await? {
+            sqlx::query("ALTER TABLE ScanSelectedPlugin ADD COLUMN plugin_revision_id TEXT")
+                .execute(&mut *conn)
+                .await?;
+        }
+
+        if !Self::column_exists(conn, "ScanEntrypointInput", "plugin_revision_id").await? {
+            sqlx::query("ALTER TABLE ScanEntrypointInput ADD COLUMN plugin_revision_id TEXT")
+                .execute(&mut *conn)
+                .await?;
+        }
+
+        if !Self::column_exists(conn, "ScanPluginResult", "plugin_revision_id").await? {
+            sqlx::query("ALTER TABLE ScanPluginResult ADD COLUMN plugin_revision_id TEXT")
+                .execute(&mut *conn)
+                .await?;
+        }
+
+        #[derive(sqlx::FromRow)]
+        struct PluginRow {
+            id: String,
+            version: String,
+            name: String,
+            description: Option<String>,
+            license: Option<String>,
+            authors_json: Option<String>,
+            icon: Option<String>,
+            homepage: Option<String>,
+            code: Option<String>,
+            current_revision_id: Option<String>,
+        }
+
+        let plugins: Vec<PluginRow> = sqlx::query_as(
+            "SELECT id, version, name, description, license, authors_json, icon, homepage, code, current_revision_id FROM Plugin",
+        )
+        .fetch_all(&mut *conn)
+        .await?;
+
+        for plugin in plugins {
+            let existing = if let Some(ref rid) = plugin.current_revision_id {
+                sqlx::query_scalar::<_, String>(
+                    "SELECT id FROM PluginRevision WHERE id = ?1 LIMIT 1",
+                )
+                .bind(rid)
+                .fetch_optional(&mut *conn)
+                .await?
+            } else {
+                None
+            };
+
+            let revision_id = if let Some(rid) = existing {
+                rid
+            } else {
+                let rid = Uuid::new_v4().to_string();
+                sqlx::query(
+                    "INSERT INTO PluginRevision \
+                     (id, plugin_id, version, name, description, license, authors_json, icon, homepage, code) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                )
+                .bind(&rid)
+                .bind(&plugin.id)
+                .bind(&plugin.version)
+                .bind(&plugin.name)
+                .bind(plugin.description.as_deref())
+                .bind(plugin.license.as_deref())
+                .bind(plugin.authors_json.as_deref())
+                .bind(plugin.icon.as_deref())
+                .bind(plugin.homepage.as_deref())
+                .bind(plugin.code.as_deref())
+                .execute(&mut *conn)
+                .await?;
+                rid
+            };
+
+            sqlx::query("UPDATE Plugin SET current_revision_id = ?1 WHERE id = ?2")
+                .bind(&revision_id)
+                .bind(&plugin.id)
+                .execute(&mut *conn)
+                .await?;
+        }
+
+        sqlx::query(
+            "UPDATE ScanSelectedPlugin \
+             SET plugin_revision_id = (SELECT current_revision_id FROM Plugin WHERE Plugin.id = ScanSelectedPlugin.plugin_id) \
+             WHERE plugin_revision_id IS NULL",
+        )
+        .execute(&mut *conn)
+        .await?;
+
+        sqlx::query(
+            "UPDATE ScanEntrypointInput \
+             SET plugin_revision_id = (SELECT current_revision_id FROM Plugin WHERE Plugin.id = ScanEntrypointInput.plugin_id) \
+             WHERE plugin_revision_id IS NULL",
+        )
+        .execute(&mut *conn)
+        .await?;
+
+        sqlx::query(
+            "UPDATE ScanPluginResult \
+             SET plugin_revision_id = (SELECT current_revision_id FROM Plugin WHERE Plugin.id = ScanPluginResult.plugin_id) \
+             WHERE plugin_revision_id IS NULL",
+        )
+        .execute(&mut *conn)
+        .await?;
 
         Ok(())
     }
@@ -1220,6 +1377,7 @@ CREATE TABLE IF NOT EXISTS ScanPluginLog (
         conn: &mut SqliteConnection,
         plugin: &LocalPluginBundle,
     ) -> Result<(), PersistenceError> {
+        let revision_id = Uuid::new_v4().to_string();
         let version: String = plugin.manifest.version.clone().into();
         let name: String = plugin.manifest.name.clone().into();
         let description: String = plugin.manifest.description.clone().into();
@@ -1229,9 +1387,27 @@ CREATE TABLE IF NOT EXISTS ScanPluginLog (
         let authors_json = serde_json::to_string(&plugin.manifest.authors)?;
 
         sqlx::query(
+            "INSERT INTO PluginRevision \
+             (id, plugin_id, version, name, description, license, authors_json, icon, homepage, code) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        )
+        .bind(&revision_id)
+        .bind(&plugin.id)
+        .bind(&version)
+        .bind(&name)
+        .bind(&description)
+        .bind(&license)
+        .bind(&authors_json)
+        .bind(&icon)
+        .bind(&homepage)
+        .bind(&plugin.code)
+        .execute(&mut *conn)
+        .await?;
+
+        sqlx::query(
             "INSERT INTO Plugin \
-             (id, version, name, description, license, authors_json, icon, homepage, code) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) \
+             (id, version, name, description, license, authors_json, icon, homepage, code, current_revision_id) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) \
              ON CONFLICT(id) DO UPDATE SET \
                  version = excluded.version, \
                  name = excluded.name, \
@@ -1240,7 +1416,8 @@ CREATE TABLE IF NOT EXISTS ScanPluginLog (
                  authors_json = excluded.authors_json, \
                  icon = excluded.icon, \
                  homepage = excluded.homepage, \
-                 code = excluded.code",
+                 code = excluded.code, \
+                 current_revision_id = excluded.current_revision_id",
         )
         .bind(&plugin.id)
         .bind(&version)
@@ -1251,6 +1428,7 @@ CREATE TABLE IF NOT EXISTS ScanPluginLog (
         .bind(&icon)
         .bind(&homepage)
         .bind(&plugin.code)
+        .bind(&revision_id)
         .execute(&mut *conn)
         .await?;
 

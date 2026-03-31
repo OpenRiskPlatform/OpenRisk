@@ -107,6 +107,7 @@ pub async fn run_scan(
 
         results.push(ScanPluginResultRecord {
             plugin_id: load_data.plugin_id,
+            plugin_revision_id: Some(load_data.plugin_revision_id),
             entrypoint_id: load_data.entrypoint_id,
             output,
         });

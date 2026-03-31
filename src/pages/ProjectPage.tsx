@@ -842,7 +842,8 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                                                     parsedData !== null && isDataModelResult(parsedData)
                                                         ? parsedData
                                                         : null;
-                                                const subtitle = `${result.pluginId} / ${result.entrypointId}`;
+                                                const revisionSuffix = result.pluginRevisionId ? ` [${result.pluginRevisionId.slice(0, 8)}]` : '';
+                                                const subtitle = `${result.pluginId} / ${result.entrypointId}${revisionSuffix}`;
                                                 return (
                                                     <div
                                                         key={`${result.pluginId}::${result.entrypointId}`}

@@ -72,9 +72,15 @@ export const commands = {
 	 *  #
 	 */
 	updateScanPreview: (scanId: string, preview: string) => typedError<ScanSummaryRecord, AppError>(__TAURI_INVOKE("update_scan_preview", { scanId, preview })),
-	// Mark a scan as archived or active without deleting it from the database.
+	/**
+	 *  Mark a scan as archived or active without deleting it from the database.
+	 *  #
+	 */
 	setScanArchived: (scanId: string, archived: boolean) => typedError<ScanSummaryRecord, AppError>(__TAURI_INVOKE("set_scan_archived", { scanId, archived })),
-	// Persist the explicit UI ordering for all scans in the active project.
+	/**
+	 *  Persist the explicit UI ordering for all scans in the active project.
+	 *  #
+	 */
 	reorderScans: (orderedScanIds: string[]) => typedError<ScanSummaryRecord[], AppError>(__TAURI_INVOKE("reorder_scans", { orderedScanIds })),
 	/**
 	 *  Probe the lock status of a project file *without* opening it.
@@ -251,6 +257,7 @@ export type ScanEntrypointInput = {
 // Single plugin result stored in a completed scan.
 export type ScanPluginResultRecord = {
 	pluginId: string,
+	pluginRevisionId: string | null,
 	entrypointId: string,
 	output: PluginOutput,
 };
