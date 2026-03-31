@@ -4,13 +4,14 @@ import { SettingsProvider } from "@/core/settings/SettingsContext";
 import { BackendClientProvider } from "@/hooks/useBackendClient";
 import { PluginProvider } from "@/hooks/usePlugins";
 import { useTheme } from "@/hooks/useTheme";
+import { Toaster } from "sonner";
 
 export const Route = createRootRoute({
   component: RootComponent,
 });
 
 function ThemeWrapper() {
-  useTheme(); // Apply theme based on settings
+  useTheme();
   return null;
 }
 
@@ -21,6 +22,7 @@ function RootComponent() {
       <BackendClientProvider>
         <PluginProvider>
           <Outlet />
+          <Toaster richColors closeButton position="bottom-right" />
           {import.meta.env.DEV && <TanStackRouterDevtools />}
         </PluginProvider>
       </BackendClientProvider>

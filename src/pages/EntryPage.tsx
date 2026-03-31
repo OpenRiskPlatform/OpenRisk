@@ -2,7 +2,6 @@
  * Entry Page - Landing/Home screen
  */
 
-import { Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,16 +9,9 @@ import { FormEvent, useState } from "react";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { useNavigate } from "@tanstack/react-router";
 import { open } from "@tauri-apps/plugin-dialog";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { useBackendClient } from "@/hooks/useBackendClient";
+import { Settings } from "lucide-react";
 
-const RECENT_PROJECT_DIR = "/home/ms/Downloads/test/";
 
 export function EntryPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -48,9 +40,6 @@ export function EntryPage() {
     }
   };
 
-  const handleUseRecentProject = () => {
-    setProjectDir(RECENT_PROJECT_DIR);
-  };
 
   const handlePickExistingProject = async () => {
     setOpenError(null);
@@ -116,7 +105,7 @@ export function EntryPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
+    <div className="h-full overflow-y-auto flex flex-col bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
       {/* Header with Settings */}
       <header className="absolute top-0 right-0 p-6">
         <Button
@@ -131,7 +120,7 @@ export function EntryPage() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4">
+      <main className="flex-1 flex flex-col items-center py-8 px-4">
         <div className="text-center space-y-8 max-w-2xl">
           {/* Logo/Icon placeholder */}
           <div className="flex justify-center">
@@ -166,116 +155,95 @@ export function EntryPage() {
             </p>
           </div>
 
-          {/* Project creation form */}
-          <div className="max-w-xl mx-auto w-full">
-            <form
-              onSubmit={handleCreateProject}
-              className="bg-white dark:bg-slate-900/70 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 p-6 space-y-5"
-            >
-              <div className="space-y-2 text-left">
-                <Label htmlFor="projectName" className="text-slate-700 dark:text-slate-200">
-                  Project Name
-                </Label>
-                <Input
-                  id="projectName"
-                  value={projectName}
-                  onChange={(event) => setProjectName(event.target.value)}
-                  placeholder="ACME Risk Assessment"
-                />
-              </div>
+          {/* Two-column project cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-3xl mx-auto w-full text-left">
 
-              <div className="space-y-2 text-left">
-                <Label htmlFor="projectDirectory" className="text-slate-700 dark:text-slate-200">
-                  Project Directory
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="projectDirectory"
-                    value={projectDir}
-                    placeholder="Select or create a folder"
-                    readOnly
-                  />
-                  <Button type="button" variant="outline" onClick={handlePickDirectory}>
-                    Browse
-                  </Button>
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Recently used:{" "}
-                  <button
-                    type="button"
-                    onClick={handleUseRecentProject}
-                    className="underline-offset-2 hover:underline font-medium"
-                  >
-                    {RECENT_PROJECT_DIR}
-                  </button>
+            {/* Create new project */}
+            <div className="bg-white dark:bg-slate-900/70 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 p-6 space-y-5 flex flex-col">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Create New Project</h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  Start a fresh risk analysis project in a new directory.
                 </p>
               </div>
-
-              {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-
-              <Button type="submit" size="lg" className="w-full" disabled={isCreating}>
-                {isCreating ? "Creating Project..." : "Create Project"}
-              </Button>
-            </form>
-          </div>
-                <Button
-        variant="outline"
-        size="sm"
-        onClick={async () => {
-          const project = await backendClient.createProject("Demo", "/home/user/demo");
-          console.log('Test project:', project);
-        }}
-      >
-        Test Create
-      </Button>
-
-          <Button
-            variant="ghost"
-            size="lg"
-            className="text-base"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <Settings className="mr-2 h-4 w-4" />
-            Configure platform settings
-          </Button>
-
-          <Card className="max-w-xl mx-auto w-full text-left">
-            <CardHeader>
-              <CardTitle>Open Existing Project</CardTitle>
-              <CardDescription>
-                Select a project directory that already contains a project database.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="openProjectDirectory">Project Directory</Label>
-                <div className="flex gap-2">
+              <form onSubmit={handleCreateProject} className="space-y-4 flex flex-col flex-1">
+                <div className="space-y-2">
+                  <Label htmlFor="projectName" className="text-slate-700 dark:text-slate-200">
+                    Project Name
+                  </Label>
                   <Input
-                    id="openProjectDirectory"
-                    value={openProjectDir}
-                    placeholder="Select a project folder"
-                    readOnly
+                    id="projectName"
+                    value={projectName}
+                    onChange={(event) => setProjectName(event.target.value)}
+                    placeholder="ACME Risk Assessment"
                   />
-                  <Button type="button" variant="outline" onClick={handlePickExistingProject}>
-                    Browse
-                  </Button>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="projectDirectory" className="text-slate-700 dark:text-slate-200">
+                    Project Directory
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="projectDirectory"
+                      value={projectDir}
+                      placeholder="Select a folder"
+                      readOnly
+                      title={projectDir}
+                      style={{ direction: projectDir ? "rtl" : "ltr", unicodeBidi: "plaintext" }}
+                    />
+                    <Button type="button" variant="outline" onClick={handlePickDirectory}>
+                      Browse
+                    </Button>
+                  </div>
+                </div>
+                {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+                <Button type="submit" size="lg" className="w-full mt-auto" disabled={isCreating}>
+                  {isCreating ? "Creating…" : "Create Project"}
+                </Button>
+              </form>
+            </div>
+
+            {/* Open existing project */}
+            <div className="bg-white dark:bg-slate-900/70 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 p-6 space-y-5 flex flex-col">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Open Existing Project</h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  Select a directory that already contains a project database.
+                </p>
               </div>
+              <div className="space-y-4 flex flex-col flex-1 justify-between">
+                <div className="space-y-2">
+                  <Label htmlFor="openProjectDirectory" className="text-slate-700 dark:text-slate-200">
+                    Project Directory
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="openProjectDirectory"
+                      value={openProjectDir}
+                      placeholder="Select a project folder"
+                      readOnly
+                      title={openProjectDir}
+                      style={{ direction: openProjectDir ? "rtl" : "ltr", unicodeBidi: "plaintext" }}
+                    />
+                    <Button type="button" variant="outline" onClick={handlePickExistingProject}>
+                      Browse
+                    </Button>
+                  </div>
+                </div>
+                {openError && <p className="text-sm text-red-600 dark:text-red-400">{openError}</p>}
+                <Button
+                  type="button"
+                  size="lg"
+                  className="w-full mt-auto"
+                  onClick={handleOpenProject}
+                  disabled={isOpeningProject}
+                >
+                  {isOpeningProject ? "Opening…" : "Open Project"}
+                </Button>
+              </div>
+            </div>
 
-              {openError && (
-                <p className="text-sm text-red-600 dark:text-red-400">{openError}</p>
-              )}
-
-              <Button
-                type="button"
-                className="w-full"
-                onClick={handleOpenProject}
-                disabled={isOpeningProject}
-              >
-                {isOpeningProject ? "Opening Project..." : "Open Project"}
-              </Button>
-            </CardContent>
-          </Card>
+          </div>
         </div>
       </main>
 

@@ -6,8 +6,16 @@ import { type ReactNode, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Settings } from "lucide-react";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
-import { Link } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { Sidebar } from "@/components/ui/Sidebar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 
 interface MainLayoutProps {
@@ -17,14 +25,16 @@ interface MainLayoutProps {
 
 export function MainLayout({ children, projectDir }: MainLayoutProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [exitOpen, setExitOpen] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <div className="h-screen flex flex-col bg-background">
       {/* Header */}
-      <header className="shrink-0 border-b bg-white">
+      <header className="shrink-0 border-b bg-background text-foreground">
         <div className="px-6 h-16 flex items-center justify-between">
-          <Link
-            to="/"
+          <button
+            onClick={() => setExitOpen(true)}
             className="flex items-center gap-2 hover:opacity-80 transition-opacity"
           >
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -43,7 +53,7 @@ export function MainLayout({ children, projectDir }: MainLayoutProps) {
               </svg>
             </div>
             <span className="font-semibold text-lg">OpenRisk</span>
-          </Link>
+          </button>
           <Button
             variant="ghost"
             size="icon"
@@ -70,6 +80,29 @@ export function MainLayout({ children, projectDir }: MainLayoutProps) {
         onOpenChange={setSettingsOpen}
         projectDir={projectDir}
       />
+
+      {/* Exit project confirmation */}
+      <Dialog open={exitOpen} onOpenChange={setExitOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader className="gap-4">
+            <DialogTitle>Close current project?</DialogTitle>
+            <DialogDescription>
+              You will be taken back to the entry page and the current project will be closed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExitOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => { setExitOpen(false); navigate({ to: "/" }); }}
+            >
+              Close project
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

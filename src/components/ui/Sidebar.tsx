@@ -1,12 +1,9 @@
 import { FileText, Search, Printer, Calendar, BarChart2 } from 'lucide-react';
-import { useState } from 'react';
-import { useNavigate } from '@tanstack/react-router';
-
+import { useNavigate, useRouterState } from '@tanstack/react-router';
 
 export function Sidebar() {
-  const [activeRoute, setActiveRoute] = useState('/');
-    const navigate = useNavigate();
-
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   const navItems = [
     { icon: FileText, label: 'Project', route: '/project' },
@@ -15,30 +12,24 @@ export function Sidebar() {
     { icon: Printer, label: 'Print', route: '/print' },
   ];
 
-  const handleNavClick = async(route: string) => {
-    setActiveRoute(route);
-    await navigate({to: route});
-    console.log('Navigate to:', route);
-  };
-
   return (
-    <div className="w-16 shrink-0 bg-white flex flex-col items-center py-4 border-r border-gray-200">
+    <div className="w-16 shrink-0 bg-background flex flex-col items-center py-4 border-r border-border">
       {/* Navigation Items */}
       <nav className="flex-1 flex flex-col gap-2 w-full px-2">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = activeRoute === item.route;
-          
+          const isActive = pathname === item.route;
+
           return (
             <button
               key={item.route}
-              onClick={() => handleNavClick(item.route)}
+              onClick={() => navigate({ to: item.route })}
               className={`
                 w-full h-12 rounded-lg flex items-center justify-center
                 transition-colors duration-150
-                ${isActive 
-                  ? 'border-2 border-gray-500 text-gray-900' 
-                  : 'text-gray-600 hover:bg-gray-200'
+                ${isActive
+                  ? 'border-2 border-foreground/40 text-foreground'
+                  : 'text-muted-foreground hover:bg-accent'
                 }
               `}
               title={item.label}
