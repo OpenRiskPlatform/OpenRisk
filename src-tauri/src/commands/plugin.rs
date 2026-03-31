@@ -8,6 +8,7 @@ use serde_json::Value;
 use std::path::PathBuf;
 
 /// List all installed built-in plugins.
+/// #
 #[tauri::command]
 #[specta::specta]
 pub fn list_plugins() -> Result<Vec<PluginSummary>, String> {
@@ -15,6 +16,7 @@ pub fn list_plugins() -> Result<Vec<PluginSummary>, String> {
 }
 
 /// Get the full detail record (manifest + settings) for a single plugin.
+/// #
 #[tauri::command]
 #[specta::specta]
 pub fn get_plugin(plugin_id: String) -> Result<PluginDetail, String> {
@@ -22,6 +24,7 @@ pub fn get_plugin(plugin_id: String) -> Result<PluginDetail, String> {
 }
 
 /// Parse and validate a manifest file at an arbitrary path (import flow).
+/// #
 #[tauri::command]
 #[specta::specta]
 pub fn open_plugin(file_path: String) -> Result<Value, String> {
@@ -30,6 +33,7 @@ pub fn open_plugin(file_path: String) -> Result<Value, String> {
 }
 
 /// Persist updated settings for an installed plugin.
+/// #
 #[tauri::command]
 #[specta::specta]
 pub fn configure_plugin(plugin_id: String, settings: Value) -> Result<(), String> {
@@ -37,6 +41,7 @@ pub fn configure_plugin(plugin_id: String, settings: Value) -> Result<(), String
 }
 
 /// Call the optional `validate(settings)` export to confirm a plugin is ready to run.
+/// #
 #[tauri::command]
 #[specta::specta]
 pub fn check_plugin_readiness(plugin_id: String, settings: Option<Value>) -> Result<Value, String> {

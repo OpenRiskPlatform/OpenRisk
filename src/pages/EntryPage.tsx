@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { useBackendClient } from "@/hooks/useBackendClient";
+import { unwrap } from "@/lib/utils";
 
 const LAST_PROJECT_DIR_KEY = "openrisk:last-project-dir";
 const RECENT_PROJECTS_KEY = "openrisk:recent-projects";
@@ -161,7 +162,7 @@ export function EntryPage({ initialMode }: EntryPageProps) {
 
         setBusy(true);
         try {
-            const project = await backendClient.createProject(projectName.trim(), projectPath);
+            const project = await unwrap(backendClient.createProject(projectName.trim(), projectPath));
             localStorage.setItem(LAST_PROJECT_DIR_KEY, project.directory);
             saveRecent(project.directory);
             await navigate({ to: "/project", search: { dir: project.directory } });
@@ -181,7 +182,7 @@ export function EntryPage({ initialMode }: EntryPageProps) {
 
         setBusy(true);
         try {
-            const project = await backendClient.openProject(openProjectPath);
+            const project = await unwrap(backendClient.openProject(openProjectPath, null));
             localStorage.setItem(LAST_PROJECT_DIR_KEY, project.directory);
             saveRecent(project.directory);
             await navigate({ to: "/project", search: { dir: project.directory } });
@@ -210,7 +211,7 @@ export function EntryPage({ initialMode }: EntryPageProps) {
         setError(null);
         setBusy(true);
         try {
-            const project = await backendClient.openProject(projectPathValue);
+            const project = await unwrap(backendClient.openProject(projectPathValue, null));
             localStorage.setItem(LAST_PROJECT_DIR_KEY, project.directory);
             saveRecent(project.directory);
             await navigate({ to: "/project", search: { dir: project.directory } });
@@ -234,7 +235,7 @@ export function EntryPage({ initialMode }: EntryPageProps) {
         setUnlockError(null);
         setUnlockBusy(true);
         try {
-            const project = await backendClient.openProject(unlockPath, unlockPassword);
+            const project = await unwrap(backendClient.openProject(unlockPath, unlockPassword));
             localStorage.setItem(LAST_PROJECT_DIR_KEY, project.directory);
             saveRecent(project.directory);
             setUnlockOpen(false);

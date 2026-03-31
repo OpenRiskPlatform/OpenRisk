@@ -24,16 +24,21 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useBackendClient } from "@/hooks/useBackendClient";
+import { unwrap } from "@/lib/utils";
 import type {
     PluginEntrypointSelection,
-    PluginLogEntry,
-    PluginSettingsDescriptor,
+    PluginSettingsPayload,
     ProjectSettingsPayload,
-    ScanDetail,
-    ScanSummary,
-} from "@/core/backend/types";
+    ScanDetailRecord,
+    ScanSummaryRecord,
+} from "@/core/backend/bindings";
 import { PluginResultView } from "@/components/data-model/PluginResultView";
 import { isDataModelResult } from "@/core/data-model/types";
+
+interface PluginLogEntry {
+    level: "log" | "warn" | "error";
+    message: string;
+}
 
 function PluginErrorView({ message }: { message: string }) {
     const [expanded, setExpanded] = useState(false);
@@ -112,11 +117,11 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     const [settingsData, setSettingsData] = useState<ProjectSettingsPayload | null>(null);
     const [settingsError, setSettingsError] = useState<string | null>(null);
 
-    const [scans, setScans] = useState<ScanSummary[]>([]);
+    const [scans, setScans] = useState<ScanSummaryRecord[]>([]);
     const [scansError, setScansError] = useState<string | null>(null);
     const [selectedScanId, setSelectedScanId] = useState<string | null>(null);
 
-    const [scanDetail, setScanDetail] = useState<ScanDetail | null>(null);
+    const [scanDetail, setScanDetailRecord] = useState<ScanDetailRecord | null>(null);
     const [detailError, setDetailError] = useState<string | null>(null);
 
     const [querySearch, setQuerySearch] = useState("");
@@ -169,8 +174,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
             return;
         }
 
-        backendClient
-            .openProject(projectDir)
+        unwrap(backendClient.openProject(projectDir, null))
             .then(() => {
                 if (!cancelled) {
                     setProjectSessionReady(true);
@@ -200,7 +204,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
             return;
         }
 
-        Promise.all([backendClient.loadSettings(), backendClient.listScans()])
+        Promise.all([unwrap(backendClient.loadSettings()), unwrap(backendClient.listScans())])
             .then(([settings, scansList]) => {
                 if (cancelled) {
                     return;
@@ -270,8 +274,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
         }
 
         const handler = () => {
-            backendClient
-                .loadSettings()
+            unwrap(backendClient.loadSettings())
                 .then((settings) => setSettingsData(settings))
                 .catch((err) => {
                     setSettingsError(err instanceof Error ? err.message : String(err));
@@ -287,18 +290,17 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     useEffect(() => {
         let cancelled = false;
         if (!projectDir || !projectSessionReady || !selectedScanId) {
-            setScanDetail(null);
+            setScanDetailRecord(null);
             return;
         }
 
-        backendClient
-            .getScan(selectedScanId)
+        unwrap(backendClient.getScan(selectedScanId))
             .then((detail) => {
                 if (cancelled) {
                     return;
                 }
 
-                setScanDetail(detail);
+                setScanDetailRecord(detail);
                 setDetailError(null);
 
                 const enabledMap: Record<string, boolean> = {};
@@ -318,7 +320,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                     return;
                 }
                 setDetailError(err instanceof Error ? err.message : String(err));
-                setScanDetail(null);
+                setScanDetailRecord(null);
             });
 
         return () => {
@@ -333,7 +335,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
         setCreatingScan(true);
         setScansError(null);
         try {
-            const created = await backendClient.createScan();
+            const created = await unwrap(backendClient.createScan(null));
             setScans((prev) => [created, ...prev]);
             setSelectedScanId(created.id);
         } catch (err) {
@@ -343,7 +345,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
         }
     };
 
-    const startRename = (scan: ScanSummary) => {
+    const startRename = (scan: ScanSummaryRecord) => {
         setRenamingScanId(scan.id);
         setRenamingValue(scan.preview?.trim() || `New Scan ${scan.id.slice(0, 8)}`);
     };
@@ -360,7 +362,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
         }
 
         try {
-            const updated = await backendClient.updateScanPreview(renamingScanId, value);
+            const updated = await unwrap(backendClient.updateScanPreview(renamingScanId, value));
             setScans((prev) =>
                 prev.map((scan) => (scan.id === updated.id ? { ...scan, preview: updated.preview } : scan))
             );
@@ -412,15 +414,15 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
         setDetailError(null);
 
         try {
-            const updatedScan = await backendClient.runScan(
+            const updatedScan = await unwrap(backendClient.runScan(
                 selectedScanId,
                 selectedPlugins,
-                pluginInputs
-            );
+                pluginInputs as any
+            ));
 
             setScans((prev) => prev.map((scan) => (scan.id === updatedScan.id ? updatedScan : scan)));
-            const freshDetail = await backendClient.getScan(selectedScanId);
-            setScanDetail(freshDetail);
+            const freshDetail = await unwrap(backendClient.getScan(selectedScanId));
+            setScanDetailRecord(freshDetail);
         } catch (err) {
             setDetailError(err instanceof Error ? err.message : String(err));
             setScans((prev) =>
@@ -450,7 +452,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
 
         setRenameProjectSaving(true);
         try {
-            const updated = await backendClient.updateProjectName(nextName);
+            const updated = await unwrap(backendClient.updateProjectName(nextName));
             setProjectName(updated.name);
             setSettingsData((prev) =>
                 prev
@@ -473,7 +475,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
 
     const goBack = async () => {
         try {
-            await backendClient.closeProject();
+            await unwrap(backendClient.closeProject());
         } catch {
             // Ignore close errors on navigation back; the entry page can open again.
         }
@@ -780,7 +782,7 @@ function PluginRunCard({
     entrypointInputs,
     onFieldChange,
 }: {
-    plugin: PluginSettingsDescriptor;
+    plugin: PluginSettingsPayload;
     enabledEntrypoints: Record<string, boolean>;
     onEntrypointChange: (entrypointId: string, enabled: boolean) => void;
     entrypointInputs: Record<string, Record<string, unknown>>;

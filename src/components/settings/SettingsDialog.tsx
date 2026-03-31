@@ -9,7 +9,8 @@ import { GeneralSettings } from "./GeneralSettings";
 import { PluginSettings } from "./PluginSettings";
 import { InfoSettings } from "./InfoSettings";
 import { useBackendClient } from "@/hooks/useBackendClient";
-import type { ProjectSettingsPayload } from "@/core/backend/types";
+import { unwrap } from "@/lib/utils";
+import type { ProjectSettingsPayload } from "@/core/backend/bindings";
 import { useSettings } from "@/core/settings/SettingsContext";
 
 export type SettingsCategory = "info" | "general" | "plugins";
@@ -47,8 +48,7 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
     setSettingsLoading(true);
     setSettingsError(null);
 
-    backendClient
-      .loadSettings()
+    unwrap(backendClient.loadSettings())
       .then((payload) => {
         if (!cancelled) {
           setSettingsData(payload);

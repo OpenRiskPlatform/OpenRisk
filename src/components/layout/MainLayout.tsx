@@ -6,6 +6,7 @@ import { type ReactNode, useState } from "react";
 import { useEffect } from "react";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { useBackendClient } from "@/hooks/useBackendClient";
+import { unwrap } from "@/lib/utils";
 import { useSettings } from "@/core/settings/SettingsContext";
 
 interface MainLayoutProps {
@@ -26,8 +27,7 @@ export function MainLayout({ children, projectDir }: MainLayoutProps) {
       };
     }
 
-    backendClient
-      .loadSettings()
+    unwrap(backendClient.loadSettings())
       .then((payload) => {
         if (!cancelled) {
           updateGlobalSettings({ theme: payload.projectSettings?.theme ?? "system" });

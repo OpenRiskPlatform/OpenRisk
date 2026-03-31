@@ -3,7 +3,7 @@
  */
 
 import { useEffect, useState } from "react";
-import type { ProjectSettingsRecord } from "@/core/backend/types";
+import type { ProjectSettingsRecord } from "@/core/backend/bindings";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useBackendClient } from "@/hooks/useBackendClient";
+import { unwrap } from "@/lib/utils";
 import { useSettings } from "@/core/settings/SettingsContext";
 
 interface GeneralSettingsProps {
@@ -52,11 +53,9 @@ export function GeneralSettings({
 
     setSavingTheme(true);
     try {
-      const updated = await backendClient.updateProjectSettings({
-        theme: value,
-      });
+      const updated = await unwrap(backendClient.updateProjectSettings(value)) as unknown as ProjectSettingsRecord;
       onProjectSettingsUpdated(updated);
-      await updateGlobalSettings({ theme: updated.theme });
+      await updateGlobalSettings({ theme: updated.theme as "light" | "dark" | "system" });
     } finally {
       setSavingTheme(false);
     }
@@ -67,7 +66,7 @@ export function GeneralSettings({
       setPasswordEnabled(null);
       return;
     }
-    const status = await backendClient.getProjectLockStatus(projectDir);
+    const status = await unwrap(backendClient.getProjectLockStatus(projectDir));
     setPasswordEnabled(status.locked);
   };
 
@@ -90,7 +89,7 @@ export function GeneralSettings({
 
     setPasswordBusy(true);
     try {
-      await backendClient.setProjectPassword(newPassword);
+      await unwrap(backendClient.setProjectPassword(newPassword));
       setPasswordInfo("Password protection enabled. Database file is now encrypted.");
       clearPasswordInputs();
       await refreshPasswordStatus();
@@ -114,7 +113,7 @@ export function GeneralSettings({
 
     setPasswordBusy(true);
     try {
-      await backendClient.changeProjectPassword(currentPassword, newPassword);
+      await unwrap(backendClient.changeProjectPassword(currentPassword, newPassword));
       setPasswordInfo("Password changed successfully.");
       clearPasswordInputs();
       await refreshPasswordStatus();
@@ -133,7 +132,7 @@ export function GeneralSettings({
     setPasswordInfo(null);
     setPasswordBusy(true);
     try {
-      await backendClient.removeProjectPassword(currentPassword);
+      await unwrap(backendClient.removeProjectPassword(currentPassword));
       setPasswordInfo("Password protection removed. File is no longer encrypted.");
       clearPasswordInputs();
       await refreshPasswordStatus();

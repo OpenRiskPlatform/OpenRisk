@@ -23,6 +23,7 @@ pub async fn get_project_lock_status(project_path: String) -> Result<ProjectLock
 }
 
 /// Encrypt an unencrypted project database with `new_password`.
+/// #
 #[tauri::command]
 #[specta::specta]
 pub async fn set_project_password(
@@ -41,6 +42,7 @@ pub async fn set_project_password(
 }
 
 /// Re-encrypt the database, replacing the current password with `new_password`.
+/// #
 #[tauri::command]
 #[specta::specta]
 pub async fn change_project_password(
@@ -60,6 +62,7 @@ pub async fn change_project_password(
 }
 
 /// Remove encryption from the project database.
+/// #
 #[tauri::command]
 #[specta::specta]
 pub async fn remove_project_password(
@@ -76,4 +79,3 @@ pub async fn remove_project_password(
         .await
         .map_err(|e| e.to_string())
 }
-

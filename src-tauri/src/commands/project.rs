@@ -35,6 +35,7 @@ async fn get_open_project(
 // ---------------------------------------------------------------------------
 
 /// Create a new project database at `project_path` and open it as the active project.
+/// #
 #[tauri::command]
 #[specta::specta]
 pub async fn create_project(
@@ -78,6 +79,7 @@ pub async fn open_project(
 }
 
 /// Close the active project and release its database connection.
+/// #
 #[tauri::command]
 #[specta::specta]
 pub async fn close_project(state: tauri::State<'_, ProjectState>) -> Result<(), String> {
@@ -90,6 +92,7 @@ pub async fn close_project(state: tauri::State<'_, ProjectState>) -> Result<(), 
 // ---------------------------------------------------------------------------
 
 /// Load the full settings snapshot (project + global settings + all plugin configs).
+/// #
 #[tauri::command]
 #[specta::specta]
 pub async fn load_settings(
@@ -100,6 +103,7 @@ pub async fn load_settings(
 }
 
 /// Update the project-wide theme setting.
+/// #
 #[tauri::command]
 #[specta::specta]
 pub async fn update_project_settings(
@@ -114,6 +118,7 @@ pub async fn update_project_settings(
 }
 
 /// Rename the active project.
+/// #
 #[tauri::command]
 #[specta::specta]
 pub async fn update_project_name(
@@ -128,6 +133,7 @@ pub async fn update_project_name(
 }
 
 /// Persist updated settings for one plugin within the active project.
+/// #
 #[tauri::command]
 #[specta::specta]
 pub async fn update_project_plugin_settings(
@@ -143,6 +149,7 @@ pub async fn update_project_plugin_settings(
 }
 
 /// Register or refresh a plugin from a directory on disk into the active project.
+/// #
 #[tauri::command]
 #[specta::specta]
 pub async fn upsert_project_plugin_from_dir(
@@ -165,6 +172,7 @@ pub async fn upsert_project_plugin_from_dir(
 // ---------------------------------------------------------------------------
 
 /// Create a new scan in Draft status.
+/// #
 #[tauri::command]
 #[specta::specta]
 pub async fn create_scan(
@@ -179,6 +187,7 @@ pub async fn create_scan(
 }
 
 /// List all scans for the active project, newest first.
+/// #
 #[tauri::command]
 #[specta::specta]
 pub async fn list_scans(
@@ -189,6 +198,7 @@ pub async fn list_scans(
 }
 
 /// Fetch full details of a single scan including all plugin results.
+/// #
 #[tauri::command]
 #[specta::specta]
 pub async fn get_scan(
@@ -217,6 +227,7 @@ pub async fn run_scan(
 }
 
 /// Update the preview (display name) of a scan.
+/// #
 #[tauri::command]
 #[specta::specta]
 pub async fn update_scan_preview(

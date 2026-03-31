@@ -2,7 +2,7 @@
  * Info Settings Panel
  */
 
-import type { ProjectSummary } from "@/core/backend/types";
+import type { ProjectSummary } from "@/core/backend/bindings";
 
 interface InfoSettingsProps {
     projectDir?: string;

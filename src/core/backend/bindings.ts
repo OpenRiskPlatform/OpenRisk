@@ -4,17 +4,35 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 
 /** Commands */
 export const commands = {
-	// List all installed built-in plugins.
+	/**
+	 *  List all installed built-in plugins.
+	 *  #
+	 */
 	listPlugins: () => typedError<PluginSummary[], string>(__TAURI_INVOKE("list_plugins")),
-	// Get the full detail record (manifest + settings) for a single plugin.
+	/**
+	 *  Get the full detail record (manifest + settings) for a single plugin.
+	 *  #
+	 */
 	getPlugin: (pluginId: string) => typedError<PluginDetail, string>(__TAURI_INVOKE("get_plugin", { pluginId })),
-	// Parse and validate a manifest file at an arbitrary path (import flow).
+	/**
+	 *  Parse and validate a manifest file at an arbitrary path (import flow).
+	 *  #
+	 */
 	openPlugin: (filePath: string) => typedError<"Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Value[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: Value } }) & { Array?: never; Bool?: never; Number?: never; String?: never }, string>(__TAURI_INVOKE("open_plugin", { filePath })),
-	// Persist updated settings for an installed plugin.
+	/**
+	 *  Persist updated settings for an installed plugin.
+	 *  #
+	 */
 	configurePlugin: (pluginId: string, settings: "Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Value[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: Value } }) & { Array?: never; Bool?: never; Number?: never; String?: never }) => typedError<null, string>(__TAURI_INVOKE("configure_plugin", { pluginId, settings })),
-	// Call the optional `validate(settings)` export to confirm a plugin is ready to run.
+	/**
+	 *  Call the optional `validate(settings)` export to confirm a plugin is ready to run.
+	 *  #
+	 */
 	checkPluginReadiness: (pluginId: string, settings: "Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: ("Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Vec<Value> }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: Value } }) & { Array?: never; Bool?: never; Number?: never; String?: never })[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: "Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Value[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: Map<string, Value> }) & { Array?: never; Bool?: never; Number?: never; String?: never } } }) & { Array?: never; Bool?: never; Number?: never; String?: never } | null) => typedError<"Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Value[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: Value } }) & { Array?: never; Bool?: never; Number?: never; String?: never }, string>(__TAURI_INVOKE("check_plugin_readiness", { pluginId, settings })),
-	// Create a new project database at `project_path` and open it as the active project.
+	/**
+	 *  Create a new project database at `project_path` and open it as the active project.
+	 *  #
+	 */
 	createProject: (name: string, projectPath: string) => typedError<ProjectSummary, string>(__TAURI_INVOKE("create_project", { name, projectPath })),
 	/**
 	 *  Open an existing project file as the active project.
@@ -23,23 +41,50 @@ export const commands = {
 	 *  if a previous `open_project` returned a lock error, call again with the password.
 	 */
 	openProject: (projectPath: string, password: string | null) => typedError<ProjectSummary, string>(__TAURI_INVOKE("open_project", { projectPath, password })),
-	// Close the active project and release its database connection.
+	/**
+	 *  Close the active project and release its database connection.
+	 *  #
+	 */
 	closeProject: () => typedError<null, string>(__TAURI_INVOKE("close_project")),
-	// Load the full settings snapshot (project + global settings + all plugin configs).
+	/**
+	 *  Load the full settings snapshot (project + global settings + all plugin configs).
+	 *  #
+	 */
 	loadSettings: () => typedError<ProjectSettingsPayload, string>(__TAURI_INVOKE("load_settings")),
-	// Update the project-wide theme setting.
+	/**
+	 *  Update the project-wide theme setting.
+	 *  #
+	 */
 	updateProjectSettings: (theme: string | null) => typedError<ProjectSettingsRecord, string>(__TAURI_INVOKE("update_project_settings", { theme })),
-	// Rename the active project.
+	/**
+	 *  Rename the active project.
+	 *  #
+	 */
 	updateProjectName: (name: string) => typedError<ProjectSummary, string>(__TAURI_INVOKE("update_project_name", { name })),
-	// Persist updated settings for one plugin within the active project.
+	/**
+	 *  Persist updated settings for one plugin within the active project.
+	 *  #
+	 */
 	updateProjectPluginSettings: (pluginId: string, settings: "Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Value[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: Value } }) & { Array?: never; Bool?: never; Number?: never; String?: never }) => typedError<PluginSettingsPayload, string>(__TAURI_INVOKE("update_project_plugin_settings", { pluginId, settings })),
-	// Register or refresh a plugin from a directory on disk into the active project.
+	/**
+	 *  Register or refresh a plugin from a directory on disk into the active project.
+	 *  #
+	 */
 	upsertProjectPluginFromDir: (pluginDir: string, replacePluginId: string | null) => typedError<PluginSettingsPayload, string>(__TAURI_INVOKE("upsert_project_plugin_from_dir", { pluginDir, replacePluginId })),
-	// Create a new scan in Draft status.
+	/**
+	 *  Create a new scan in Draft status.
+	 *  #
+	 */
 	createScan: (preview: string | null) => typedError<ScanSummaryRecord, string>(__TAURI_INVOKE("create_scan", { preview })),
-	// List all scans for the active project, newest first.
+	/**
+	 *  List all scans for the active project, newest first.
+	 *  #
+	 */
 	listScans: () => typedError<ScanSummaryRecord[], string>(__TAURI_INVOKE("list_scans")),
-	// Fetch full details of a single scan including all plugin results.
+	/**
+	 *  Fetch full details of a single scan including all plugin results.
+	 *  #
+	 */
 	getScan: (scanId: string) => typedError<ScanDetailRecord, string>(__TAURI_INVOKE("get_scan", { scanId })),
 	/**
 	 *  Execute a scan: run the selected plugins and persist results.
@@ -47,7 +92,10 @@ export const commands = {
 	 *  Plugin code is read from the database (synced on project open), not from disk.
 	 */
 	runScan: (scanId: string, selectedPlugins: PluginEntrypointSelection[], inputs: "Null" | ({ Bool: boolean }) & { Array?: never; Number?: never; Object?: never; String?: never } | ({ Number: ({ f64: number }) & { i64?: never; u64?: never } | ({ i64: number }) & { f64?: never; u64?: never } | ({ u64: number }) & { f64?: never; i64?: never } }) & { Array?: never; Bool?: never; Object?: never; String?: never } | ({ String: string }) & { Array?: never; Bool?: never; Number?: never; Object?: never } | ({ Array: Value[] }) & { Bool?: never; Number?: never; Object?: never; String?: never } | ({ Object: { [key in string]: Value } }) & { Array?: never; Bool?: never; Number?: never; String?: never }) => typedError<ScanSummaryRecord, string>(__TAURI_INVOKE("run_scan", { scanId, selectedPlugins, inputs })),
-	// Update the preview (display name) of a scan.
+	/**
+	 *  Update the preview (display name) of a scan.
+	 *  #
+	 */
 	updateScanPreview: (scanId: string, preview: string) => typedError<ScanSummaryRecord, string>(__TAURI_INVOKE("update_scan_preview", { scanId, preview })),
 	/**
 	 *  Probe the lock status of a project file *without* opening it.
@@ -55,11 +103,20 @@ export const commands = {
 	 *  Call this before `open_project` to determine whether a password prompt is needed.
 	 */
 	getProjectLockStatus: (projectPath: string) => typedError<ProjectLockStatus, string>(__TAURI_INVOKE("get_project_lock_status", { projectPath })),
-	// Encrypt an unencrypted project database with `new_password`.
+	/**
+	 *  Encrypt an unencrypted project database with `new_password`.
+	 *  #
+	 */
 	setProjectPassword: (newPassword: string) => typedError<ProjectLockStatus, string>(__TAURI_INVOKE("set_project_password", { newPassword })),
-	// Re-encrypt the database, replacing the current password with `new_password`.
+	/**
+	 *  Re-encrypt the database, replacing the current password with `new_password`.
+	 *  #
+	 */
 	changeProjectPassword: (currentPassword: string, newPassword: string) => typedError<ProjectLockStatus, string>(__TAURI_INVOKE("change_project_password", { currentPassword, newPassword })),
-	// Remove encryption from the project database.
+	/**
+	 *  Remove encryption from the project database.
+	 *  #
+	 */
 	removeProjectPassword: (currentPassword: string) => typedError<ProjectLockStatus, string>(__TAURI_INVOKE("remove_project_password", { currentPassword })),
 };
 

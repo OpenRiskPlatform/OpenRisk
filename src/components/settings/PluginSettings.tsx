@@ -5,22 +5,23 @@
 import { useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useBackendClient } from "@/hooks/useBackendClient";
+import { unwrap } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type {
-    PluginSettingsDescriptor,
+    PluginSettingsPayload,
     ProjectSettingsRecord,
-} from "@/core/backend/types";
+} from "@/core/backend/bindings";
 
 interface PluginSettingsProps {
     projectDir?: string;
     projectSettings: ProjectSettingsRecord | null;
-    plugins: PluginSettingsDescriptor[];
+    plugins: PluginSettingsPayload[];
     loading: boolean;
     error?: string | null;
-    onPluginUpdated: (plugin: PluginSettingsDescriptor) => void;
+    onPluginUpdated: (plugin: PluginSettingsPayload) => void;
 }
 
 export function PluginSettings({
@@ -54,10 +55,7 @@ export function PluginSettings({
 
         setImporting(true);
         try {
-            const payload = await backendClient.upsertProjectPluginFromDir(
-                selected,
-                replacePluginId
-            );
+            const payload = await unwrap(backendClient.upsertProjectPluginFromDir(selected, replacePluginId ?? null)) as unknown as PluginSettingsPayload;
             onPluginUpdated(payload);
         } catch (error) {
             setImportError(error instanceof Error ? error.message : String(error));
@@ -145,8 +143,8 @@ function PluginSettingsCard({
     isReplacing,
 }: {
     projectDir: string;
-    plugin: PluginSettingsDescriptor;
-    onPluginUpdated: (plugin: PluginSettingsDescriptor) => void;
+    plugin: PluginSettingsPayload;
+    onPluginUpdated: (plugin: PluginSettingsPayload) => void;
     backendClient: ReturnType<typeof useBackendClient>;
     onReplaceFromFolder: () => void;
     isReplacing: boolean;
@@ -170,10 +168,10 @@ function PluginSettingsCard({
         setSaveError(null);
         setSaving(true);
         try {
-            const updated = await backendClient.updateProjectPluginSettings(
+            const updated = await unwrap(backendClient.updateProjectPluginSettings(
                 plugin.id,
-                draft
-            );
+                draft as any
+            )) as unknown as PluginSettingsPayload;
             onPluginUpdated(updated);
             setSavedAt(Date.now());
         } catch (error) {
