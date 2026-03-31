@@ -80,18 +80,18 @@ export interface ScanDetail {
  */
 export abstract class BackendClient {
   /**
-   * Create a new project at the given directory
+   * Create a new project file at the given path.
    */
   abstract createProject(
     name: string,
-    directory: string
+    projectPath: string
   ): Promise<ProjectSummary>;
 
   /**
-   * Open an existing project. Pass `password` for encrypted projects (replaces the old
+   * Open an existing project file. Pass `password` for encrypted projects (replaces the old
    * separate `unlockProject` call).
    */
-  abstract openProject(directory: string, password?: string): Promise<ProjectSummary>;
+  abstract openProject(projectPath: string, password?: string): Promise<ProjectSummary>;
 
   /** Close the active project and release its database connection. */
   abstract closeProject(): Promise<void>;
@@ -146,7 +146,7 @@ export abstract class BackendClient {
     replacePluginId?: string
   ): Promise<PluginSettingsDescriptor>;
 
-  abstract getProjectLockStatus(directory: string): Promise<ProjectLockStatus>;
+  abstract getProjectLockStatus(projectPath: string): Promise<ProjectLockStatus>;
 
   abstract setProjectPassword(newPassword: string): Promise<ProjectLockStatus>;
 

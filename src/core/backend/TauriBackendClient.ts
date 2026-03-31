@@ -12,11 +12,11 @@ import type {
 } from "./types";
 
 export class TauriBackendClient extends BackendClient {
-  async createProject(name: string, directory: string): Promise<ProjectSummary> {
+  async createProject(name: string, projectPath: string): Promise<ProjectSummary> {
     try {
       const result = await invoke<string>("create_project", {
         name,
-        dirPath: directory,
+        projectPath,
       });
       return JSON.parse(result) as ProjectSummary;
     } catch (error: any) {
@@ -25,10 +25,10 @@ export class TauriBackendClient extends BackendClient {
     }
   }
 
-  async openProject(directory: string, password?: string): Promise<ProjectSummary> {
+  async openProject(projectPath: string, password?: string): Promise<ProjectSummary> {
     try {
       const result = await invoke<string>("open_project", {
-        dirPath: directory,
+        projectPath,
         password: password ?? null,
       });
       return JSON.parse(result) as ProjectSummary;
@@ -193,10 +193,10 @@ export class TauriBackendClient extends BackendClient {
     }
   }
 
-  async getProjectLockStatus(directory: string): Promise<ProjectLockStatus> {
+  async getProjectLockStatus(projectPath: string): Promise<ProjectLockStatus> {
     try {
       const result = await invoke<string>("get_project_lock_status", {
-        dirPath: directory,
+        projectPath,
       });
       return JSON.parse(result) as ProjectLockStatus;
     } catch (error: any) {

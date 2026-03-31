@@ -1,17 +1,22 @@
 //! Public API for the project subsystem.
 //!
-//! Re-exports the [`ProjectPersistence`] trait, the [`SqliteProjectPersistence`] production
-//! implementation, and all domain types. Command handlers obtain a project instance from Tauri
-//! managed state rather than calling thin wrapper functions.
-//!
-//! Business logic that goes beyond raw DB access (plugin execution, disk I/O, settings merging)
-//! lives in the [`service`] module.
+//! Module layout:
+//! - [`session`]  — [`SqliteProjectPersistence`] struct, factory methods (create/open),
+//!                  connection management, schema migrations, and re-encryption.
+//! - [`dao`]      — [`ProjectPersistence`] trait and its `impl` for [`SqliteProjectPersistence`];
+//!                  all CRUD operations on an open session.
+//! - [`service`]  — Business-logic orchestration: plugin sync, scan execution, settings merge.
+//! - [`types`]    — Shared domain DTOs and the [`PersistenceError`] type.
+//! - [`plugins`]  — Plugin bundle discovery and loading from disk.
+//! - [`security`] — SQLCipher key caching and password validation helpers.
 
-mod db;
+pub(super) mod dao;
 mod plugins;
 mod security;
 pub mod service;
+pub(super) mod session;
 mod types;
 
-pub use db::{ProjectPersistence, SqliteProjectPersistence};
+pub use dao::ProjectPersistence;
+pub use session::SqliteProjectPersistence;
 pub use types::*;

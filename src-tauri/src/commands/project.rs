@@ -32,16 +32,17 @@ async fn get_open_project(
 // Session management
 // ---------------------------------------------------------------------------
 
-/// Create a new project database at `dir_path` and open it as the active project.
+/// Create a new project database at `project_path` and open it as the active project.
 #[tauri::command]
 pub async fn create_project(
     name: String,
-    dir_path: String,
+    project_path: String,
     state: tauri::State<'_, ProjectState>,
 ) -> Result<String, String> {
-    let (summary, persistence) = SqliteProjectPersistence::create(&name, &PathBuf::from(dir_path))
-        .await
-        .map_err(|e| e.to_string())?;
+    let (summary, persistence) =
+        SqliteProjectPersistence::create(&name, &PathBuf::from(project_path))
+            .await
+            .map_err(|e| e.to_string())?;
     service::sync_bundled_plugins_for_new_project(&persistence)
         .await
         .map_err(|e| e.to_string())?;
@@ -49,17 +50,17 @@ pub async fn create_project(
     serde_json::to_string(&summary).map_err(|e| e.to_string())
 }
 
-/// Open an existing project at `dir_path` as the active project.
+/// Open an existing project file as the active project.
 ///
 /// Pass `password` when the database is encrypted. This also covers the unlock flow:
 /// if a previous `open_project` returned a lock error, call again with the password.
 #[tauri::command]
 pub async fn open_project(
-    dir_path: String,
+    project_path: String,
     password: Option<String>,
     state: tauri::State<'_, ProjectState>,
 ) -> Result<String, String> {
-    let path = PathBuf::from(dir_path);
+    let path = PathBuf::from(project_path);
     let (summary, persistence) = match password {
         Some(pw) => SqliteProjectPersistence::open_with_password(&path, pw).await,
         None => SqliteProjectPersistence::open(&path).await,

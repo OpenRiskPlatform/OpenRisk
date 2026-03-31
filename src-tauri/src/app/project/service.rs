@@ -6,7 +6,7 @@
 //! these concerns; every function here takes a `&dyn ProjectPersistence` and
 //! calls fine-grained DAO methods.
 
-use super::db::ProjectPersistence;
+use super::dao::ProjectPersistence;
 use super::plugins::{
     build_default_settings, discover_local_plugins, extract_manifest_id, load_plugin_bundle_with_id,
 };
@@ -77,7 +77,9 @@ pub async fn run_scan(
         ));
     }
 
-    let ctx = dao.begin_scan_run(scan_id, &selected_plugins, &inputs).await?;
+    let ctx = dao
+        .begin_scan_run(scan_id, &selected_plugins, &inputs)
+        .await?;
 
     let inputs_obj = if inputs.is_object() {
         inputs
@@ -176,7 +178,8 @@ pub async fn upsert_plugin_from_dir(
     let merged = merge_with_defaults(existing_raw.as_deref(), default_settings);
     let merged_json = serde_json::to_string(&merged)?;
 
-    dao.save_plugin_settings_json(&plugin_id, &merged_json).await?;
+    dao.save_plugin_settings_json(&plugin_id, &merged_json)
+        .await?;
     dao.get_plugin_payload(&plugin_id).await
 }
 

@@ -15,8 +15,8 @@ use std::path::PathBuf;
 ///
 /// Call this before `open_project` to determine whether a password prompt is needed.
 #[tauri::command]
-pub async fn get_project_lock_status(dir_path: String) -> Result<String, String> {
-    let status = SqliteProjectPersistence::check_lock_status(&PathBuf::from(dir_path))
+pub async fn get_project_lock_status(project_path: String) -> Result<String, String> {
+    let status = SqliteProjectPersistence::check_lock_status(&PathBuf::from(project_path))
         .await
         .map_err(|e| e.to_string())?;
     serde_json::to_string(&status).map_err(|e| e.to_string())
