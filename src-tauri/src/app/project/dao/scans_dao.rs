@@ -5,6 +5,25 @@ use crate::app::project::session::SqliteProjectPersistence;
 use crate::app::project::types::*;
 use uuid::Uuid;
 
+#[derive(sqlx::FromRow)]
+struct ScanSummaryRow {
+    id: String,
+    status: String,
+    preview: Option<String>,
+    is_archived: i64,
+    sort_order: i64,
+}
+
+fn map_scan_summary(row: ScanSummaryRow) -> ScanSummaryRecord {
+    ScanSummaryRecord {
+        id: row.id,
+        status: row.status,
+        preview: row.preview,
+        is_archived: row.is_archived != 0,
+        sort_order: row.sort_order,
+    }
+}
+
 pub(super) async fn create_scan(
     this: &SqliteProjectPersistence,
     preview: Option<String>,
@@ -23,7 +42,15 @@ pub(super) async fn create_scan(
         .filter(|v| !v.is_empty())
         .unwrap_or(fallback);
 
-    sqlx::query("INSERT INTO Scan (id, project_id, status, preview) VALUES (?1, ?2, ?3, ?4)")
+    sqlx::query("UPDATE Scan SET sort_order = sort_order + 1 WHERE project_id = ?1")
+        .bind(&project_id)
+        .execute(&mut *conn)
+        .await?;
+
+    sqlx::query(
+        "INSERT INTO Scan (id, project_id, status, preview, is_archived, sort_order) \
+         VALUES (?1, ?2, ?3, ?4, 0, 0)",
+    )
         .bind(&id)
         .bind(&project_id)
         .bind("Draft")
@@ -35,6 +62,8 @@ pub(super) async fn create_scan(
         id,
         status: "Draft".to_string(),
         preview: Some(final_preview),
+        is_archived: false,
+        sort_order: 0,
     })
 }
 
@@ -48,28 +77,16 @@ pub(super) async fn list_scans(
         .fetch_one(&mut *conn)
         .await?;
 
-    #[derive(sqlx::FromRow)]
-    struct Row {
-        id: String,
-        status: String,
-        preview: Option<String>,
-    }
-
-    let rows = sqlx::query_as::<_, Row>(
-        "SELECT id, status, preview FROM Scan WHERE project_id = ?1 ORDER BY rowid DESC",
+    let rows = sqlx::query_as::<_, ScanSummaryRow>(
+        "SELECT id, status, preview, is_archived, sort_order \
+         FROM Scan WHERE project_id = ?1 \
+         ORDER BY is_archived ASC, sort_order ASC, rowid DESC",
     )
     .bind(project_id)
     .fetch_all(&mut *conn)
     .await?;
 
-    Ok(rows
-        .into_iter()
-        .map(|r| ScanSummaryRecord {
-            id: r.id,
-            status: r.status,
-            preview: r.preview,
-        })
-        .collect())
+    Ok(rows.into_iter().map(map_scan_summary).collect())
 }
 
 pub(super) async fn get_scan(
@@ -359,24 +376,14 @@ pub(super) async fn end_scan_run(
     .execute(&mut *conn)
     .await?;
 
-    #[derive(sqlx::FromRow)]
-    struct ScanRow {
-        id: String,
-        status: String,
-        preview: Option<String>,
-    }
+    let row = sqlx::query_as::<_, ScanSummaryRow>(
+        "SELECT id, status, preview, is_archived, sort_order FROM Scan WHERE id = ?1 LIMIT 1",
+    )
+    .bind(scan_id)
+    .fetch_one(&mut *conn)
+    .await?;
 
-    let row =
-        sqlx::query_as::<_, ScanRow>("SELECT id, status, preview FROM Scan WHERE id = ?1 LIMIT 1")
-            .bind(scan_id)
-            .fetch_one(&mut *conn)
-            .await?;
-
-    Ok(ScanSummaryRecord {
-        id: row.id,
-        status: row.status,
-        preview: row.preview,
-    })
+    Ok(map_scan_summary(row))
 }
 
 pub(super) async fn update_scan_preview(
@@ -400,22 +407,87 @@ pub(super) async fn update_scan_preview(
         .execute(&mut *conn)
         .await?;
 
-    #[derive(sqlx::FromRow)]
-    struct ScanRow {
-        id: String,
-        status: String,
-        preview: Option<String>,
+    let row = sqlx::query_as::<_, ScanSummaryRow>(
+        "SELECT id, status, preview, is_archived, sort_order FROM Scan WHERE id = ?1 LIMIT 1",
+    )
+    .bind(scan_id)
+    .fetch_one(&mut *conn)
+    .await?;
+
+    Ok(map_scan_summary(row))
+}
+
+pub(super) async fn set_scan_archived(
+    this: &SqliteProjectPersistence,
+    scan_id: &str,
+    archived: bool,
+) -> Result<ScanSummaryRecord, PersistenceError> {
+    let mut guard = this.conn.lock().await;
+    let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
+
+    sqlx::query("UPDATE Scan SET is_archived = ?1 WHERE id = ?2")
+        .bind(archived as i64)
+        .bind(scan_id)
+        .execute(&mut *conn)
+        .await?;
+
+    let row = sqlx::query_as::<_, ScanSummaryRow>(
+        "SELECT id, status, preview, is_archived, sort_order FROM Scan WHERE id = ?1 LIMIT 1",
+    )
+    .bind(scan_id)
+    .fetch_one(&mut *conn)
+    .await?;
+
+    Ok(map_scan_summary(row))
+}
+
+pub(super) async fn reorder_scans(
+    this: &SqliteProjectPersistence,
+    ordered_scan_ids: &[String],
+) -> Result<Vec<ScanSummaryRecord>, PersistenceError> {
+    let mut guard = this.conn.lock().await;
+    let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
+
+    let project_id: String = sqlx::query_scalar("SELECT id FROM Project LIMIT 1")
+        .fetch_one(&mut *conn)
+        .await?;
+
+    let existing_ids: Vec<String> = sqlx::query_scalar("SELECT id FROM Scan WHERE project_id = ?1")
+        .bind(&project_id)
+        .fetch_all(&mut *conn)
+        .await?;
+
+    if existing_ids.len() != ordered_scan_ids.len() {
+        return Err(PersistenceError::Validation(
+            "Scan reorder payload must include all project scans".into(),
+        ));
     }
 
-    let row =
-        sqlx::query_as::<_, ScanRow>("SELECT id, status, preview FROM Scan WHERE id = ?1 LIMIT 1")
-            .bind(scan_id)
-            .fetch_one(&mut *conn)
-            .await?;
+    for existing_id in &existing_ids {
+        if !ordered_scan_ids.iter().any(|id| id == existing_id) {
+            return Err(PersistenceError::Validation(
+                "Scan reorder payload does not match current project scans".into(),
+            ));
+        }
+    }
 
-    Ok(ScanSummaryRecord {
-        id: row.id,
-        status: row.status,
-        preview: row.preview,
-    })
+    for (index, scan_id) in ordered_scan_ids.iter().enumerate() {
+        sqlx::query("UPDATE Scan SET sort_order = ?1 WHERE id = ?2 AND project_id = ?3")
+            .bind(index as i64)
+            .bind(scan_id)
+            .bind(&project_id)
+            .execute(&mut *conn)
+            .await?;
+    }
+
+    let rows = sqlx::query_as::<_, ScanSummaryRow>(
+        "SELECT id, status, preview, is_archived, sort_order \
+         FROM Scan WHERE project_id = ?1 \
+         ORDER BY is_archived ASC, sort_order ASC, rowid DESC",
+    )
+    .bind(&project_id)
+    .fetch_all(&mut *conn)
+    .await?;
+
+    Ok(rows.into_iter().map(map_scan_summary).collect())
 }

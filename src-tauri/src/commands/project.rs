@@ -1,10 +1,9 @@
 //! Tauri command handlers for project and scan operations.
 
 use crate::app::project::{
-    service, AppError, PluginEntrypointSelection, PluginRecord, ProjectLockStatus,
-    ProjectPersistence, ProjectSettingsPayload, ProjectSettingsRecord, ProjectSummary,
-    ScanDetailRecord, ScanEntrypointInput, ScanSummaryRecord, SettingValue,
-    SqliteProjectPersistence,
+    service, AppError, PluginEntrypointSelection, PluginRecord, ProjectPersistence,
+    ProjectSettingsPayload, ProjectSettingsRecord, ProjectSummary, ScanDetailRecord,
+    ScanEntrypointInput, ScanSummaryRecord, SettingValue, SqliteProjectPersistence,
 };
 use crate::ProjectState;
 use std::path::PathBuf;
@@ -117,17 +116,12 @@ pub async fn set_plugin_setting(
 #[specta::specta]
 pub async fn upsert_project_plugin_from_dir(
     plugin_dir: String,
-    replace_plugin_id: Option<String>,
     state: tauri::State<'_, ProjectState>,
 ) -> Result<PluginRecord, AppError> {
     let project = get_open_project(&state).await?;
-    service::upsert_plugin_from_dir(
-        project.as_ref(),
-        &PathBuf::from(plugin_dir),
-        replace_plugin_id,
-    )
-    .await
-    .map_err(AppError::from)
+    service::upsert_plugin_from_dir(project.as_ref(), &PathBuf::from(plugin_dir))
+        .await
+        .map_err(AppError::from)
 }
 
 /// Register or refresh a plugin from a `.zip` archive into the active project.
@@ -136,17 +130,12 @@ pub async fn upsert_project_plugin_from_dir(
 #[specta::specta]
 pub async fn upsert_project_plugin_from_zip(
     zip_path: String,
-    replace_plugin_id: Option<String>,
     state: tauri::State<'_, ProjectState>,
 ) -> Result<PluginRecord, AppError> {
     let project = get_open_project(&state).await?;
-    service::upsert_plugin_from_zip(
-        project.as_ref(),
-        &PathBuf::from(zip_path),
-        replace_plugin_id,
-    )
-    .await
-    .map_err(AppError::from)
+    service::upsert_plugin_from_zip(project.as_ref(), &PathBuf::from(zip_path))
+        .await
+        .map_err(AppError::from)
 }
 
 /// Create a new scan in Draft status.
@@ -161,7 +150,7 @@ pub async fn create_scan(
     project.create_scan(preview).await.map_err(AppError::from)
 }
 
-/// List all scans for the active project, newest first.
+/// List all scans for the active project including archived ones.
 /// #
 #[tauri::command]
 #[specta::specta]
@@ -186,7 +175,7 @@ pub async fn get_scan(
 
 /// Execute a scan: run the selected plugins and persist results.
 ///
-/// Plugin code is read from the database (synced on project open), not from disk.
+/// Plugin code is read from the project database, not from disk.
 #[tauri::command]
 #[specta::specta]
 pub async fn run_scan(
@@ -213,6 +202,35 @@ pub async fn update_scan_preview(
     let project = get_open_project(&state).await?;
     project
         .update_scan_preview(&scan_id, preview)
+        .await
+        .map_err(AppError::from)
+}
+
+/// Mark a scan as archived or active without deleting it from the database.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_scan_archived(
+    scan_id: String,
+    archived: bool,
+    state: tauri::State<'_, ProjectState>,
+) -> Result<ScanSummaryRecord, AppError> {
+    let project = get_open_project(&state).await?;
+    project
+        .set_scan_archived(&scan_id, archived)
+        .await
+        .map_err(AppError::from)
+}
+
+/// Persist the explicit UI ordering for all scans in the active project.
+#[tauri::command]
+#[specta::specta]
+pub async fn reorder_scans(
+    ordered_scan_ids: Vec<String>,
+    state: tauri::State<'_, ProjectState>,
+) -> Result<Vec<ScanSummaryRecord>, AppError> {
+    let project = get_open_project(&state).await?;
+    project
+        .reorder_scans(&ordered_scan_ids)
         .await
         .map_err(AppError::from)
 }

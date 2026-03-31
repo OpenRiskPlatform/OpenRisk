@@ -123,13 +123,8 @@ pub async fn run_scan(
 pub async fn upsert_plugin_from_dir(
     dao: &dyn ProjectPersistence,
     plugin_dir: &Path,
-    replace_plugin_id: Option<String>,
 ) -> Result<PluginRecord, PersistenceError> {
-    let manifest_id = extract_manifest_id(plugin_dir)?;
-    let plugin_id = match replace_plugin_id {
-        Some(id) if !id.trim().is_empty() => id.trim().to_string(),
-        _ => manifest_id,
-    };
+    let plugin_id = extract_manifest_id(plugin_dir)?;
     let bundle = load_plugin_bundle_with_id(plugin_dir, plugin_id.clone())?;
 
     dao.save_plugin(&bundle).await?;
@@ -146,9 +141,8 @@ pub async fn upsert_plugin_from_dir(
 pub async fn upsert_plugin_from_zip(
     dao: &dyn ProjectPersistence,
     zip_path: &Path,
-    replace_plugin_id: Option<String>,
 ) -> Result<PluginRecord, PersistenceError> {
-    let bundle = load_plugin_bundle_from_zip(zip_path, replace_plugin_id)?;
+    let bundle = load_plugin_bundle_from_zip(zip_path)?;
     let plugin_id = bundle.id.clone();
 
     dao.save_plugin(&bundle).await?;

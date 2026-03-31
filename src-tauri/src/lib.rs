@@ -29,6 +29,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::project::get_scan,
         commands::project::run_scan,
         commands::project::update_scan_preview,
+        commands::project::set_scan_archived,
+        commands::project::reorder_scans,
         // Security commands
         commands::security::get_project_lock_status,
         commands::security::set_project_password,

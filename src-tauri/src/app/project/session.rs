@@ -31,7 +31,7 @@ use uuid::Uuid;
 // Schema & version constants
 // ---------------------------------------------------------------------------
 
-pub(super) const CURRENT_SCHEMA_VERSION: i64 = 9;
+pub(super) const CURRENT_SCHEMA_VERSION: i64 = 10;
 const MIN_SUPPORTED_SCHEMA_VERSION: i64 = 4;
 
 const PROJECT_LEGACY_ERROR_PREFIX: &str = "PROJECT_LEGACY:";
@@ -134,6 +134,8 @@ CREATE TABLE IF NOT EXISTS Scan (
     project_id TEXT NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('Draft','Running','Completed','Failed')),
     preview TEXT,
+    is_archived INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (project_id) REFERENCES Project(id) ON DELETE CASCADE
 );
 
@@ -507,6 +509,7 @@ impl SqliteProjectPersistence {
                 7 => Self::migrate_to_v7(conn).await?,
                 8 => Self::migrate_to_v8(conn).await?,
                 9 => Self::migrate_to_v9(conn).await?,
+                10 => Self::migrate_to_v10(conn).await?,
                 _ => {
                     return Err(PersistenceError::Validation(format!(
                         "Missing migration to schema version {}",
@@ -630,6 +633,35 @@ impl SqliteProjectPersistence {
             sqlx::query("DROP TABLE PluginSettingDef_old")
                 .execute(&mut *conn)
                 .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Add scan archive/order metadata while preserving all historical rows.
+    async fn migrate_to_v10(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
+        if !Self::column_exists(conn, "Scan", "is_archived").await? {
+            sqlx::query("ALTER TABLE Scan ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0")
+                .execute(&mut *conn)
+                .await?;
+        }
+
+        if !Self::column_exists(conn, "Scan", "sort_order").await? {
+            sqlx::query("ALTER TABLE Scan ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
+                .execute(&mut *conn)
+                .await?;
+
+            let rows: Vec<String> = sqlx::query_scalar("SELECT id FROM Scan ORDER BY rowid DESC")
+                .fetch_all(&mut *conn)
+                .await?;
+
+            for (index, scan_id) in rows.iter().enumerate() {
+                sqlx::query("UPDATE Scan SET sort_order = ?1 WHERE id = ?2")
+                    .bind(index as i64)
+                    .bind(scan_id)
+                    .execute(&mut *conn)
+                    .await?;
+            }
         }
 
         Ok(())

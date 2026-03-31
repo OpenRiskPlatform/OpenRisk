@@ -77,6 +77,17 @@ pub trait ProjectPersistence: Send + Sync {
         scan_id: &str,
         preview: String,
     ) -> Result<ScanSummaryRecord, PersistenceError>;
+    /// Mark a scan as archived or active without deleting it from the database.
+    async fn set_scan_archived(
+        &self,
+        scan_id: &str,
+        archived: bool,
+    ) -> Result<ScanSummaryRecord, PersistenceError>;
+    /// Persist the explicit UI ordering for all scans in the project.
+    async fn reorder_scans(
+        &self,
+        ordered_scan_ids: &[String],
+    ) -> Result<Vec<ScanSummaryRecord>, PersistenceError>;
     /// Encrypt an unencrypted project with `new_password`.
     async fn set_project_password(
         &self,
@@ -168,6 +179,19 @@ impl ProjectPersistence for SqliteProjectPersistence {
         preview: String,
     ) -> Result<ScanSummaryRecord, PersistenceError> {
         scans_dao::update_scan_preview(self, scan_id, preview).await
+    }
+    async fn set_scan_archived(
+        &self,
+        scan_id: &str,
+        archived: bool,
+    ) -> Result<ScanSummaryRecord, PersistenceError> {
+        scans_dao::set_scan_archived(self, scan_id, archived).await
+    }
+    async fn reorder_scans(
+        &self,
+        ordered_scan_ids: &[String],
+    ) -> Result<Vec<ScanSummaryRecord>, PersistenceError> {
+        scans_dao::reorder_scans(self, ordered_scan_ids).await
     }
     async fn set_project_password(
         &self,

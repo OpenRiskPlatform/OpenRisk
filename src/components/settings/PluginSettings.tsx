@@ -44,7 +44,7 @@ export function PluginSettings({
     const [importing, setImporting] = useState(false);
     const [importError, setImportError] = useState<string | null>(null);
 
-    const pickAndImportPlugin = async (replacePluginId?: string) => {
+    const pickAndImportPlugin = async () => {
         if (!projectDir) {
             return;
         }
@@ -54,7 +54,7 @@ export function PluginSettings({
         const selected = await open({
             directory: true,
             multiple: false,
-            title: replacePluginId ? "Select replacement plugin folder" : "Select plugin folder",
+            title: "Select plugin folder",
         });
 
         if (!selected || Array.isArray(selected)) {
@@ -63,7 +63,7 @@ export function PluginSettings({
 
         setImporting(true);
         try {
-            const payload = await unwrap(backendClient.upsertProjectPluginFromDir(selected, replacePluginId ?? null));
+            const payload = await unwrap(backendClient.upsertProjectPluginFromDir(selected));
             onPluginUpdated(payload);
         } catch (error) {
             setImportError(error instanceof Error ? error.message : String(error));
@@ -72,7 +72,7 @@ export function PluginSettings({
         }
     };
 
-    const pickAndImportPluginZip = async (replacePluginId?: string) => {
+    const pickAndImportPluginZip = async () => {
         if (!projectDir) {
             return;
         }
@@ -83,7 +83,7 @@ export function PluginSettings({
             directory: false,
             multiple: false,
             filters: [{ name: "Plugin Archive", extensions: ["zip"] }],
-            title: replacePluginId ? "Select replacement plugin archive" : "Select plugin archive (.zip)",
+            title: "Select plugin archive (.zip)",
         });
 
         if (!selected || Array.isArray(selected)) {
@@ -92,7 +92,7 @@ export function PluginSettings({
 
         setImporting(true);
         try {
-            const payload = await unwrap(backendClient.upsertProjectPluginFromZip(selected, replacePluginId ?? null));
+            const payload = await unwrap(backendClient.upsertProjectPluginFromZip(selected));
             onPluginUpdated(payload);
         } catch (error) {
             setImportError(error instanceof Error ? error.message : String(error));
@@ -152,7 +152,7 @@ export function PluginSettings({
                             Load ZIP
                         </Button>
                         <p className="text-xs text-muted-foreground">
-                            Add or replace a plugin from a folder or .zip archive.
+                            Load a plugin from a folder or .zip archive. If its ID already exists, it is updated in place.
                         </p>
                     </div>
 
@@ -171,9 +171,6 @@ export function PluginSettings({
                             plugin={plugin}
                             onPluginUpdated={onPluginUpdated}
                             backendClient={backendClient}
-                            onReplaceFromFolder={() => pickAndImportPlugin(plugin.id)}
-                            onReplaceFromZip={() => pickAndImportPluginZip(plugin.id)}
-                            isReplacing={importing}
                         />
                     ))}
                 </div>
@@ -193,17 +190,11 @@ function PluginSettingsCard({
     plugin,
     onPluginUpdated,
     backendClient,
-    onReplaceFromFolder,
-    onReplaceFromZip,
-    isReplacing,
 }: {
     projectDir: string;
     plugin: PluginRecord;
     onPluginUpdated: (plugin: PluginRecord) => void;
     backendClient: ReturnType<typeof useBackendClient>;
-    onReplaceFromFolder: () => void;
-    onReplaceFromZip: () => void;
-    isReplacing: boolean;
 }) {
     const [draft, setDraft] = useState<Record<string, unknown>>(() => {
         const r: Record<string, unknown> = {};
@@ -253,24 +244,6 @@ function PluginSettingsCard({
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm text-muted-foreground">v{plugin.version}</p>
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={onReplaceFromFolder}
-                        disabled={isReplacing}
-                    >
-                        Replace Folder
-                    </Button>
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={onReplaceFromZip}
-                        disabled={isReplacing}
-                    >
-                        Replace ZIP
-                    </Button>
                 </div>
             </div>
 

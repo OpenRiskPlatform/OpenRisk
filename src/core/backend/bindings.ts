@@ -40,19 +40,19 @@ export const commands = {
 	 *  Register or refresh a plugin from a directory on disk into the active project.
 	 *  #
 	 */
-	upsertProjectPluginFromDir: (pluginDir: string, replacePluginId: string | null) => typedError<PluginRecord, AppError>(__TAURI_INVOKE("upsert_project_plugin_from_dir", { pluginDir, replacePluginId })),
+	upsertProjectPluginFromDir: (pluginDir: string) => typedError<PluginRecord, AppError>(__TAURI_INVOKE("upsert_project_plugin_from_dir", { pluginDir })),
 	/**
 	 *  Register or refresh a plugin from a `.zip` archive into the active project.
 	 *  #
 	 */
-	upsertProjectPluginFromZip: (zipPath: string, replacePluginId: string | null) => typedError<PluginRecord, AppError>(__TAURI_INVOKE("upsert_project_plugin_from_zip", { zipPath, replacePluginId })),
+	upsertProjectPluginFromZip: (zipPath: string) => typedError<PluginRecord, AppError>(__TAURI_INVOKE("upsert_project_plugin_from_zip", { zipPath })),
 	/**
 	 *  Create a new scan in Draft status.
 	 *  #
 	 */
 	createScan: (preview: string | null) => typedError<ScanSummaryRecord, AppError>(__TAURI_INVOKE("create_scan", { preview })),
 	/**
-	 *  List all scans for the active project, newest first.
+	 *  List all scans for the active project including archived ones.
 	 *  #
 	 */
 	listScans: () => typedError<ScanSummaryRecord[], AppError>(__TAURI_INVOKE("list_scans")),
@@ -64,7 +64,7 @@ export const commands = {
 	/**
 	 *  Execute a scan: run the selected plugins and persist results.
 	 * 
-	 *  Plugin code is read from the database (synced on project open), not from disk.
+	 *  Plugin code is read from the project database, not from disk.
 	 */
 	runScan: (scanId: string, selectedPlugins: PluginEntrypointSelection[], inputs: ScanEntrypointInput[]) => typedError<ScanSummaryRecord, AppError>(__TAURI_INVOKE("run_scan", { scanId, selectedPlugins, inputs })),
 	/**
@@ -72,6 +72,10 @@ export const commands = {
 	 *  #
 	 */
 	updateScanPreview: (scanId: string, preview: string) => typedError<ScanSummaryRecord, AppError>(__TAURI_INVOKE("update_scan_preview", { scanId, preview })),
+	// Mark a scan as archived or active without deleting it from the database.
+	setScanArchived: (scanId: string, archived: boolean) => typedError<ScanSummaryRecord, AppError>(__TAURI_INVOKE("set_scan_archived", { scanId, archived })),
+	// Persist the explicit UI ordering for all scans in the active project.
+	reorderScans: (orderedScanIds: string[]) => typedError<ScanSummaryRecord[], AppError>(__TAURI_INVOKE("reorder_scans", { orderedScanIds })),
 	/**
 	 *  Probe the lock status of a project file *without* opening it.
 	 * 
@@ -256,6 +260,8 @@ export type ScanSummaryRecord = {
 	id: string,
 	status: string,
 	preview: string | null,
+	isArchived: boolean,
+	sortOrder: number,
 };
 
 // A typed scalar value used for both plugin settings and scan inputs.

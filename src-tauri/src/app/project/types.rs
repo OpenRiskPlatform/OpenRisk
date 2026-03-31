@@ -202,6 +202,8 @@ pub struct ScanSummaryRecord {
     pub id: String,
     pub status: String,
     pub preview: Option<String>,
+    pub is_archived: bool,
+    pub sort_order: i64,
 }
 
 /// A single field value submitted as input to one plugin entrypoint.

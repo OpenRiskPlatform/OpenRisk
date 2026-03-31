@@ -52,11 +52,7 @@ pub fn load_plugin_bundle_with_id(
 /// Load a [`LocalPluginBundle`] from a `.zip` archive.
 ///
 /// The zip must contain `plugin.json` and the entrypoint file at its root.
-/// Pass `plugin_id_override` to replace the id embedded in the manifest.
-pub fn load_plugin_bundle_from_zip(
-    zip_path: &Path,
-    plugin_id_override: Option<String>,
-) -> Result<LocalPluginBundle, PersistenceError> {
+pub fn load_plugin_bundle_from_zip(zip_path: &Path) -> Result<LocalPluginBundle, PersistenceError> {
     let file = fs::File::open(zip_path)?;
     let mut archive = zip::ZipArchive::new(file)
         .map_err(|e| PersistenceError::Validation(format!("Invalid zip archive: {}", e)))?;
@@ -73,22 +69,20 @@ pub fn load_plugin_bundle_from_zip(
     let manifest =
         parse_manifest_relaxed(&manifest_raw).map_err(|e| PersistenceError::Validation(e))?;
 
-    let plugin_id = plugin_id_override.unwrap_or_else(|| {
-        serde_json::from_str::<Value>(&manifest_raw)
-            .ok()
-            .and_then(|v| {
-                v.get("id")
-                    .and_then(|s| s.as_str())
-                    .map(|s| s.trim().to_string())
-            })
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| {
-                zip_path
-                    .file_stem()
-                    .map(|s| s.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "plugin".to_string())
-            })
-    });
+    let plugin_id = serde_json::from_str::<Value>(&manifest_raw)
+        .ok()
+        .and_then(|v| {
+            v.get("id")
+                .and_then(|s| s.as_str())
+                .map(|s| s.trim().to_string())
+        })
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| {
+            zip_path
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| "plugin".to_string())
+        });
 
     let entrypoint = manifest.main.clone().to_string();
     let code = {
