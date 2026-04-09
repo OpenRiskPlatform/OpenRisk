@@ -3,7 +3,7 @@
  * table or the raw JSON view.
  */
 
-import { Check, Clipboard, FileDown } from "lucide-react";
+import { AlertCircle, Check, Clipboard, FileDown } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,6 +48,7 @@ export function SearchResultsPanel({
 }: SearchResultsPanelProps) {
   const shown = result.results?.length ?? 0;
   const total = result.total?.value;
+  const isError = result.success === false;
 
   const usedFields = searchFields
     ? Object.entries({
@@ -131,15 +132,29 @@ export function SearchResultsPanel({
                   )}
                 </Button>
               )}
-              <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={shown === 0}>
+              <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={shown === 0 || isError}>
                 <FileDown className="mr-1 h-3.5 w-3.5" />
                 Export PDF
               </Button>
             </div>
           </div>
         </CardHeader>
-        <CardContent className={viewMode === "table" ? "p-0 pt-0" : undefined}>
-          {viewMode === "table" ? (
+        <CardContent className={!isError && viewMode === "table" ? "p-0 pt-0" : undefined}>
+          {viewMode === "json" ? (
+            <pre className="bg-muted p-4 rounded-lg overflow-auto max-h-[600px] text-xs mx-6 mb-6">
+              {JSON.stringify(result, null, 2)}
+            </pre>
+          ) : isError ? (
+            <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4 mx-6 mb-6">
+              <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-destructive">Plugin returned an error</p>
+                <p className="text-sm text-muted-foreground">
+                  {result.error ?? "An unknown error occurred."}
+                </p>
+              </div>
+            </div>
+          ) : (
             <PersonResultTable
               entities={result.results ?? []}
               page={page}
@@ -150,10 +165,6 @@ export function SearchResultsPanel({
               onToggleFavorite={onToggleFavorite}
               onReorder={onReorder}
             />
-          ) : (
-            <pre className="bg-muted p-4 rounded-lg overflow-auto max-h-[600px] text-xs mx-6 mb-6">
-              {JSON.stringify(result, null, 2)}
-            </pre>
           )}
         </CardContent>
       </Card>

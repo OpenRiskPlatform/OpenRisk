@@ -22,6 +22,7 @@ export interface SearchResultEntity {
 export interface SearchResult {
   success: boolean;
   query: string;
+  error?: string;
   total?: { value: number; relation: string };
   results?: SearchResultEntity[];
   timestamp?: string;

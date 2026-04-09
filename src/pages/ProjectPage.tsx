@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useBackendClient } from "@/hooks/useBackendClient";
+import { usePersonSearchContext } from "@/core/personSearch/PersonSearchContext";
 import type { ProjectSummary } from "@/core/backend/types";
 
 interface ProjectPageProps {
@@ -16,9 +17,15 @@ interface ProjectPageProps {
 
 export function ProjectPage({ projectDir }: ProjectPageProps) {
   const backendClient = useBackendClient();
+  const { switchProject } = usePersonSearchContext();
   const [project, setProject] = useState<ProjectSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Reset search state only when switching to a different project
+  useEffect(() => {
+    switchProject(projectDir);
+  }, [projectDir]);
 
   useEffect(() => {
     let cancelled = false;

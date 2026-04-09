@@ -23,6 +23,8 @@ export function usePersonSearch() {
   const [fields, setFields] = useState<PersonSearchFields>(emptyFields);
   const [selectedPlugin, setSelectedPlugin] = useState<string | null>(null);
   const [searchType, setSearchType] = useState<"person" | "company">("person");
+  const [adverseaEndpoints, setAdverseaEndpoints] = useState<string[]>([]);
+  const [activeProjectDir, setActiveProjectDir] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SearchResult | null>(null);
@@ -69,15 +71,6 @@ export function usePersonSearch() {
     setLoading(true);
     setError(null);
 
-    // Count each filled field as 1 token immediately on trigger
-    if (pageNumber === 1) {
-      const tokensUsed = Object.values(fields).filter((v) => v.trim() !== "").length;
-      setPluginTokens((prev) => ({
-        ...prev,
-        [selectedPlugin]: (prev[selectedPlugin] ?? 0) + tokensUsed,
-      }));
-    }
-
     try {
       const settings = getPluginSettings(selectedPlugin);
       const inputs: Record<string, string> = {};
@@ -94,6 +87,10 @@ export function usePersonSearch() {
       inputs.limit = String(PAGE_SIZE);
       inputs.offset = String((pageNumber - 1) * PAGE_SIZE);
 
+      if (selectedPlugin === "adversea" && adverseaEndpoints.length > 0) {
+        inputs.endpoints = adverseaEndpoints.join(",");
+      }
+
       const response = await backendClient.executePlugin(
         selectedPlugin,
         inputs,
@@ -105,7 +102,17 @@ export function usePersonSearch() {
         setResult(data);
         setPage(pageNumber);
 
-        // Only push to history on page 1 (i.e. new search, not pagination)
+        if (pageNumber === 1 && data.success !== false) {
+          const tokensUsed =
+            selectedPlugin === "adversea"
+              ? Math.max(adverseaEndpoints.length, 1)
+              : 1;
+          setPluginTokens((prev) => ({
+            ...prev,
+            [selectedPlugin]: (prev[selectedPlugin] ?? 0) + tokensUsed,
+          }));
+        }
+
         if (pageNumber === 1) {
           const nameParts2 = [fields.firstName, fields.lastName]
             .map((s) => s.trim())
@@ -188,7 +195,6 @@ export function usePersonSearch() {
           : e
       )
     );
-    // Also update the live result so the table stays in sync
     setResult((prev) =>
       prev ? { ...prev, results: orderedEntities } : prev
     );
@@ -218,19 +224,55 @@ export function usePersonSearch() {
   const isFavoriteEntity = (entityId: string) =>
     favoriteEntities.some((f) => f.entity.id === entityId);
 
+  // Resets form fields and results when switching to a different plugin
+  const setSelectedPluginAndReset = (pluginId: string | null) => {
+    if (pluginId !== selectedPlugin) {
+      setFields(emptyFields);
+      setResult(null);
+      setError(null);
+      setPage(1);
+      setCommittedFields(null);
+      setCountrySearch("");
+    }
+    setSelectedPlugin(pluginId);
+  };
+
+  const resetSearchState = () => {
+    setFields(emptyFields);
+    setResult(null);
+    setError(null);
+    setPage(1);
+    setCommittedFields(null);
+    setScanHistory([]);
+    setActiveHistoryId(null);
+    setFavoriteEntities([]);
+    setPluginTokens({});
+    setAdverseaEndpoints([]);
+    setCountrySearch("");
+    setViewMode("table");
+    setActiveProjectDir(null);
+  };
+
+  const switchProject = (projectDir: string | undefined) => {
+    if (projectDir && projectDir !== activeProjectDir) {
+      resetSearchState();
+      setActiveProjectDir(projectDir);
+    }
+  };
+
   return {
-    // form state
     fields,
     setFields,
     selectedPlugin,
-    setSelectedPlugin,
+    setSelectedPlugin: setSelectedPluginAndReset,
     searchType,
     setSearchType,
+    adverseaEndpoints,
+    setAdverseaEndpoints,
     countrySearch,
     setCountrySearch,
     filteredCountries,
     hasAnyField,
-    // async state
     loading,
     error,
     result,
@@ -238,16 +280,12 @@ export function usePersonSearch() {
     viewMode,
     setViewMode,
     copied,
-    // scan history
     scanHistory,
     activeHistoryId,
-    // favorite entities
     favoriteEntities,
     isFavoriteEntity,
-    // plugin token usage
     pluginTokens,
     committedFields,
-    // handlers
     handleFieldChange,
     handleClear,
     handleSubmit,
@@ -259,5 +297,7 @@ export function usePersonSearch() {
     handleUpdateHistoryOrder,
     handleToggleFavoriteEntity,
     handleRemoveFavoriteEntity,
+    resetSearchState,
+    switchProject,
   };
 }
