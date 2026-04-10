@@ -86,6 +86,21 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
     });
   };
 
+  const handleProjectNameUpdated = (name: string) => {
+    setSettingsData((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return {
+        ...prev,
+        project: {
+          ...prev.project,
+          name,
+        },
+      };
+    });
+  };
+
   const handlePluginUpdated = (plugin: ProjectSettingsPayload["plugins"][number]) => {
     setSettingsData((prev) => {
       if (!prev) {
@@ -130,6 +145,7 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
             {activeCategory === "general" && (
               <GeneralSettings
                 projectDir={projectDir}
+                projectName={settingsData?.project?.name ?? ""}
                 projectSettings={settingsData?.projectSettings ?? null}
                 loading={settingsLoading}
                 error={
@@ -138,6 +154,7 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
                     : "Open or create a project to edit settings."
                 }
                 onProjectSettingsUpdated={handleProjectSettingsUpdated}
+                onProjectNameUpdated={handleProjectNameUpdated}
               />
             )}
             {activeCategory === "plugins" && (

@@ -5,6 +5,7 @@
 - Never manually edit generated files.
 - If a file is generated, change the source and regenerate.
 - Before editing any file, check if it has a generator comment/header.
+- Before running ANY command, switch to bash first.
 
 ## Generated Files In This Repo
 
@@ -51,3 +52,38 @@
   1. Revert only that generated file change.
   2. Regenerate it from source.
   3. Re-run checks.
+
+## Frontend Stack (Current)
+
+- React 19 + TypeScript + Vite.
+- Routing: @tanstack/react-router.
+- UI: shadcn/ui components built on Radix primitives.
+- Icons: lucide-react.
+- Styling: Tailwind CSS + CSS variables tokens + tailwindcss-animate.
+- Backend bridge from frontend: Tauri invoke via generated src/core/backend/bindings.ts.
+
+## Backend Stack (Current)
+
+- Tauri v2 desktop backend in Rust.
+- Database: SQLite via sqlx.
+- Encryption: SQLCipher (bundled via libsqlite3-sys features).
+- Plugin runtime: rustyscript (isolated JS/TS execution).
+- Typed Rust <-> TS contracts: specta + tauri-specta + specta-typescript.
+
+## shadcn/ui Usage Rules (Required)
+
+- Use existing UI primitives from src/components/ui first; do not reinvent base controls.
+- Prefer component variants (variant/size) over custom ad-hoc class stacks.
+- Use cn() helper from src/lib/utils.ts for class composition.
+- Keep styling aligned with existing design tokens from src/index.css and tailwind.config.js.
+- If a new primitive is needed, add via shadcn CLI into src/components/ui following components.json aliases.
+- Keep icons in lucide-react for consistency.
+- Do not manually patch generated binding types in src/core/backend/bindings.ts when adding backend fields.
+
+## shadcn Workflow
+
+1. Check whether component already exists in src/components/ui.
+2. If exists, compose it in feature components/pages.
+3. If missing, add via shadcn CLI.
+4. Use token-based classes (bg-background, text-foreground, border-border, etc.).
+5. Run npm run build after UI changes.

@@ -20,18 +20,22 @@ import { useSettings } from "@/core/settings/SettingsContext";
 
 interface GeneralSettingsProps {
   projectDir?: string;
+  projectName?: string;
   projectSettings: ProjectSettingsRecord | null;
   loading: boolean;
   error?: string | null;
   onProjectSettingsUpdated: (settings: ProjectSettingsRecord) => void;
+  onProjectNameUpdated?: (name: string) => void;
 }
 
 export function GeneralSettings({
   projectDir,
+  projectName,
   projectSettings,
   loading,
   error,
   onProjectSettingsUpdated,
+  onProjectNameUpdated,
 }: GeneralSettingsProps) {
   const backendClient = useBackendClient();
   const { updateGlobalSettings } = useSettings();
@@ -43,6 +47,9 @@ export function GeneralSettings({
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
+  const [projectNameDraft, setProjectNameDraft] = useState(projectName ?? "");
+  const [renamingProject, setRenamingProject] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
 
   const theme = projectSettings?.theme ?? "system";
 
@@ -74,6 +81,34 @@ export function GeneralSettings({
     setNewPassword("");
     setConfirmPassword("");
     setCurrentPassword("");
+  };
+
+  const submitRenameProject = async () => {
+    if (!projectDir) {
+      return;
+    }
+    const nextName = projectNameDraft.trim();
+    if (!nextName) {
+      setRenameError("Project name must not be empty");
+      return;
+    }
+
+    setRenameError(null);
+    setRenamingProject(true);
+    try {
+      const updated = await unwrap(backendClient.updateProjectSettings(nextName, null));
+      onProjectSettingsUpdated(updated);
+      onProjectNameUpdated?.(nextName);
+      window.dispatchEvent(
+        new CustomEvent("openrisk:project-renamed", {
+          detail: { name: nextName },
+        }),
+      );
+    } catch (err) {
+      setRenameError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRenamingProject(false);
+    }
   };
 
   const submitEnablePassword = async () => {
@@ -148,6 +183,10 @@ export function GeneralSettings({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectDir]);
 
+  useEffect(() => {
+    setProjectNameDraft(projectName ?? "");
+  }, [projectName]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -173,6 +212,30 @@ export function GeneralSettings({
 
       {projectDir && !loading && !error && projectSettings && (
         <div className="space-y-4">
+          <div className="rounded-lg border p-4 space-y-3">
+            <div className="space-y-0.5">
+              <Label>Project Name</Label>
+              <p className="text-sm text-muted-foreground">
+                Update display name for this project.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Input
+                value={projectNameDraft}
+                onChange={(e) => setProjectNameDraft(e.target.value)}
+                placeholder="Project name"
+              />
+              <Button
+                type="button"
+                onClick={() => void submitRenameProject()}
+                disabled={renamingProject}
+              >
+                {renamingProject ? "Saving..." : "Rename"}
+              </Button>
+            </div>
+            {renameError ? <p className="text-sm text-red-600">{renameError}</p> : null}
+          </div>
+
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label>Theme</Label>
