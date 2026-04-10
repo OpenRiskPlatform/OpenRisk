@@ -44,6 +44,46 @@ pub(super) async fn load_scan_logs(
         .collect())
 }
 
+pub(super) async fn load_scan_metrics(
+    conn: &mut SqliteConnection,
+    scan_result_id: &str,
+) -> Result<Vec<PluginMetricValue>, PersistenceError> {
+    let rows: Vec<(String, String, String, Option<String>, String)> = sqlx::query_as(
+        "SELECT m.metric_name, m.type_json, m.value_json, d.description, COALESCE(d.title, m.metric_name) \
+         FROM ScanPluginMetric m \
+         LEFT JOIN ScanPluginResult r ON r.id = m.scan_result_id \
+         LEFT JOIN PluginRevisionMetricDef d \
+           ON d.revision_id = r.plugin_revision_id AND d.name = m.metric_name \
+         WHERE m.scan_result_id = ?1 \
+         ORDER BY m.metric_name",
+    )
+    .bind(scan_result_id)
+    .fetch_all(&mut *conn)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|(name, type_json, value_json, description, title)| {
+            let type_ = serde_json::from_str::<PluginFieldTypeDef>(&type_json).unwrap_or(
+                PluginFieldTypeDef {
+                    name: "string".to_string(),
+                    values: None,
+                },
+            );
+            let value = serde_json::from_str::<serde_json::Value>(&value_json)
+                .map(|v| SettingValue::from_json(&v))
+                .unwrap_or(SettingValue::Null);
+            PluginMetricValue {
+                name,
+                title,
+                type_,
+                description,
+                value,
+            }
+        })
+        .collect())
+}
+
 pub(super) async fn load_plugin_record(
     conn: &mut SqliteConnection,
     plugin_id: &str,

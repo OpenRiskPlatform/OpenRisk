@@ -167,6 +167,15 @@ export type PluginManifestRecord = {
 	homepage: string | null,
 };
 
+// One metric value produced by plugin runtime and stored with scan results.
+export type PluginMetricValue = {
+	name: string,
+	title: string,
+	type: PluginFieldTypeDef,
+	description: string | null,
+	value: SettingValue,
+};
+
 // Structured result of executing one plugin entrypoint.
 export type PluginOutput = {
 	// Whether the plugin executed successfully.
@@ -177,6 +186,8 @@ export type PluginOutput = {
 	error: string | null,
 	// Console log entries captured during execution.
 	logs: LogEntry[],
+	// Runtime metrics collected via plugin metrics receiver.
+	metrics: PluginMetricValue[],
 };
 
 // Complete descriptor for a plugin as configured within a project.
@@ -276,11 +287,11 @@ export type SettingValue = { type: "string"; value: string } | { type: "number";
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
-    try {
-        return { status: "ok", data: await result };
-    } catch (e) {
-        if (e instanceof Error) throw e;
-        return { status: "error", error: e as any };
-    }
+	try {
+		return { status: "ok", data: await result };
+	} catch (e) {
+		if (e instanceof Error) throw e;
+		return { status: "error", error: e as any };
+	}
 }
 

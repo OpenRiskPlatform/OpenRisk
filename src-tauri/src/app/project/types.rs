@@ -111,6 +111,29 @@ pub struct PluginSettingDef {
     pub default_value: Option<SettingValue>,
 }
 
+/// Definition of one runtime metric declared by a plugin.
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginMetricDef {
+    pub name: String,
+    pub title: String,
+    #[serde(rename = "type")]
+    pub type_: PluginFieldTypeDef,
+    pub description: Option<String>,
+}
+
+/// One metric value produced by plugin runtime and stored with scan results.
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginMetricValue {
+    pub name: String,
+    pub title: String,
+    #[serde(rename = "type")]
+    pub type_: PluginFieldTypeDef,
+    pub description: Option<String>,
+    pub value: SettingValue,
+}
+
 // ---------------------------------------------------------------------------
 // Setting / input values
 // ---------------------------------------------------------------------------
@@ -263,6 +286,8 @@ pub struct PluginOutput {
     pub error: Option<String>,
     /// Console log entries captured during execution.
     pub logs: Vec<LogEntry>,
+    /// Runtime metrics collected via plugin metrics receiver.
+    pub metrics: Vec<PluginMetricValue>,
 }
 
 /// Single plugin result stored in a completed scan.
@@ -299,6 +324,7 @@ pub struct PluginLoadData {
     pub entrypoint_id: String,
     /// The JavaScript-exported function name to invoke.
     pub entrypoint_function: String,
+    pub metric_defs: Vec<PluginMetricDef>,
     pub settings: Vec<PluginSettingValue>,
     pub code: Option<String>,
 }

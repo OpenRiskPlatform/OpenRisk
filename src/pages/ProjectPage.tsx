@@ -27,6 +27,7 @@ import { useBackendClient } from "@/hooks/useBackendClient";
 import { unwrap } from "@/lib/utils";
 import type {
     PluginEntrypointSelection,
+    PluginMetricValue,
     PluginRecord,
     ProjectSettingsPayload,
     ScanDetailRecord,
@@ -99,6 +100,48 @@ function PluginLogsView({ logs }: { logs: PluginLogEntry[] }) {
                         <div key={i} className={`flex gap-2 text-xs font-mono ${levelColor(entry.level)}`}>
                             <span className="shrink-0 w-12 opacity-60">[{entry.level}]</span>
                             <span className="break-all">{entry.message}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function metricValueToText(value: SettingValue): string {
+    if (value.type === "null") {
+        return "null";
+    }
+    return String(value.value);
+}
+
+function PluginMetricsView({ metrics }: { metrics: PluginMetricValue[] }) {
+    const [expanded, setExpanded] = useState(true);
+    if (!metrics.length) return null;
+
+    return (
+        <div className="mt-2">
+            <button
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => setExpanded((v) => !v)}
+            >
+                <span>Stats ({metrics.length})</span>
+                {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </button>
+            {expanded && (
+                <div className="mt-1.5 rounded border bg-muted/20 p-2 space-y-1">
+                    {metrics.map((metric) => (
+                        <div key={metric.name} className="grid grid-cols-[1fr_auto] gap-2 text-xs items-start">
+                            <div>
+                                <div className="font-medium">{metric.title}</div>
+                                <div className="text-muted-foreground">{metric.name} • {metric.type.name}</div>
+                                {metric.description ? (
+                                    <div className="text-muted-foreground">{metric.description}</div>
+                                ) : null}
+                            </div>
+                            <div className="font-mono text-foreground rounded bg-muted px-2 py-0.5">
+                                {metricValueToText(metric.value)}
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -865,11 +908,13 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                                                             {!envelope.ok ? (
                                                                 <>
                                                                     <PluginErrorView message={envelope.error ?? "Unknown error"} />
+                                                                    <PluginMetricsView metrics={envelope.metrics ?? []} />
                                                                     <PluginLogsView logs={envelope.logs ?? []} />
                                                                 </>
                                                             ) : entities ? (
                                                                 <>
                                                                     <PluginResultView entities={entities} />
+                                                                    <PluginMetricsView metrics={envelope.metrics ?? []} />
                                                                     <PluginLogsView logs={envelope.logs ?? []} />
                                                                 </>
                                                             ) : (
@@ -877,6 +922,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                                                                     <pre className="rounded bg-muted p-3 text-xs overflow-auto">
                                                                         {envelope.dataJson ?? "null"}
                                                                     </pre>
+                                                                    <PluginMetricsView metrics={envelope.metrics ?? []} />
                                                                     <PluginLogsView logs={envelope.logs ?? []} />
                                                                 </>
                                                             )}

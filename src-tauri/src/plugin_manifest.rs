@@ -5,8 +5,9 @@ use std::sync::OnceLock;
 #[path = "../schemas/plugin-manifest.schema.rs"]
 mod manifest_types;
 
+pub use manifest_types::FieldType as PluginFieldType;
 pub use manifest_types::OpenRiskPluginManifest;
-use manifest_types::{FieldType as PluginFieldType, FieldTypeObjectName, FieldTypeString};
+use manifest_types::{FieldTypeObjectName, FieldTypeString};
 
 impl PluginFieldType {
     pub fn name(&self) -> &'static str {

@@ -64,22 +64,44 @@ impl ImportProvider for ScriptImportProvider {
 
 /// Execute `entrypoint_fn` from the given plugin `code` with the provided merged inputs.
 ///
-/// Returns `(result, logs)` where `logs` is an array of `{ level, message }` objects
+/// Returns `(result, logs, metrics)` where `logs` is an array of `{ level, message }` objects
 /// captured from `console.log`, `console.warn`, and `console.error`.
 pub fn run_plugin_module(
     code: String,
     merged_inputs: Value,
     entrypoint_fn: &str,
-) -> Result<(Value, Value), String> {
+) -> Result<(Value, Value, Value), String> {
     let inputs_json = merged_inputs.to_string();
     let wrapper_code = format!(
         r#"
         import * as __mod__ from "script://main.ts";
         export default async () => {{
             const __logs__ = [];
+            const __metrics__ = Object.create(null);
             const __origLog__ = console.log.bind(console);
             const __origWarn__ = console.warn.bind(console);
             const __origError__ = console.error.bind(console);
+            globalThis.openrisk = {{
+                metrics: {{
+                    set: (name, value) => {{
+                        if (typeof name !== "string" || !name.trim()) {{
+                            throw new TypeError("Metric name must be a non-empty string");
+                        }}
+                        __metrics__[name] = value;
+                        return value;
+                    }},
+                    get: (name) => __metrics__[name],
+                    inc: (name, delta = 1) => {{
+                        if (typeof name !== "string" || !name.trim()) {{
+                            throw new TypeError("Metric name must be a non-empty string");
+                        }}
+                        const next = (Number(__metrics__[name] ?? 0) + Number(delta));
+                        __metrics__[name] = next;
+                        return next;
+                    }},
+                    all: () => ({{ ...__metrics__ }}),
+                }},
+            }};
             console.log = (...args) => {{
                 __logs__.push({{ level: "log", message: args.map(String).join(" ") }});
                 __origLog__(...args);
@@ -101,7 +123,7 @@ pub fn run_plugin_module(
             }}
             const inputs = {};
             const __result__ = await __fn__(inputs);
-            return {{ __result__: __result__, __logs__: __logs__ }};
+            return {{ __result__: __result__, __logs__: __logs__, __metrics__: __metrics__ }};
         }}
         "#,
         entrypoint_fn, entrypoint_fn, inputs_json
@@ -124,8 +146,12 @@ pub fn run_plugin_module(
                 .get("__logs__")
                 .cloned()
                 .unwrap_or(Value::Array(vec![]));
+            let metrics = returned
+                .get("__metrics__")
+                .cloned()
+                .unwrap_or(Value::Object(Default::default()));
             let result = returned.get("__result__").cloned().unwrap_or(Value::Null);
-            Ok((result, logs))
+            Ok((result, logs, metrics))
         }
         Err(err) => Err(err.to_string()),
     }

@@ -6,8 +6,9 @@ use super::plugins::{
     load_plugin_bundle_with_id,
 };
 use super::types::{
-    LogEntry, PersistenceError, PluginEntrypointSelection, PluginOutput, PluginRecord,
-    PluginSettingValue, ScanEntrypointInput, ScanPluginResultRecord, ScanSummaryRecord,
+    LogEntry, PersistenceError, PluginEntrypointSelection, PluginMetricDef, PluginMetricValue,
+    PluginOutput, PluginRecord, PluginSettingValue, ScanEntrypointInput, ScanPluginResultRecord,
+    ScanSummaryRecord, SettingValue,
 };
 use serde_json::{Map, Value};
 use std::path::Path;
@@ -45,6 +46,7 @@ pub async fn run_scan(
                     load_data.plugin_id
                 )),
                 logs: vec![],
+                metrics: vec![],
             },
             Some(code) => {
                 // Build settings Value for the JS runtime.
@@ -83,16 +85,18 @@ pub async fn run_scan(
                 })?;
 
                 match result {
-                    Ok((output_val, logs_val)) => {
+                    Ok((output_val, logs_val, metrics_val)) => {
                         let data_json = serde_json::to_string(&output_val)
                             .ok()
                             .filter(|s| s != "null");
-                        let logs = parse_logs(&logs_val);
+                        let mut logs = parse_logs(&logs_val);
+                        let metrics = parse_metrics(&metrics_val, &load_data.metric_defs, &mut logs);
                         PluginOutput {
                             ok: true,
                             data_json,
                             error: None,
                             logs,
+                            metrics,
                         }
                     }
                     Err(err) => PluginOutput {
@@ -100,6 +104,7 @@ pub async fn run_scan(
                         data_json: None,
                         error: Some(err),
                         logs: vec![],
+                        metrics: vec![],
                     },
                 }
             }
@@ -175,5 +180,63 @@ fn parse_logs(logs_val: &Value) -> Vec<LogEntry> {
     match logs_val.as_array() {
         Some(arr) => arr.iter().filter_map(LogEntry::from_json).collect(),
         None => vec![],
+    }
+}
+
+fn parse_metrics(
+    metrics_val: &Value,
+    defs: &[PluginMetricDef],
+    logs: &mut Vec<LogEntry>,
+) -> Vec<PluginMetricValue> {
+    let metric_map = match metrics_val.as_object() {
+        Some(v) => v,
+        None => return vec![],
+    };
+
+    let mut metrics = Vec::with_capacity(defs.len());
+    for def in defs {
+        let Some(raw_value) = metric_map.get(&def.name) else {
+            continue;
+        };
+
+        if !metric_value_matches_type(raw_value, &def.type_.name, def.type_.values.as_deref()) {
+            logs.push(LogEntry {
+                level: super::types::LogLevel::Warn,
+                message: format!(
+                    "Metric '{}' ignored: value does not match declared type '{}'",
+                    def.name,
+                    def.type_.name
+                ),
+            });
+            continue;
+        }
+
+        metrics.push(PluginMetricValue {
+            name: def.name.clone(),
+            title: def.title.clone(),
+            type_: def.type_.clone(),
+            description: def.description.clone(),
+            value: SettingValue::from_json(raw_value),
+        });
+    }
+
+    metrics
+}
+
+fn metric_value_matches_type(raw_value: &Value, type_name: &str, enum_values: Option<&[String]>) -> bool {
+    match type_name {
+        "string" | "date" | "url" => raw_value.is_string(),
+        "number" => raw_value.is_number(),
+        "integer" => raw_value.as_i64().is_some() || raw_value.as_u64().is_some(),
+        "boolean" => raw_value.is_boolean(),
+        "enum" => {
+            let Some(s) = raw_value.as_str() else {
+                return false;
+            };
+            enum_values
+                .map(|values| values.iter().any(|v| v == s))
+                .unwrap_or(false)
+        }
+        _ => true,
     }
 }

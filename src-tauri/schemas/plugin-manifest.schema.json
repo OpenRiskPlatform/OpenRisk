@@ -99,6 +99,13 @@
                 "$ref": "#/definitions/SettingDefinition"
             }
         },
+        "metrics": {
+            "type": "array",
+            "description": "Runtime metrics emitted by plugin code through openrisk.metrics.* receiver.",
+            "items": {
+                "$ref": "#/definitions/MetricDefinition"
+            }
+        },
         "repository": {
             "type": "string",
             "description": "Plugin source code repository URL",
@@ -288,6 +295,33 @@
                 },
                 "validation": {
                     "$ref": "#/definitions/ValidationRules"
+                }
+            },
+            "additionalProperties": false
+        },
+        "MetricDefinition": {
+            "type": "object",
+            "required": [
+                "name",
+                "type",
+                "title"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Metric key used by openrisk.metrics.set/get/inc",
+                    "pattern": "^[a-z][a-z0-9_]{1,63}$"
+                },
+                "type": {
+                    "$ref": "#/definitions/FieldType"
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Human-readable metric name"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Metric purpose shown in UI"
                 }
             },
             "additionalProperties": false

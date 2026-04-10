@@ -1,6 +1,6 @@
 //! DAO functions for the scan lifecycle.
 
-use super::helpers::{conn_unavailable, load_scan_logs};
+use super::helpers::{conn_unavailable, load_scan_logs, load_scan_metrics};
 use crate::app::project::session::SqliteProjectPersistence;
 use crate::app::project::types::*;
 use std::collections::HashMap;
@@ -179,6 +179,7 @@ pub(super) async fn get_scan(
                 data_json: row.data_json,
                 error: row.error,
                 logs,
+                metrics: load_scan_metrics(conn, &row.id).await?,
             },
         });
     }
@@ -361,11 +362,35 @@ pub(super) async fn begin_scan_run(
             })
             .collect();
 
+        let metric_rows: Vec<(String, String, String, Option<String>)> = sqlx::query_as(
+            "SELECT name, title, type_json, description \
+             FROM PluginRevisionMetricDef WHERE revision_id = ?1 ORDER BY rowid",
+        )
+        .bind(&revision_id)
+        .fetch_all(&mut *conn)
+        .await?;
+
+        let metric_defs = metric_rows
+            .into_iter()
+            .map(|(name, title, type_json, description)| PluginMetricDef {
+                name,
+                title,
+                type_: serde_json::from_str::<PluginFieldTypeDef>(&type_json).unwrap_or(
+                    PluginFieldTypeDef {
+                        name: "string".to_string(),
+                        values: None,
+                    },
+                ),
+                description,
+            })
+            .collect();
+
         plugins.push(PluginLoadData {
             plugin_id: sel.plugin_id.clone(),
             plugin_revision_id: revision_id,
             entrypoint_id: sel.entrypoint_id.clone(),
             entrypoint_function,
+            metric_defs,
             settings,
             code,
         });
@@ -425,6 +450,22 @@ pub(super) async fn end_scan_run(
             .bind(&rid)
             .bind(level)
             .bind(&log.message)
+            .execute(&mut *conn)
+            .await?;
+        }
+
+        for metric in &result.output.metrics {
+            let type_json = serde_json::to_string(&metric.type_)
+                .unwrap_or_else(|_| "{\"name\":\"string\"}".to_string());
+            let value_json = metric.value.to_json_string();
+            sqlx::query(
+                "INSERT INTO ScanPluginMetric (scan_result_id, metric_name, type_json, value_json) \
+                 VALUES (?1, ?2, ?3, ?4)",
+            )
+            .bind(&rid)
+            .bind(&metric.name)
+            .bind(&type_json)
+            .bind(&value_json)
             .execute(&mut *conn)
             .await?;
         }

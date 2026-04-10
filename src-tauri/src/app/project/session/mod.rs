@@ -492,6 +492,32 @@ impl SqliteProjectPersistence {
             .await?;
         }
 
+        for metric in &plugin.metric_defs {
+            let type_str = metric.type_.name().to_string();
+            let type_json = serde_json::to_string(&metric.type_.to_json_value())
+                .unwrap_or_else(|_| "{\"name\":\"string\"}".to_string());
+            let enum_values_json = metric
+                .type_
+                .enum_values()
+                .map(|v| v.to_vec())
+                .filter(|v| !v.is_empty())
+                .map(|v| serde_json::to_string(&v).unwrap_or_default());
+            sqlx::query(
+                "INSERT INTO PluginRevisionMetricDef \
+                 (revision_id, name, title, type_, type_json, enum_values_json, description) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            )
+            .bind(&revision_id)
+            .bind(&metric.name)
+            .bind(&metric.title)
+            .bind(&type_str)
+            .bind(&type_json)
+            .bind(enum_values_json.as_deref())
+            .bind(&metric.description)
+            .execute(&mut *conn)
+            .await?;
+        }
+
         Ok(())
     }
 

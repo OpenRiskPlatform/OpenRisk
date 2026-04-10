@@ -11,7 +11,7 @@ use uuid::Uuid;
 // Schema & version constants
 // ---------------------------------------------------------------------------
 
-pub(super) const CURRENT_SCHEMA_VERSION: i64 = 15;
+pub(super) const CURRENT_SCHEMA_VERSION: i64 = 16;
 const MIN_SUPPORTED_SCHEMA_VERSION: i64 = 4;
 
 pub(super) const PROJECT_LEGACY_ERROR_PREFIX: &str = "PROJECT_LEGACY:";
@@ -176,6 +176,27 @@ CREATE TABLE IF NOT EXISTS PluginRevisionSettingDef (
     PRIMARY KEY (revision_id, name),
     FOREIGN KEY (revision_id) REFERENCES PluginRevision(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS PluginRevisionMetricDef (
+    revision_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    type_ TEXT NOT NULL,
+    type_json TEXT NOT NULL,
+    enum_values_json TEXT,
+    description TEXT,
+    PRIMARY KEY (revision_id, name),
+    FOREIGN KEY (revision_id) REFERENCES PluginRevision(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS ScanPluginMetric (
+    scan_result_id TEXT NOT NULL,
+    metric_name TEXT NOT NULL,
+    type_json TEXT NOT NULL,
+    value_json TEXT NOT NULL DEFAULT 'null',
+    PRIMARY KEY (scan_result_id, metric_name),
+    FOREIGN KEY (scan_result_id) REFERENCES ScanPluginResult(id) ON DELETE CASCADE
+);
 "#;
 
 // ---------------------------------------------------------------------------
@@ -237,6 +258,7 @@ pub(super) async fn apply_migrations_to_latest(
             13 => migrate_to_v13(conn).await?,
             14 => migrate_to_v14(conn).await?,
             15 => migrate_to_v15(conn).await?,
+            16 => migrate_to_v16(conn).await?,
             _ => {
                 return Err(PersistenceError::Validation(format!(
                     "Missing migration to schema version {}",
@@ -954,6 +976,44 @@ async fn migrate_to_v15(conn: &mut SqliteConnection) -> Result<(), PersistenceEr
     sqlx::query("PRAGMA foreign_keys = ON")
         .execute(&mut *conn)
         .await?;
+
+    Ok(())
+}
+
+/// Add runtime metric definition/value tables for plugin-level execution statistics.
+async fn migrate_to_v16(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
+    if !table_exists(conn, "PluginRevisionMetricDef").await? {
+        sqlx::query(
+            "CREATE TABLE PluginRevisionMetricDef (\
+             revision_id TEXT NOT NULL,\
+             name TEXT NOT NULL,\
+             title TEXT NOT NULL,\
+             type_ TEXT NOT NULL,\
+             type_json TEXT NOT NULL,\
+             enum_values_json TEXT,\
+             description TEXT,\
+             PRIMARY KEY (revision_id, name),\
+             FOREIGN KEY (revision_id) REFERENCES PluginRevision(id) ON DELETE CASCADE\
+             )",
+        )
+        .execute(&mut *conn)
+        .await?;
+    }
+
+    if !table_exists(conn, "ScanPluginMetric").await? {
+        sqlx::query(
+            "CREATE TABLE ScanPluginMetric (\
+             scan_result_id TEXT NOT NULL,\
+             metric_name TEXT NOT NULL,\
+             type_json TEXT NOT NULL,\
+             value_json TEXT NOT NULL DEFAULT 'null',\
+             PRIMARY KEY (scan_result_id, metric_name),\
+             FOREIGN KEY (scan_result_id) REFERENCES ScanPluginResult(id) ON DELETE CASCADE\
+             )",
+        )
+        .execute(&mut *conn)
+        .await?;
+    }
 
     Ok(())
 }

@@ -97,5 +97,25 @@
       "required": true,
       "default": null
     }
+  ],
+  "metrics": [
+    {
+      "name": "api_requests",
+      "type": "integer",
+      "title": "API Requests",
+      "description": "Number of OpenCorporates HTTP requests made during execution."
+    },
+    {
+      "name": "result_count",
+      "type": "integer",
+      "title": "Result Count",
+      "description": "Number of normalized entities returned by the entrypoint."
+    },
+    {
+      "name": "last_status_code",
+      "type": "integer",
+      "title": "Last HTTP Status",
+      "description": "HTTP status code from the last OpenCorporates API request."
+    }
   ]
 }

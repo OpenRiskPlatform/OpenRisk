@@ -41,6 +41,14 @@ interface DataModelEntity {
   $extra?: KeyValueEntry[];
 }
 
+function metricSet(name: string, value: unknown): void {
+  (globalThis as any).openrisk?.metrics?.set?.(name, value);
+}
+
+function metricInc(name: string, delta = 1): void {
+  (globalThis as any).openrisk?.metrics?.inc?.(name, delta);
+}
+
 interface OpenCorporatesAddress {
   street_address?: string | null;
   locality?: string | null;
@@ -283,6 +291,7 @@ function buildSearchUrl(
 }
 
 async function fetchJson<T>(url: URL): Promise<T> {
+  metricInc("api_requests", 1);
   const response = await fetch(url.toString(), {
     headers: {
       Accept: "application/json",
@@ -290,11 +299,14 @@ async function fetchJson<T>(url: URL): Promise<T> {
   });
 
   if (!response.ok) {
+    metricSet("last_status_code", response.status);
     const errorText = await response.text().catch(() => response.statusText);
     throw new Error(
       `OpenCorporates request failed (${response.status}): ${errorText}`
     );
   }
+
+  metricSet("last_status_code", response.status);
 
   return response.json() as Promise<T>;
 }
@@ -611,10 +623,12 @@ export async function searchCompanies(
   const data = await fetchJson<CompanySearchResponse>(url);
   const companies = data.results?.companies ?? [];
 
-  return companies
+  const entities = companies
     .map((item) => item.company)
     .filter((company): company is OpenCorporatesCompany => Boolean(company))
     .map((company) => normalizeCompanyEntity(company, url));
+  metricSet("result_count", entities.length);
+  return entities;
 }
 
 export async function searchOfficers(
@@ -625,9 +639,11 @@ export async function searchOfficers(
   const data = await fetchJson<OfficerSearchResponse>(url);
   const officers = data.results?.officers ?? [];
 
-  return officers
+  const entities = officers
     .map((item) => item.officer)
     .filter((officer): officer is OpenCorporatesOfficer => Boolean(officer))
     .map((officer) => normalizeOfficerEntity(officer, url));
+  metricSet("result_count", entities.length);
+  return entities;
 }
 
