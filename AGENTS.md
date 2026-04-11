@@ -5,7 +5,7 @@
 - Never manually edit generated files.
 - If a file is generated, change the source and regenerate.
 - Before editing any file, check if it has a generator comment/header.
-- Before running ANY command, switch to bash first.
+- Before running ANY command, switch to bash first (run BASH REPL).
 
 ## Generated Files In This Repo
 

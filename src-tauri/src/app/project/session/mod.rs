@@ -92,30 +92,33 @@ impl SqliteProjectPersistence {
 
         let mut conn = Self::connect(&db_path, true, None).await?;
         migrations::apply_schema(&mut conn).await?;
-        sqlx::query("INSERT INTO SchemaVersion (id, version) VALUES (1, ?1)")
-            .bind(migrations::CURRENT_SCHEMA_VERSION)
-            .execute(&mut conn)
-            .await?;
+        sqlx::query!(
+            "INSERT INTO SchemaVersion (id, version) VALUES (1, ?1)",
+            migrations::CURRENT_SCHEMA_VERSION
+        )
+        .execute(&mut conn)
+        .await?;
 
         let project_settings_id = Uuid::new_v4().to_string();
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO ProjectSettings (id, description, locale, theme) VALUES (?1, ?2, ?3, ?4)",
+            project_settings_id,
+            "",
+            "en-US",
+            "system",
         )
-        .bind(&project_settings_id)
-        .bind("")
-        .bind("en-US")
-        .bind("system")
         .execute(&mut conn)
         .await?;
 
         let project_id = Uuid::new_v4().to_string();
-        sqlx::query(
+        let project_id_for_insert = project_id.clone();
+        sqlx::query!(
             "INSERT INTO Project (id, name, audit, project_settings_id) VALUES (?1, ?2, ?3, ?4)",
+            project_id_for_insert,
+            trimmed_name,
+            Option::<String>::None,
+            project_settings_id,
         )
-        .bind(&project_id)
-        .bind(trimmed_name)
-        .bind(Option::<String>::None)
-        .bind(&project_settings_id)
         .execute(&mut conn)
         .await?;
 
@@ -198,10 +201,11 @@ impl SqliteProjectPersistence {
         migrations::apply_schema(&mut conn).await?;
         migrations::apply_migrations_to_latest(&mut conn).await?;
 
-        let project_row =
-            sqlx::query_as::<_, ProjectRow>("SELECT id, name, audit FROM Project LIMIT 1")
-                .fetch_one(&mut conn)
-                .await?;
+        let project_row = sqlx::query!(
+            "SELECT id as \"id!: String\", name as \"name!: String\", audit FROM Project LIMIT 1"
+        )
+        .fetch_one(&mut conn)
+        .await?;
 
         if let Some(pw) = &password {
             cache_key(&db_path, pw.clone());
@@ -243,7 +247,7 @@ impl SqliteProjectPersistence {
         }
 
         // Force SQLCipher key validation by reading the schema.
-        sqlx::query("SELECT count(1) FROM sqlite_master")
+        let _ = sqlx::query_scalar!("SELECT count(1) FROM sqlite_master")
             .fetch_one(&mut conn)
             .await?;
 
@@ -330,56 +334,59 @@ impl SqliteProjectPersistence {
         let update_metrics_fn: Option<String> = plugin.update_metrics_fn.clone();
         let authors_json = serde_json::to_string(&plugin.manifest.authors)?;
 
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO Plugin \
              (id, current_revision_id) \
              VALUES (?1, NULL) \
              ON CONFLICT(id) DO UPDATE SET \
                  id = excluded.id",
+            plugin.id,
         )
-        .bind(&plugin.id)
         .execute(&mut *conn)
         .await?;
 
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO PluginRevision \
                (id, plugin_id, version, name, description, license, authors_json, icon, homepage, update_metrics_fn, code) \
                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            revision_id,
+            plugin.id,
+            version,
+            name,
+            description,
+            license,
+            authors_json,
+            icon,
+            homepage,
+            update_metrics_fn,
+            plugin.code,
         )
-        .bind(&revision_id)
-        .bind(&plugin.id)
-        .bind(&version)
-        .bind(&name)
-        .bind(&description)
-        .bind(&license)
-        .bind(&authors_json)
-        .bind(&icon)
-        .bind(&homepage)
-        .bind(&update_metrics_fn)
-        .bind(&plugin.code)
         .execute(&mut *conn)
         .await?;
 
-        sqlx::query("UPDATE Plugin SET current_revision_id = ?1 WHERE id = ?2")
-            .bind(&revision_id)
-            .bind(&plugin.id)
-            .execute(&mut *conn)
-            .await?;
+        sqlx::query!(
+            "UPDATE Plugin SET current_revision_id = ?1 WHERE id = ?2",
+            revision_id,
+            plugin.id,
+        )
+        .execute(&mut *conn)
+        .await?;
 
-        let project_id: Option<String> = sqlx::query_scalar("SELECT id FROM Project LIMIT 1")
+        let project_id = sqlx::query_scalar!("SELECT id FROM Project LIMIT 1")
             .fetch_optional(&mut *conn)
-            .await?;
+            .await?
+            .flatten();
         if let Some(project_id) = project_id {
-            sqlx::query(
+            sqlx::query!(
                 "INSERT INTO ProjectPlugin (project_id, plugin_id, pinned_revision_id, enabled) \
                  VALUES (?1, ?2, ?3, 1) \
                  ON CONFLICT(project_id, plugin_id) DO UPDATE SET \
                      pinned_revision_id = excluded.pinned_revision_id, \
                      enabled = excluded.enabled",
+                project_id,
+                plugin.id,
+                revision_id,
             )
-            .bind(&project_id)
-            .bind(&plugin.id)
-            .bind(&revision_id)
             .execute(&mut *conn)
             .await?;
         }
@@ -388,15 +395,15 @@ impl SqliteProjectPersistence {
             let ep_id: String = ep.id.clone().into();
             let ep_name: String = ep.name.clone().into();
             let ep_fn: String = ep.function.clone().into();
-            sqlx::query(
+            sqlx::query!(
                 "INSERT INTO PluginRevisionEntrypoint (revision_id, id, name, function_name, description) \
                  VALUES (?1, ?2, ?3, ?4, ?5)",
+                revision_id,
+                ep_id,
+                ep_name,
+                ep_fn,
+                ep.description,
             )
-            .bind(&revision_id)
-            .bind(&ep_id)
-            .bind(&ep_name)
-            .bind(&ep_fn)
-            .bind(&ep.description)
             .execute(&mut *conn)
             .await?;
         }
@@ -430,21 +437,21 @@ impl SqliteProjectPersistence {
                     .default
                     .as_ref()
                     .map(|v| serde_json::to_string(v).unwrap_or_default());
-                sqlx::query(
+                sqlx::query!(
                     "INSERT INTO PluginRevisionInputDef \
                      (revision_id, entrypoint_id, name, title, type_, type_json, enum_values_json, optional, description, default_value_json) \
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                    revision_id,
+                    ep_id,
+                    name_str,
+                    title_str,
+                    type_str,
+                    type_json,
+                    enum_values_json,
+                    optional,
+                    input.description,
+                    default_json,
                 )
-                .bind(&revision_id)
-                .bind(&ep_id)
-                .bind(&name_str)
-                .bind(&title_str)
-                .bind(&type_str)
-                .bind(&type_json)
-                .bind(enum_values_json.as_deref())
-                .bind(optional)
-                .bind(&input.description)
-                .bind(default_json.as_deref())
                 .execute(&mut *conn)
                 .await?;
             }
@@ -476,20 +483,20 @@ impl SqliteProjectPersistence {
                 .default
                 .as_ref()
                 .map(|v| serde_json::to_string(v).unwrap_or_default());
-            sqlx::query(
+            sqlx::query!(
                 "INSERT INTO PluginRevisionSettingDef \
                  (revision_id, name, title, type_, type_json, enum_values_json, description, required, default_value_json) \
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                revision_id,
+                name_str,
+                title_str,
+                type_str,
+                type_json,
+                enum_values_json,
+                setting.description,
+                required,
+                default_json,
             )
-            .bind(&revision_id)
-            .bind(&name_str)
-            .bind(&title_str)
-            .bind(&type_str)
-            .bind(&type_json)
-            .bind(enum_values_json.as_deref())
-            .bind(&setting.description)
-            .bind(required)
-            .bind(default_json.as_deref())
             .execute(&mut *conn)
             .await?;
         }
@@ -504,18 +511,18 @@ impl SqliteProjectPersistence {
                 .map(|v| v.to_vec())
                 .filter(|v| !v.is_empty())
                 .map(|v| serde_json::to_string(&v).unwrap_or_default());
-            sqlx::query(
+            sqlx::query!(
                 "INSERT INTO PluginRevisionMetricDef \
                  (revision_id, name, title, type_, type_json, enum_values_json, description) \
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                revision_id,
+                metric.name,
+                metric.title,
+                type_str,
+                type_json,
+                enum_values_json,
+                metric.description,
             )
-            .bind(&revision_id)
-            .bind(&metric.name)
-            .bind(&metric.title)
-            .bind(&type_str)
-            .bind(&type_json)
-            .bind(enum_values_json.as_deref())
-            .bind(&metric.description)
             .execute(&mut *conn)
             .await?;
         }
@@ -663,15 +670,4 @@ impl SqliteProjectPersistence {
 
         result
     }
-}
-
-// ---------------------------------------------------------------------------
-// Private row type used only during open_inner
-// ---------------------------------------------------------------------------
-
-#[derive(sqlx::FromRow)]
-struct ProjectRow {
-    id: String,
-    name: String,
-    audit: Option<String>,
 }

@@ -4,6 +4,23 @@ use super::helpers::{conn_unavailable, load_plugin_record, normalize_theme};
 use crate::app::project::plugins::LocalPluginBundle;
 use crate::app::project::session::SqliteProjectPersistence;
 use crate::app::project::types::*;
+use sqlx::SqliteConnection;
+
+async fn project_settings_id(conn: &mut SqliteConnection) -> Result<String, PersistenceError> {
+    let row = sqlx::query!(
+        r#"SELECT project_settings_id as "project_settings_id!" FROM Project LIMIT 1"#
+    )
+    .fetch_one(conn)
+    .await?;
+    Ok(row.project_settings_id)
+}
+
+async fn project_id(conn: &mut SqliteConnection) -> Result<String, PersistenceError> {
+    let row = sqlx::query!(r#"SELECT id as "id!" FROM Project LIMIT 1"#)
+        .fetch_one(conn)
+        .await?;
+    Ok(row.id)
+}
 
 pub(super) async fn load_settings(
     this: &SqliteProjectPersistence,
@@ -11,39 +28,29 @@ pub(super) async fn load_settings(
     let mut guard = this.conn.lock().await;
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
-    #[derive(sqlx::FromRow)]
-    struct ProjRow {
-        id: String,
-        name: String,
-        audit: Option<String>,
-        project_settings_id: String,
-        description: Option<String>,
-        locale: Option<String>,
-        theme: Option<String>,
-        advanced_mode: i64,
-    }
-
-    let proj = sqlx::query_as::<_, ProjRow>(
-        "SELECT p.id, p.name, p.audit, p.project_settings_id, \
-         ps.description, ps.locale, ps.theme, ps.advanced_mode \
-         FROM Project p \
-         INNER JOIN ProjectSettings ps ON ps.id = p.project_settings_id \
-         LIMIT 1",
+    let proj = sqlx::query!(
+        r#"SELECT p.id as "id!", p.name as "name!", p.audit,
+                  p.project_settings_id as "project_settings_id!",
+                  ps.description, ps.locale, ps.theme, ps.advanced_mode as "advanced_mode!"
+           FROM Project p
+           INNER JOIN ProjectSettings ps ON ps.id = p.project_settings_id
+           LIMIT 1"#
     )
     .fetch_one(&mut *conn)
     .await?;
 
     let psid = proj.project_settings_id.clone();
 
-    let plugin_ids: Vec<(String,)> =
-        sqlx::query_as("SELECT plugin_id FROM ProjectPlugin WHERE project_id = ?1")
-            .bind(&proj.id)
-            .fetch_all(&mut *conn)
-            .await?;
+    let plugin_ids = sqlx::query!(
+        r#"SELECT plugin_id as "plugin_id!" FROM ProjectPlugin WHERE project_id = ?1"#,
+        proj.id
+    )
+    .fetch_all(&mut *conn)
+    .await?;
 
     let mut plugins = Vec::new();
-    for (pid,) in &plugin_ids {
-        plugins.push(load_plugin_record(conn, pid, &proj.id, &psid).await?);
+    for row in &plugin_ids {
+        plugins.push(load_plugin_record(conn, &row.plugin_id, &proj.id, &psid).await?);
     }
 
     Ok(ProjectSettingsPayload {
@@ -80,44 +87,40 @@ pub(super) async fn update_project_settings(
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
     if let Some(ref n) = name {
-        sqlx::query("UPDATE Project SET name = ?1")
-            .bind(n.trim())
+        let trimmed = n.trim().to_string();
+        sqlx::query!(r#"UPDATE Project SET name = ?1"#, trimmed)
             .execute(&mut *conn)
             .await?;
     }
 
-    let psid: String = sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
-        .fetch_one(&mut *conn)
-        .await?;
+    let psid = project_settings_id(&mut *conn).await?;
 
     let normalized = normalize_theme(theme);
-    sqlx::query("UPDATE ProjectSettings SET theme = ?1 WHERE id = ?2")
-        .bind(&normalized)
-        .bind(&psid)
-        .execute(&mut *conn)
-        .await?;
+    sqlx::query!(
+        r#"UPDATE ProjectSettings SET theme = ?1 WHERE id = ?2"#,
+        normalized,
+        psid
+    )
+    .execute(&mut *conn)
+    .await?;
 
     if let Some(am) = advanced_mode {
-        sqlx::query("UPDATE ProjectSettings SET advanced_mode = ?1 WHERE id = ?2")
-            .bind(am as i64)
-            .bind(&psid)
-            .execute(&mut *conn)
-            .await?;
+        let advanced_mode_i64 = am as i64;
+        sqlx::query!(
+            r#"UPDATE ProjectSettings SET advanced_mode = ?1 WHERE id = ?2"#,
+            advanced_mode_i64,
+            psid
+        )
+        .execute(&mut *conn)
+        .await?;
     }
 
-    #[derive(sqlx::FromRow)]
-    struct Row {
-        id: String,
-        description: Option<String>,
-        locale: Option<String>,
-        theme: Option<String>,
-        advanced_mode: i64,
-    }
-
-    let row = sqlx::query_as::<_, Row>(
-        "SELECT id, description, locale, theme, advanced_mode FROM ProjectSettings WHERE id = ?1",
+    let row = sqlx::query!(
+        r#"SELECT id as "id!", description, locale, theme,
+                advanced_mode as "advanced_mode!"
+            FROM ProjectSettings WHERE id = ?1"#,
+        psid,
     )
-    .bind(&psid)
     .fetch_one(&mut *conn)
     .await?;
 
@@ -139,35 +142,31 @@ pub(super) async fn set_plugin_setting(
     let mut guard = this.conn.lock().await;
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
-    let psid: String = sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
-        .fetch_one(&mut *conn)
-        .await?;
-    let project_id: String = sqlx::query_scalar("SELECT id FROM Project LIMIT 1")
-        .fetch_one(&mut *conn)
-        .await?;
+    let psid = project_settings_id(&mut *conn).await?;
+    let project_id = project_id(&mut *conn).await?;
 
-    sqlx::query(
-        "INSERT INTO ProjectPlugin (project_id, plugin_id, pinned_revision_id, enabled) \
-         VALUES (?1, ?2, (SELECT current_revision_id FROM Plugin WHERE id = ?2), 1) \
-         ON CONFLICT(project_id, plugin_id) DO UPDATE SET enabled = 1",
+    sqlx::query!(
+        r#"INSERT INTO ProjectPlugin (project_id, plugin_id, pinned_revision_id, enabled)
+           VALUES (?1, ?2, (SELECT current_revision_id FROM Plugin WHERE id = ?2), 1)
+           ON CONFLICT(project_id, plugin_id) DO UPDATE SET enabled = 1"#,
+        project_id,
+        plugin_id,
     )
-    .bind(&project_id)
-    .bind(plugin_id)
     .execute(&mut *conn)
     .await?;
 
     let value_json = value.to_json_string();
-    sqlx::query(
-        "INSERT INTO ProjectPluginSettingValue \
-         (plugin_id, project_settings_id, setting_name, value_json) \
-         VALUES (?1, ?2, ?3, ?4) \
-         ON CONFLICT(plugin_id, project_settings_id, setting_name) \
-         DO UPDATE SET value_json = excluded.value_json",
+    sqlx::query!(
+        r#"INSERT INTO ProjectPluginSettingValue
+           (plugin_id, project_settings_id, setting_name, value_json)
+           VALUES (?1, ?2, ?3, ?4)
+           ON CONFLICT(plugin_id, project_settings_id, setting_name)
+           DO UPDATE SET value_json = excluded.value_json"#,
+        plugin_id,
+        psid,
+        setting_name,
+        value_json,
     )
-    .bind(plugin_id)
-    .bind(&psid)
-    .bind(setting_name)
-    .bind(&value_json)
     .execute(&mut *conn)
     .await?;
 
@@ -190,26 +189,28 @@ pub(super) async fn get_plugin_setting_values(
     let mut guard = this.conn.lock().await;
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
-    let psid: String = sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
-        .fetch_one(&mut *conn)
-        .await?;
+    let psid = project_settings_id(&mut *conn).await?;
 
-    let rows: Vec<(String, String)> = sqlx::query_as(
-        "SELECT setting_name, value_json FROM ProjectPluginSettingValue \
-         WHERE plugin_id = ?1 AND project_settings_id = ?2",
+    let rows = sqlx::query!(
+        r#"SELECT setting_name as "setting_name!", value_json as "value_json!"
+           FROM ProjectPluginSettingValue
+           WHERE plugin_id = ?1 AND project_settings_id = ?2"#,
+        plugin_id,
+        psid,
     )
-    .bind(plugin_id)
-    .bind(&psid)
     .fetch_all(&mut *conn)
     .await?;
 
     Ok(rows
         .into_iter()
-        .map(|(name, vj)| {
-            let value = serde_json::from_str::<serde_json::Value>(&vj)
+        .map(|row| {
+            let value = serde_json::from_str::<serde_json::Value>(&row.value_json)
                 .map(|v| SettingValue::from_json(&v))
                 .unwrap_or(SettingValue::Null);
-            PluginSettingValue { name, value }
+            PluginSettingValue {
+                name: row.setting_name,
+                value,
+            }
         })
         .collect())
 }
@@ -222,36 +223,32 @@ pub(super) async fn save_plugin_setting_values(
     let mut guard = this.conn.lock().await;
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
-    let psid: String = sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
-        .fetch_one(&mut *conn)
-        .await?;
-    let project_id: String = sqlx::query_scalar("SELECT id FROM Project LIMIT 1")
-        .fetch_one(&mut *conn)
-        .await?;
+    let psid = project_settings_id(&mut *conn).await?;
+    let project_id = project_id(&mut *conn).await?;
 
-    sqlx::query(
-        "INSERT INTO ProjectPlugin (project_id, plugin_id, pinned_revision_id, enabled) \
-         VALUES (?1, ?2, (SELECT current_revision_id FROM Plugin WHERE id = ?2), 1) \
-         ON CONFLICT(project_id, plugin_id) DO UPDATE SET enabled = 1",
+    sqlx::query!(
+        r#"INSERT INTO ProjectPlugin (project_id, plugin_id, pinned_revision_id, enabled)
+           VALUES (?1, ?2, (SELECT current_revision_id FROM Plugin WHERE id = ?2), 1)
+           ON CONFLICT(project_id, plugin_id) DO UPDATE SET enabled = 1"#,
+        project_id,
+        plugin_id,
     )
-    .bind(&project_id)
-    .bind(plugin_id)
     .execute(&mut *conn)
     .await?;
 
     for sv in values {
         let vj = sv.value.to_json_string();
-        sqlx::query(
-            "INSERT INTO ProjectPluginSettingValue \
-             (plugin_id, project_settings_id, setting_name, value_json) \
-             VALUES (?1, ?2, ?3, ?4) \
-             ON CONFLICT(plugin_id, project_settings_id, setting_name) \
-             DO UPDATE SET value_json = excluded.value_json",
+        sqlx::query!(
+            r#"INSERT INTO ProjectPluginSettingValue
+               (plugin_id, project_settings_id, setting_name, value_json)
+               VALUES (?1, ?2, ?3, ?4)
+               ON CONFLICT(plugin_id, project_settings_id, setting_name)
+               DO UPDATE SET value_json = excluded.value_json"#,
+            plugin_id,
+            psid,
+            sv.name,
+            vj,
         )
-        .bind(plugin_id)
-        .bind(&psid)
-        .bind(&sv.name)
-        .bind(&vj)
         .execute(&mut *conn)
         .await?;
     }
@@ -265,12 +262,8 @@ pub(super) async fn get_plugin_record(
     let mut guard = this.conn.lock().await;
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
-    let psid: String = sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
-        .fetch_one(&mut *conn)
-        .await?;
-    let project_id: String = sqlx::query_scalar("SELECT id FROM Project LIMIT 1")
-        .fetch_one(&mut *conn)
-        .await?;
+    let psid = project_settings_id(&mut *conn).await?;
+    let project_id = project_id(&mut *conn).await?;
 
     load_plugin_record(conn, plugin_id, &project_id, &psid).await
 }
@@ -282,89 +275,96 @@ pub(super) async fn get_plugin_load_data_for_metrics(
     let mut guard = this.conn.lock().await;
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
-    let psid: String = sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
-        .fetch_one(&mut *conn)
-        .await?;
-    let project_id: String = sqlx::query_scalar("SELECT id FROM Project LIMIT 1")
-        .fetch_one(&mut *conn)
-        .await?;
+    let psid = project_settings_id(&mut *conn).await?;
+    let project_id = project_id(&mut *conn).await?;
 
-    let revision_id: String = sqlx::query_scalar(
-        "SELECT COALESCE(pp.pinned_revision_id, p.current_revision_id) \
-         FROM Plugin p \
-         LEFT JOIN ProjectPlugin pp ON pp.plugin_id = p.id AND pp.project_id = ?2 \
-         WHERE p.id = ?1 \
-         LIMIT 1",
+    let revision_row = sqlx::query!(
+        r#"SELECT COALESCE(pp.pinned_revision_id, p.current_revision_id) as "revision_id!: String"
+           FROM Plugin p
+           LEFT JOIN ProjectPlugin pp ON pp.plugin_id = p.id AND pp.project_id = ?2
+           WHERE p.id = ?1
+           LIMIT 1"#,
+        plugin_id,
+        project_id,
     )
-    .bind(plugin_id)
-    .bind(&project_id)
     .fetch_optional(&mut *conn)
     .await?
-    .flatten()
-    .ok_or_else(|| PersistenceError::Validation(format!("Plugin '{}' has no active revision", plugin_id)))?;
+    .ok_or_else(|| {
+        PersistenceError::Validation(format!("Plugin '{}' has no active revision", plugin_id))
+    })?;
+    let revision_id = revision_row.revision_id;
 
-    let code: Option<String> =
-        sqlx::query_scalar("SELECT code FROM PluginRevision WHERE id = ?1 LIMIT 1")
-            .bind(&revision_id)
-            .fetch_optional(&mut *conn)
-            .await?
-            .flatten();
-
-    let update_metrics_fn: Option<String> =
-        sqlx::query_scalar("SELECT update_metrics_fn FROM PluginRevision WHERE id = ?1 LIMIT 1")
-            .bind(&revision_id)
-            .fetch_optional(&mut *conn)
-            .await?
-            .flatten();
-
-    let sv_rows: Vec<(String, String)> = sqlx::query_as(
-        "SELECT setting_name, value_json FROM ProjectPluginSettingValue \
-         WHERE plugin_id = ?1 AND project_settings_id = ?2",
+    let revision_id_for_code = revision_id.clone();
+    let code = sqlx::query_scalar!(
+        r#"SELECT code FROM PluginRevision WHERE id = ?1 LIMIT 1"#,
+        revision_id_for_code,
     )
-    .bind(plugin_id)
-    .bind(&psid)
+    .fetch_optional(&mut *conn)
+    .await?
+    .flatten();
+
+    let revision_id_for_update_metrics = revision_id.clone();
+    let update_metrics_fn = sqlx::query_scalar!(
+        r#"SELECT update_metrics_fn FROM PluginRevision WHERE id = ?1 LIMIT 1"#,
+        revision_id_for_update_metrics,
+    )
+    .fetch_optional(&mut *conn)
+    .await?
+    .flatten();
+
+    let sv_rows = sqlx::query!(
+        r#"SELECT setting_name as "setting_name!", value_json as "value_json!"
+           FROM ProjectPluginSettingValue
+           WHERE plugin_id = ?1 AND project_settings_id = ?2"#,
+        plugin_id,
+        psid,
+    )
     .fetch_all(&mut *conn)
     .await?;
 
     let settings = sv_rows
         .into_iter()
-        .map(|(name, vj)| {
-            let value = serde_json::from_str::<serde_json::Value>(&vj)
+        .map(|row| {
+            let value = serde_json::from_str::<serde_json::Value>(&row.value_json)
                 .map(|v| SettingValue::from_json(&v))
                 .unwrap_or(SettingValue::Null);
-            PluginSettingValue { name, value }
+            PluginSettingValue {
+                name: row.setting_name,
+                value,
+            }
         })
         .collect();
 
-    let metric_rows: Vec<(String, String, String, Option<String>, Option<String>)> =
-        sqlx::query_as(
-            "SELECT name, title, type_json, enum_values_json, description \
-             FROM PluginRevisionMetricDef WHERE revision_id = ?1 ORDER BY rowid",
-        )
-        .bind(&revision_id)
-        .fetch_all(&mut *conn)
-        .await?;
+    let revision_id_for_metric_defs = revision_id.clone();
+    let metric_rows = sqlx::query!(
+        r#"SELECT name as "name!", title as "title!",
+                type_json as "type_json!", enum_values_json, description
+            FROM PluginRevisionMetricDef WHERE revision_id = ?1 ORDER BY rowid"#,
+        revision_id_for_metric_defs,
+    )
+    .fetch_all(&mut *conn)
+    .await?;
 
     let metric_defs = metric_rows
         .into_iter()
-        .map(|(name, title, type_json, enum_values_json, description)| {
-            let mut field_type = serde_json::from_str::<PluginFieldTypeDef>(&type_json)
+        .map(|row| {
+            let mut field_type = serde_json::from_str::<PluginFieldTypeDef>(&row.type_json)
                 .unwrap_or(PluginFieldTypeDef {
                     name: "string".to_string(),
                     values: None,
                 });
             if field_type.values.is_none() {
-                field_type.values = enum_values_json.as_deref().and_then(|s| {
+                field_type.values = row.enum_values_json.as_deref().and_then(|s| {
                     serde_json::from_str::<Vec<String>>(s)
                         .ok()
                         .filter(|v| !v.is_empty())
                 });
             }
             PluginMetricDef {
-                name,
-                title,
+                name: row.name,
+                title: row.title,
                 type_: field_type,
-                description,
+                description: row.description,
             }
         })
         .collect();
@@ -391,14 +391,15 @@ pub(super) async fn upsert_plugin_metrics(
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
     for metric in metrics {
-        sqlx::query(
-            "INSERT INTO PluginMetric (plugin_id, metric_name, value_json) \
-             VALUES (?1, ?2, ?3) \
-             ON CONFLICT(plugin_id, metric_name) DO UPDATE SET value_json = excluded.value_json",
+        let value_json = metric.value.to_json_string();
+        sqlx::query!(
+            r#"INSERT INTO PluginMetric (plugin_id, metric_name, value_json)
+               VALUES (?1, ?2, ?3)
+               ON CONFLICT(plugin_id, metric_name) DO UPDATE SET value_json = excluded.value_json"#,
+            plugin_id,
+            metric.name,
+            value_json,
         )
-        .bind(plugin_id)
-        .bind(&metric.name)
-        .bind(metric.value.to_json_string())
         .execute(&mut *conn)
         .await?;
     }
@@ -414,19 +415,16 @@ pub(super) async fn set_plugin_enabled(
     let mut guard = this.conn.lock().await;
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
-    let psid: String = sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
-        .fetch_one(&mut *conn)
-        .await?;
-    let project_id: String = sqlx::query_scalar("SELECT id FROM Project LIMIT 1")
-        .fetch_one(&mut *conn)
-        .await?;
+    let psid = project_settings_id(&mut *conn).await?;
+    let project_id = project_id(&mut *conn).await?;
 
-    let updated = sqlx::query(
-        "UPDATE ProjectPlugin SET enabled = ?1 WHERE project_id = ?2 AND plugin_id = ?3",
+    let enabled_i64 = if enabled { 1i64 } else { 0i64 };
+    let updated = sqlx::query!(
+        r#"UPDATE ProjectPlugin SET enabled = ?1 WHERE project_id = ?2 AND plugin_id = ?3"#,
+        enabled_i64,
+        project_id,
+        plugin_id,
     )
-    .bind(if enabled { 1i64 } else { 0i64 })
-    .bind(&project_id)
-    .bind(plugin_id)
     .execute(&mut *conn)
     .await?;
 

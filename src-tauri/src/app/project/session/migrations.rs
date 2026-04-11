@@ -226,16 +226,15 @@ pub(super) async fn apply_migrations_to_latest(
         )));
     }
 
-    let current_version =
-        sqlx::query_scalar::<_, i64>("SELECT version FROM SchemaVersion WHERE id = 1")
-            .fetch_optional(&mut *conn)
-            .await?
-            .ok_or_else(|| {
-                PersistenceError::Validation(format!(
-                    "{}This file is not a valid OpenRisk project or was created by an incompatible older version.",
-                    PROJECT_LEGACY_ERROR_PREFIX
-                ))
-            })?;
+    let current_version = sqlx::query_scalar!("SELECT version FROM SchemaVersion WHERE id = 1")
+        .fetch_optional(&mut *conn)
+        .await?
+        .ok_or_else(|| {
+            PersistenceError::Validation(format!(
+                "{}This file is not a valid OpenRisk project or was created by an incompatible older version.",
+                PROJECT_LEGACY_ERROR_PREFIX
+            ))
+        })?;
 
     if current_version < MIN_SUPPORTED_SCHEMA_VERSION {
         return Err(PersistenceError::Validation(format!(
@@ -270,8 +269,7 @@ pub(super) async fn apply_migrations_to_latest(
                 )))
             }
         }
-        sqlx::query("UPDATE SchemaVersion SET version = ?1 WHERE id = 1")
-            .bind(next)
+        sqlx::query!("UPDATE SchemaVersion SET version = ?1 WHERE id = 1", next)
             .execute(&mut *conn)
             .await?;
         version = next;
@@ -296,10 +294,10 @@ pub(super) async fn column_exists(
 }
 
 async fn table_exists(conn: &mut SqliteConnection, table: &str) -> Result<bool, PersistenceError> {
-    let exists = sqlx::query_scalar::<_, i64>(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1 LIMIT 1",
+    let exists = sqlx::query_scalar!(
+        "SELECT 1 as \"one!: i64\" FROM sqlite_master WHERE type = 'table' AND name = ?1 LIMIT 1",
+        table
     )
-    .bind(table)
     .fetch_optional(&mut *conn)
     .await?
     .is_some();
