@@ -6,6 +6,13 @@ import { unwrap } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import type { PluginRecord } from "@/core/backend/bindings";
 
 const REGISTRY_URL =
@@ -62,6 +69,7 @@ export function ManagePlugins({
     const [registryLoading, setRegistryLoading] = useState(false);
     const [registryError, setRegistryError] = useState<string | null>(null);
     const [installingId, setInstallingId] = useState<string | null>(null);
+    const [selectedRegistryVersions, setSelectedRegistryVersions] = useState<Record<string, string>>({});
 
     const fetchRegistry = async () => {
         setRegistryLoading(true);
@@ -71,6 +79,16 @@ export function ManagePlugins({
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data: PluginRegistry = await res.json();
             setRegistry(data.plugins);
+            setSelectedRegistryVersions((prev) => {
+                const next: Record<string, string> = { ...prev };
+                for (const plugin of data.plugins) {
+                    if (!next[plugin.id]) {
+                        const firstAvailable = plugin.versions[0] ?? plugin.version;
+                        next[plugin.id] = firstAvailable;
+                    }
+                }
+                return next;
+            });
         } catch (err) {
             setRegistryError(err instanceof Error ? err.message : String(err));
         } finally {
@@ -82,12 +100,12 @@ export function ManagePlugins({
         fetchRegistry();
     }, []);
 
-    const installFromRegistry = async (rp: RegistryPlugin) => {
+    const installFromRegistry = async (rp: RegistryPlugin, version: string) => {
         if (!projectDir) return;
         setImportError(null);
         setInstallingId(rp.id);
         try {
-            const manifestUrl = `${REGISTRY_BASE}/${rp.id}/${rp.version}/plugin.json`;
+            const manifestUrl = `${REGISTRY_BASE}/${rp.id}/${version}/plugin.json`;
             const payload = await unwrap(backendClient.installPluginFromUrl(manifestUrl));
             onPluginUpdated(payload);
         } catch (err) {
@@ -271,6 +289,8 @@ export function ManagePlugins({
                                 {registry.map((rp) => {
                                     const installed = plugins.find((p) => p.id === rp.id);
                                     const isInstalling = installingId === rp.id;
+                                    const versionOptions = rp.versions.length > 0 ? rp.versions : [rp.version];
+                                    const selectedVersion = selectedRegistryVersions[rp.id] ?? versionOptions[0];
                                     return (
                                         <div
                                             key={rp.id}
@@ -279,7 +299,7 @@ export function ManagePlugins({
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex items-center gap-2 flex-wrap mb-0.5">
                                                     <p className="text-sm font-medium">{rp.name}</p>
-                                                    <span className="text-xs text-muted-foreground">v{rp.version}</span>
+                                                    <span className="text-xs text-muted-foreground">latest v{rp.version}</span>
                                                     {rp.license && (
                                                         <Badge variant="secondary" className="text-xs px-1.5 py-0">
                                                             {rp.license}
@@ -300,21 +320,44 @@ export function ManagePlugins({
                                                     </p>
                                                 )}
                                             </div>
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                variant={installed ? "outline" : "default"}
-                                                disabled={!projectDir || isInstalling}
-                                                onClick={() => installFromRegistry(rp)}
-                                                className="flex-shrink-0"
-                                            >
-                                                <Download className="h-3.5 w-3.5 mr-1.5" />
-                                                {isInstalling
-                                                    ? "Installing…"
-                                                    : installed
-                                                        ? "Reinstall"
-                                                        : "Install"}
-                                            </Button>
+                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                <Select
+                                                    value={selectedVersion}
+                                                    onValueChange={(version) => {
+                                                        setSelectedRegistryVersions((prev) => ({
+                                                            ...prev,
+                                                            [rp.id]: version,
+                                                        }));
+                                                    }}
+                                                    disabled={isInstalling}
+                                                >
+                                                    <SelectTrigger className="w-[130px] h-8">
+                                                        <SelectValue placeholder="Version" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {versionOptions.map((version) => (
+                                                            <SelectItem key={`${rp.id}-${version}`} value={version}>
+                                                                v{version}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={installed ? "outline" : "default"}
+                                                    disabled={!projectDir || isInstalling}
+                                                    onClick={() => installFromRegistry(rp, selectedVersion)}
+                                                    className="flex-shrink-0"
+                                                >
+                                                    <Download className="h-3.5 w-3.5 mr-1.5" />
+                                                    {isInstalling
+                                                        ? "Installing…"
+                                                        : installed
+                                                            ? "Reinstall"
+                                                            : "Install"}
+                                                </Button>
+                                            </div>
                                         </div>
                                     );
                                 })}
