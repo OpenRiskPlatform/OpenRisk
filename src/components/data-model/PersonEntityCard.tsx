@@ -104,7 +104,22 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
                     </p>
                 )}
 
-                <EntityCardFooter entity={entity} />
+                <EntityCardFooter
+                    entity={entity}
+                    excludePropKeys={[
+                        "name",
+                        "notes",
+                        "aliases",
+                        "birthDate",
+                        "birthPlace",
+                        "nationalities",
+                        "addresses",
+                        "emails",
+                        "phones",
+                        "pepStatus",
+                        "sanctioned",
+                    ]}
+                />
             </CardContent>
         </Card>
     );

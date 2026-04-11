@@ -140,7 +140,27 @@ export function OrganizationCard({ entity }: { entity: DataModelEntity }) {
                     </div>
                 )}
 
-                <EntityCardFooter entity={entity} />
+                <EntityCardFooter
+                    entity={entity}
+                    excludePropKeys={[
+                        "name",
+                        "aliases",
+                        "registrationId",
+                        "organizationId",
+                        "country",
+                        "address",
+                        "residenceAddress",
+                        "status",
+                        "involvedPersons",
+                        "legalRoles",
+                        "previousNames",
+                        "entryTypes",
+                        "sourceRegister",
+                        "effectiveTo",
+                        "pepStatus",
+                        "sanctioned",
+                    ]}
+                />
             </CardContent>
         </Card>
     );

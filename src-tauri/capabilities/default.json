@@ -7,6 +7,18 @@
     "shell:allow-open",
     "core:default",
     "dialog:default",
+    "fs:default",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "$HOME/**" },
+        { "path": "$DESKTOP/**" },
+        { "path": "$DOCUMENT/**" },
+        { "path": "$DOWNLOAD/**" },
+        { "path": "$PUBLIC/**" },
+        { "path": "$TEMP/**" }
+      ]
+    },
     "mcp-bridge:default",
     "store:allow-load",
     "store:allow-set",

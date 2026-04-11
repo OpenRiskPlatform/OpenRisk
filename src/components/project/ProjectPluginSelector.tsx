@@ -21,21 +21,21 @@ export function ProjectPluginSelector({
     onSelect,
 }: ProjectPluginSelectorProps) {
     return (
-        <Card>
-            <CardHeader>
+        <Card className="overflow-hidden rounded-[28px] border border-border/70 bg-card shadow-[0_18px_40px_-28px_rgba(15,23,42,0.18)]">
+            <CardHeader className="border-b bg-muted/[0.12] px-6 py-5">
                 <CardTitle>Select Plugin</CardTitle>
                 <CardDescription>
                     Choose one plugin for this scan, then enable the entrypoints you want to run.
                 </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-6 py-6">
                 {!plugins.length ? (
                     <p className="text-sm text-muted-foreground">
                         No enabled plugins available. Open Settings to install and enable a plugin.
                     </p>
                 ) : (
-                    <ScrollArea className="max-h-[420px]">
-                        <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4 pr-3">
+                    <ScrollArea className="max-h-[420px] rounded-[22px] border border-border/70 bg-background/80">
+                        <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2 xl:grid-cols-3">
                             {plugins.map((plugin) => (
                                 <ProjectPluginCard
                                     key={plugin.id}

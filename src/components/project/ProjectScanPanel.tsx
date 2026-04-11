@@ -1,13 +1,7 @@
 import { Button } from "@/components/ui/button";
-import { PluginResultView } from "@/components/data-model/PluginResultView";
 import { ProjectPluginSelector } from "@/components/project/ProjectPluginSelector";
 import { PluginRunCard } from "@/components/project/PluginRunCard";
-import { ScanRunInputsView } from "@/components/project/ScanRunInputsView";
-import {
-    PluginErrorView,
-    PluginLogsView,
-} from "@/components/project/PluginExecutionViews";
-import { isDataModelResult } from "@/core/data-model/types";
+import { ScanResultsPanel } from "@/components/project/ScanResultsPanel";
 import type {
     PluginRecord,
     ProjectSettingsPayload,
@@ -55,14 +49,17 @@ export function ProjectScanPanel({
         null;
 
     return (
-        <section className="bg-card p-2 overflow-y-auto flex-1 min-w-0">
-            {settingsError ? <p className="text-sm text-red-600">{settingsError}</p> : null}
-            {detailError ? <p className="text-sm text-red-600">{detailError}</p> : null}
+        <section className="flex-1 min-w-0 overflow-y-auto">
+            <div id="project-main-anchor" className="mx-auto flex w-full max-w-[1180px] flex-col gap-6 px-4 py-6 lg:px-8 xl:px-10">
+                {settingsError ? <p className="text-sm text-red-600">{settingsError}</p> : null}
+                {detailError ? <p className="text-sm text-red-600">{detailError}</p> : null}
 
-            {!selectedScan || !scanDetail ? (
-                <p className="text-sm text-muted-foreground">Select a scan from the history panel.</p>
-            ) : (
-                <div className="space-y-4">
+                {!selectedScan || !scanDetail ? (
+                    <div className="rounded-[24px] border border-border/70 bg-card px-6 py-8 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.18)]">
+                        <p className="text-sm text-muted-foreground">Select a scan from the history panel.</p>
+                    </div>
+                ) : (
+                    <div className="space-y-6">
                     {scanDetail.status === "Draft" ? (
                         <>
                             <div className="space-y-2">
@@ -105,73 +102,16 @@ export function ProjectScanPanel({
                         </>
                     ) : null}
 
-                    {scanDetail.status === "Running" ? (
-                        <p className="text-sm text-muted-foreground">Scan is running...</p>
+                    {scanDetail.status !== "Draft" ? (
+                        <ScanResultsPanel
+                            anchorId="project-results-section"
+                            scanDetail={scanDetail}
+                            pluginNameById={pluginNameById}
+                        />
                     ) : null}
-
-                    {scanDetail.status === "Completed" && scanDetail.results.length > 0 ? (
-                        <div className="space-y-3 select-text">
-                            <ScanRunInputsView scanDetail={scanDetail} pluginNameById={pluginNameById} />
-                            {scanDetail.results.map((result) => {
-                                const envelope = result.output;
-                                const parsedData =
-                                    envelope.ok && envelope.dataJson
-                                        ? (() => {
-                                            try {
-                                                return JSON.parse(envelope.dataJson);
-                                            } catch {
-                                                return null;
-                                            }
-                                        })()
-                                        : null;
-                                const entities = parsedData !== null && isDataModelResult(parsedData) ? parsedData : null;
-                                const revisionSuffix = result.pluginRevisionId ? ` [${result.pluginRevisionId.slice(0, 8)}]` : "";
-                                const subtitle = `${result.pluginId} / ${result.entrypointId}${revisionSuffix}`;
-                                return (
-                                    <div
-                                        key={`${result.pluginId}::${result.entrypointId}`}
-                                        className="rounded-lg bg-muted/10 p-3"
-                                    >
-                                        <div className="mb-2">
-                                            <h3 className="text-lg font-semibold">
-                                                {pluginNameById[result.pluginId] ?? result.pluginId}
-                                            </h3>
-                                            <p className="text-xs text-muted-foreground">{subtitle}</p>
-                                        </div>
-                                        <div>
-                                            {!envelope.ok ? (
-                                                <>
-                                                    <PluginErrorView message={envelope.error ?? "Unknown error"} />
-                                                    <PluginLogsView logs={envelope.logs ?? []} />
-                                                </>
-                                            ) : entities ? (
-                                                <>
-                                                    <PluginResultView entities={entities} />
-                                                    <PluginLogsView logs={envelope.logs ?? []} />
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <pre className="rounded bg-muted p-3 text-xs overflow-auto">
-                                                        {envelope.dataJson ?? "null"}
-                                                    </pre>
-                                                    <PluginLogsView logs={envelope.logs ?? []} />
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    ) : null}
-
-                    {scanDetail.status === "Failed" ? (
-                        <div className="space-y-3">
-                            <ScanRunInputsView scanDetail={scanDetail} pluginNameById={pluginNameById} />
-                            <p className="text-sm text-red-600">Scan failed. Check plugin settings and inputs.</p>
-                        </div>
-                    ) : null}
-                </div>
-            )}
+                    </div>
+                )}
+            </div>
         </section>
     );
 }

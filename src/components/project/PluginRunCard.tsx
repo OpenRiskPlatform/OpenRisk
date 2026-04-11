@@ -22,17 +22,17 @@ export function PluginRunCard({
     const inputDefs = plugin.inputDefs;
 
     return (
-        <div className="rounded-lg border bg-card p-3">
-            <div className="mb-2">
+        <div className="rounded-[28px] border border-border/70 bg-card p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.14)]">
+            <div className="mb-4 border-b border-border/70 pb-4">
                 <p className="text-sm font-semibold">{plugin.name}</p>
                 <p className="text-xs text-muted-foreground">{plugin.id}</p>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-3">
                 {entrypoints.map((ep) => {
                     const inputsForEntrypoint = inputDefs.filter((input) => input.entrypointId === ep.id);
                     return (
-                        <div key={ep.id}>
+                        <div key={ep.id} className="rounded-2xl border border-border/70 bg-muted/[0.12] p-4">
                             <div className="flex items-center justify-between gap-2">
                                 <div>
                                     <p className="text-sm">{ep.name}</p>

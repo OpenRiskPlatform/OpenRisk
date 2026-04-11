@@ -1,5 +1,9 @@
 import type { DataModelEntity, DataModelResult } from "@/core/data-model/types";
 import { EntityCard } from "./EntityCard";
+import { EntityTableSection } from "./EntityTableSection";
+import { ORGANIZATION_TABLE_COLUMNS, PERSON_TABLE_COLUMNS } from "./entityTableConfigs";
+import { OrganizationCard } from "./OrganizationCard";
+import { PersonEntityCard } from "./PersonEntityCard";
 import { RiskTopicGroupCard } from "./RiskTopicGroupCard";
 
 interface PluginResultViewProps {
@@ -8,23 +12,46 @@ interface PluginResultViewProps {
 
 type RenderItem =
     | { type: "single"; entity: DataModelEntity }
+    | { type: "personTable"; entities: DataModelEntity[] }
+    | { type: "organizationTable"; entities: DataModelEntity[] }
     | { type: "riskTopicGroup"; topics: DataModelEntity[] };
 
 function buildRenderItems(entities: DataModelResult): RenderItem[] {
     const items: RenderItem[] = [];
-    let i = 0;
-    while (i < entities.length) {
-        if (entities[i].$entity === "entity.riskTopic") {
-            const group: DataModelEntity[] = [];
-            while (i < entities.length && entities[i].$entity === "entity.riskTopic") {
-                group.push(entities[i]);
-                i++;
+    const personEntities = entities.filter((entity) => entity.$entity === "entity.person");
+    const organizationEntities = entities.filter((entity) => entity.$entity === "entity.organization");
+    const riskTopics = entities.filter((entity) => entity.$entity === "entity.riskTopic");
+
+    let personSectionAdded = false;
+    let organizationSectionAdded = false;
+    let riskTopicGroupAdded = false;
+
+    for (const entity of entities) {
+        if (entity.$entity === "entity.person") {
+            if (!personSectionAdded) {
+                items.push({ type: "personTable", entities: personEntities });
+                personSectionAdded = true;
             }
-            items.push({ type: "riskTopicGroup", topics: group });
-        } else {
-            items.push({ type: "single", entity: entities[i] });
-            i++;
+            continue;
         }
+
+        if (entity.$entity === "entity.organization") {
+            if (!organizationSectionAdded) {
+                items.push({ type: "organizationTable", entities: organizationEntities });
+                organizationSectionAdded = true;
+            }
+            continue;
+        }
+
+        if (entity.$entity === "entity.riskTopic") {
+            if (!riskTopicGroupAdded) {
+                items.push({ type: "riskTopicGroup", topics: riskTopics });
+                riskTopicGroupAdded = true;
+            }
+            continue;
+        }
+
+        items.push({ type: "single", entity });
     }
     return items;
 }
@@ -49,6 +76,30 @@ export function PluginResultView({ entities }: PluginResultViewProps) {
                         />
                     );
                 }
+                if (item.type === "personTable") {
+                    return (
+                        <EntityTableSection
+                            key={`personTable-${idx}`}
+                            entityType="entity.person"
+                            title="Person"
+                            entities={item.entities}
+                            columns={PERSON_TABLE_COLUMNS}
+                            renderExpanded={(entity) => <PersonEntityCard entity={entity} />}
+                        />
+                    );
+                }
+                if (item.type === "organizationTable") {
+                    return (
+                        <EntityTableSection
+                            key={`organizationTable-${idx}`}
+                            entityType="entity.organization"
+                            title="Organization"
+                            entities={item.entities}
+                            columns={ORGANIZATION_TABLE_COLUMNS}
+                            renderExpanded={(entity) => <OrganizationCard entity={entity} />}
+                        />
+                    );
+                }
                 return (
                     <EntityCard
                         key={`${item.entity.$entity}-${item.entity.$id}`}
@@ -59,4 +110,3 @@ export function PluginResultView({ entities }: PluginResultViewProps) {
         </div>
     );
 }
-

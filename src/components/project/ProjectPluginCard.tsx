@@ -33,8 +33,8 @@ export function ProjectPluginCard({
         <Card
             role="button"
             tabIndex={0}
-            className={`flex min-h-[220px] cursor-pointer flex-col transition-all hover:shadow-md ${
-                selected ? "border-primary bg-primary/5 shadow-sm" : ""
+            className={`flex min-h-[228px] cursor-pointer flex-col rounded-[22px] border border-border/70 bg-card transition-all hover:-translate-y-[1px] hover:shadow-md ${
+                selected ? "border-primary bg-primary/5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.18)]" : ""
             }`}
             onClick={() => onSelect(plugin.id)}
             onKeyDown={(event) => {
@@ -46,7 +46,7 @@ export function ProjectPluginCard({
         >
             <CardHeader className="pb-2">
                 <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-muted">
                         {iconSrc ? (
                             <img
                                 src={iconSrc}

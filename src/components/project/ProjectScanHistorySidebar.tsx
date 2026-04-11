@@ -1,5 +1,6 @@
 import { RefObject, useMemo, useState } from "react";
 import {
+    Archive,
     ArrowDown,
     ArrowUp,
     ChevronLeft,
@@ -7,6 +8,7 @@ import {
     Clock,
     Plus,
     Settings,
+    UserRound,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +24,7 @@ import {
 export interface ProjectScanHistoryEntry {
     id: string;
     title: string;
+    status: string;
     performedAt: string;
     pluginName: string | null;
     resultCount: number | null;
@@ -47,6 +50,7 @@ interface ProjectScanHistorySidebarProps {
     onCancelRename: () => void;
     onQuerySearchChange: (value: string) => void;
     onMoveScan: (scanId: string, delta: -1 | 1) => void;
+    onArchive: (scanId: string) => void;
     onOpenSettings: () => void;
     onGoBack: () => void;
 }
@@ -68,11 +72,16 @@ export function ProjectScanHistorySidebar({
     onCancelRename,
     onQuerySearchChange,
     onMoveScan,
+    onArchive,
     onOpenSettings,
     onGoBack,
 }: ProjectScanHistorySidebarProps) {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const countLabel = useMemo(() => entries.length, [entries.length]);
+    const activeEntry = useMemo(
+        () => entries.find((entry) => entry.id === activeId) ?? null,
+        [activeId, entries],
+    );
 
     return (
         <aside className={`shrink-0 border-l bg-background flex flex-col h-full transition-all duration-200 ${sidebarOpen ? "w-80" : "w-10"}`}>
@@ -130,6 +139,20 @@ export function ProjectScanHistorySidebar({
                                 >
                                     <Plus className="h-4 w-4" />
                                 </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-muted-foreground"
+                                    title="Archive active scan"
+                                    onClick={() => {
+                                        if (activeEntry) {
+                                            onArchive(activeEntry.id);
+                                        }
+                                    }}
+                                    disabled={!activeEntry}
+                                >
+                                    <Archive className="h-4 w-4" />
+                                </Button>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <Button
@@ -174,6 +197,7 @@ export function ProjectScanHistorySidebar({
                                     return (
                                         <li key={entry.id} className={`group relative ${isActive ? "bg-muted" : ""}`}>
                                             <button
+                                                type="button"
                                                 className="w-full text-left px-4 py-3 hover:bg-muted/60 transition-colors pr-12"
                                                 onClick={() => {
                                                     if (isActive) {
@@ -185,7 +209,9 @@ export function ProjectScanHistorySidebar({
                                                 }}
                                             >
                                                 <div className="flex items-start gap-2">
-                                                    <Clock className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
+                                                    <div className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${statusTone(entry.status)}`}>
+                                                        <StatusIcon status={entry.status} />
+                                                    </div>
                                                     <div className="min-w-0 flex-1 space-y-1">
                                                         {renamingScanId === entry.id ? (
                                                             <Input
@@ -249,6 +275,19 @@ export function ProjectScanHistorySidebar({
                                                     variant="ghost"
                                                     size="icon"
                                                     className="h-6 w-6 text-muted-foreground"
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        onArchive(entry.id);
+                                                    }}
+                                                    title="Archive scan"
+                                                >
+                                                    <Archive className="h-3 w-3" />
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6 text-muted-foreground"
                                                     disabled={!entry.canMoveUp}
                                                     onClick={(event) => {
                                                         event.stopPropagation();
@@ -283,4 +322,34 @@ export function ProjectScanHistorySidebar({
             )}
         </aside>
     );
+}
+
+function StatusIcon({ status }: { status: string }) {
+    switch (status) {
+        case "Running":
+            return <UserRound className="h-3.5 w-3.5 text-sky-600" />;
+        case "Completed":
+            return <UserRound className="h-3.5 w-3.5 text-foreground" />;
+        case "Failed":
+            return <UserRound className="h-3.5 w-3.5 text-red-600" />;
+        case "Draft":
+            return <UserRound className="h-3.5 w-3.5 text-amber-600" />;
+        default:
+            return <UserRound className="h-3.5 w-3.5 text-muted-foreground" />;
+    }
+}
+
+function statusTone(status: string): string {
+    switch (status) {
+        case "Running":
+            return "border-sky-200 bg-sky-50";
+        case "Completed":
+            return "border-emerald-200 bg-emerald-50";
+        case "Failed":
+            return "border-red-200 bg-red-50";
+        case "Draft":
+            return "border-amber-200 bg-amber-50";
+        default:
+            return "border-border bg-muted/40";
+    }
 }
