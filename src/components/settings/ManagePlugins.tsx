@@ -13,36 +13,13 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import type { PluginRecord } from "@/core/backend/bindings";
-
-const REGISTRY_URL =
-    "https://raw.githubusercontent.com/OpenRiskPlatform/plugins/refs/heads/main/plugins.json";
+import type {
+    PluginRecord,
+    RegistryPluginRecord,
+} from "@/core/backend/bindings";
 
 const REGISTRY_BASE =
     "https://raw.githubusercontent.com/OpenRiskPlatform/plugins/main";
-
-interface RegistryAuthor {
-    name: string;
-    email?: string;
-}
-
-interface RegistryPlugin {
-    id: string;
-    name: string;
-    version: string;
-    versions: string[];
-    path: string;
-    description: string;
-    authors: RegistryAuthor[];
-    license: string;
-    main: string;
-    entrypoints: unknown[];
-}
-
-interface PluginRegistry {
-    generatedAt: string;
-    plugins: RegistryPlugin[];
-}
 
 interface ManagePluginsProps {
     projectDir?: string;
@@ -65,7 +42,7 @@ export function ManagePlugins({
     const [togglingId, setTogglingId] = useState<string | null>(null);
 
     // Registry state
-    const [registry, setRegistry] = useState<RegistryPlugin[] | null>(null);
+    const [registry, setRegistry] = useState<RegistryPluginRecord[] | null>(null);
     const [registryLoading, setRegistryLoading] = useState(false);
     const [registryError, setRegistryError] = useState<string | null>(null);
     const [installingId, setInstallingId] = useState<string | null>(null);
@@ -75,15 +52,14 @@ export function ManagePlugins({
         setRegistryLoading(true);
         setRegistryError(null);
         try {
-            const res = await fetch(REGISTRY_URL);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data: PluginRegistry = await res.json();
+            const data = await unwrap(backendClient.getPluginRegistry());
             setRegistry(data.plugins);
             setSelectedRegistryVersions((prev) => {
                 const next: Record<string, string> = { ...prev };
                 for (const plugin of data.plugins) {
                     if (!next[plugin.id]) {
-                        const firstAvailable = plugin.versions[0] ?? plugin.version;
+                        const versions = plugin.versions ?? [];
+                        const firstAvailable = versions[0] ?? plugin.version;
                         next[plugin.id] = firstAvailable;
                     }
                 }
@@ -100,7 +76,7 @@ export function ManagePlugins({
         fetchRegistry();
     }, []);
 
-    const installFromRegistry = async (rp: RegistryPlugin, version: string) => {
+    const installFromRegistry = async (rp: RegistryPluginRecord, version: string) => {
         if (!projectDir) return;
         setImportError(null);
         setInstallingId(rp.id);
@@ -289,8 +265,13 @@ export function ManagePlugins({
                                 {registry.map((rp) => {
                                     const installed = plugins.find((p) => p.id === rp.id);
                                     const isInstalling = installingId === rp.id;
-                                    const versionOptions = rp.versions.length > 0 ? rp.versions : [rp.version];
-                                    const selectedVersion = selectedRegistryVersions[rp.id] ?? versionOptions[0];
+                                    const versionOptions = (rp.versions ?? []).length > 0
+                                        ? (rp.versions ?? [])
+                                        : [rp.version];
+                                    const selectedVersion = selectedRegistryVersions[rp.id]
+                                        ?? versionOptions[0]
+                                        ?? rp.version;
+                                    const authors = rp.authors ?? [];
                                     return (
                                         <div
                                             key={rp.id}
@@ -314,9 +295,9 @@ export function ManagePlugins({
                                                 <p className="text-xs text-muted-foreground line-clamp-2">
                                                     {rp.description}
                                                 </p>
-                                                {rp.authors.length > 0 && (
+                                                {authors.length > 0 && (
                                                     <p className="text-xs text-muted-foreground mt-0.5">
-                                                        by {rp.authors.map((a) => a.name).join(", ")}
+                                                        by {authors.map((a) => a.name).join(", ")}
                                                     </p>
                                                 )}
                                             </div>

@@ -101,6 +101,12 @@ export const commands = {
 	 */
 	reorderScans: (orderedScanIds: string[]) => typedError<ScanSummaryRecord[], AppError>(__TAURI_INVOKE("reorder_scans", { orderedScanIds })),
 	/**
+	 *  Fetch plugin registry metadata through backend HTTP client.
+	 * 
+	 *  Uses Rust `reqwest` (rustls) instead of WebView `fetch` to avoid client TLS stack issues.
+	 */
+	getPluginRegistry: () => typedError<PluginRegistryRecord, AppError>(__TAURI_INVOKE("get_plugin_registry")),
+	/**
 	 *  Probe the lock status of a project file *without* opening it.
 	 * 
 	 *  Call this before `open_project` to determine whether a password prompt is needed.
@@ -231,6 +237,11 @@ export type PluginRecord = {
 	settingValues: PluginSettingValue[],
 };
 
+export type PluginRegistryRecord = {
+	generatedAt: string,
+	plugins: RegistryPluginRecord[],
+};
+
 // Definition of one configurable setting declared by a plugin.
 export type PluginSettingDef = {
 	name: string,
@@ -275,6 +286,23 @@ export type ProjectSummary = {
 	name: string,
 	audit: string | null,
 	directory: string,
+};
+
+export type RegistryAuthorRecord = {
+	name: string,
+	email: string | null,
+};
+
+export type RegistryPluginRecord = {
+	id: string,
+	name: string,
+	version: string,
+	versions?: string[],
+	path?: string,
+	description: string,
+	authors?: RegistryAuthorRecord[],
+	license?: string,
+	main?: string,
 };
 
 // Full scan details: metadata, selected plugins, inputs, and all plugin results.
