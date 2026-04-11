@@ -3,7 +3,8 @@
 use super::helpers::{conn_unavailable, load_scan_logs};
 use crate::app::project::session::SqliteProjectPersistence;
 use crate::app::project::types::*;
-use std::collections::HashMap;
+use serde_json::Value;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 #[derive(sqlx::FromRow)]
@@ -11,18 +12,90 @@ struct ScanSummaryRow {
     id: String,
     status: String,
     preview: Option<String>,
+    created_at: String,
+    plugin_name: Option<String>,
     is_archived: i64,
     sort_order: i64,
 }
 
-fn map_scan_summary(row: ScanSummaryRow) -> ScanSummaryRecord {
-    ScanSummaryRecord {
+async fn load_scan_result_count(
+    conn: &mut sqlx::SqliteConnection,
+    scan_id: &str,
+) -> Result<i64, PersistenceError> {
+    let payloads: Vec<Option<String>> = sqlx::query_scalar(
+        "SELECT spr.data_json \
+         FROM ScanPluginResult spr \
+         WHERE spr.scan_id = ?1 AND spr.ok = 1",
+    )
+    .bind(scan_id)
+    .fetch_all(&mut *conn)
+    .await?;
+
+    let mut unique_entities = HashSet::new();
+    for data_json in payloads.into_iter().flatten() {
+        let parsed = match serde_json::from_str::<Value>(&data_json) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+
+        let Some(items) = parsed.as_array() else {
+            continue;
+        };
+
+        for item in items {
+            let Some(entity_type) = item.get("$entity").and_then(Value::as_str) else {
+                continue;
+            };
+            let Some(entity_id) = item.get("$id").and_then(Value::as_str) else {
+                continue;
+            };
+            unique_entities.insert(format!("{entity_type}::{entity_id}"));
+        }
+    }
+
+    Ok(unique_entities.len() as i64)
+}
+
+async fn map_scan_summary(
+    conn: &mut sqlx::SqliteConnection,
+    row: ScanSummaryRow,
+) -> Result<ScanSummaryRecord, PersistenceError> {
+    let result_count = load_scan_result_count(conn, &row.id).await?;
+
+    Ok(ScanSummaryRecord {
         id: row.id,
         status: row.status,
         preview: row.preview,
+        created_at: row.created_at,
+        plugin_name: row.plugin_name,
+        result_count,
         is_archived: row.is_archived != 0,
         sort_order: row.sort_order,
-    }
+    })
+}
+
+async fn fetch_scan_summary(
+    conn: &mut sqlx::SqliteConnection,
+    scan_id: &str,
+) -> Result<ScanSummaryRecord, PersistenceError> {
+    let row = sqlx::query_as::<_, ScanSummaryRow>(
+        "SELECT s.id, s.status, s.preview, COALESCE(s.created_at, CURRENT_TIMESTAMP) AS created_at, \
+                (SELECT pr.name \
+                 FROM ScanSelectedPlugin ssp \
+                 JOIN PluginRevision pr ON pr.id = ssp.plugin_revision_id \
+                 WHERE ssp.scan_id = s.id \
+                 ORDER BY ssp.rowid ASC \
+                 LIMIT 1) AS plugin_name, \
+                s.is_archived, s.sort_order \
+         FROM Scan s \
+         WHERE s.id = ?1 \
+         LIMIT 1",
+    )
+    .bind(scan_id)
+    .fetch_one(&mut *conn)
+    .await?;
+
+    map_scan_summary(conn, row).await
 }
 
 pub(super) async fn create_scan(
@@ -49,8 +122,8 @@ pub(super) async fn create_scan(
         .await?;
 
     sqlx::query(
-        "INSERT INTO Scan (id, project_id, status, preview, is_archived, sort_order) \
-         VALUES (?1, ?2, ?3, ?4, 0, 0)",
+        "INSERT INTO Scan (id, project_id, status, preview, created_at, is_archived, sort_order) \
+         VALUES (?1, ?2, ?3, ?4, CURRENT_TIMESTAMP, 0, 0)",
     )
     .bind(&id)
     .bind(&project_id)
@@ -59,13 +132,7 @@ pub(super) async fn create_scan(
     .execute(&mut *conn)
     .await?;
 
-    Ok(ScanSummaryRecord {
-        id,
-        status: "Draft".to_string(),
-        preview: Some(final_preview),
-        is_archived: false,
-        sort_order: 0,
-    })
+    fetch_scan_summary(&mut *conn, &id).await
 }
 
 pub(super) async fn list_scans(
@@ -79,15 +146,28 @@ pub(super) async fn list_scans(
         .await?;
 
     let rows = sqlx::query_as::<_, ScanSummaryRow>(
-        "SELECT id, status, preview, is_archived, sort_order \
-         FROM Scan WHERE project_id = ?1 \
-         ORDER BY is_archived ASC, sort_order ASC, rowid DESC",
+        "SELECT s.id, s.status, s.preview, COALESCE(s.created_at, CURRENT_TIMESTAMP) AS created_at, \
+                (SELECT pr.name \
+                 FROM ScanSelectedPlugin ssp \
+                 JOIN PluginRevision pr ON pr.id = ssp.plugin_revision_id \
+                 WHERE ssp.scan_id = s.id \
+                 ORDER BY ssp.rowid ASC \
+                 LIMIT 1) AS plugin_name, \
+                s.is_archived, s.sort_order \
+         FROM Scan s \
+         WHERE s.project_id = ?1 \
+         ORDER BY s.is_archived ASC, s.sort_order ASC, s.rowid DESC",
     )
     .bind(project_id)
     .fetch_all(&mut *conn)
     .await?;
 
-    Ok(rows.into_iter().map(map_scan_summary).collect())
+    let mut summaries = Vec::with_capacity(rows.len());
+    for row in rows {
+        summaries.push(map_scan_summary(&mut *conn, row).await?);
+    }
+
+    Ok(summaries)
 }
 
 pub(super) async fn get_scan(
@@ -102,13 +182,16 @@ pub(super) async fn get_scan(
         id: String,
         status: String,
         preview: Option<String>,
+        created_at: String,
     }
 
-    let scan =
-        sqlx::query_as::<_, ScanRow>("SELECT id, status, preview FROM Scan WHERE id = ?1 LIMIT 1")
-            .bind(scan_id)
-            .fetch_one(&mut *conn)
-            .await?;
+    let scan = sqlx::query_as::<_, ScanRow>(
+        "SELECT id, status, preview, COALESCE(created_at, CURRENT_TIMESTAMP) AS created_at \
+         FROM Scan WHERE id = ?1 LIMIT 1",
+    )
+    .bind(scan_id)
+    .fetch_one(&mut *conn)
+    .await?;
 
     let sel_rows: Vec<(String, String)> = sqlx::query_as(
         "SELECT plugin_id, entrypoint_id FROM ScanSelectedPlugin WHERE scan_id = ?1",
@@ -188,6 +271,7 @@ pub(super) async fn get_scan(
         id: scan.id,
         status: scan.status,
         preview: scan.preview,
+        created_at: scan.created_at,
         selected_plugins,
         inputs,
         results,
@@ -489,14 +573,7 @@ pub(super) async fn end_scan_run(
         }
     }
 
-    let row = sqlx::query_as::<_, ScanSummaryRow>(
-        "SELECT id, status, preview, is_archived, sort_order FROM Scan WHERE id = ?1 LIMIT 1",
-    )
-    .bind(scan_id)
-    .fetch_one(&mut *conn)
-    .await?;
-
-    Ok(map_scan_summary(row))
+    fetch_scan_summary(&mut *conn, scan_id).await
 }
 
 pub(super) async fn update_scan_preview(
@@ -520,14 +597,7 @@ pub(super) async fn update_scan_preview(
         .execute(&mut *conn)
         .await?;
 
-    let row = sqlx::query_as::<_, ScanSummaryRow>(
-        "SELECT id, status, preview, is_archived, sort_order FROM Scan WHERE id = ?1 LIMIT 1",
-    )
-    .bind(scan_id)
-    .fetch_one(&mut *conn)
-    .await?;
-
-    Ok(map_scan_summary(row))
+    fetch_scan_summary(&mut *conn, scan_id).await
 }
 
 pub(super) async fn set_scan_archived(
@@ -544,14 +614,7 @@ pub(super) async fn set_scan_archived(
         .execute(&mut *conn)
         .await?;
 
-    let row = sqlx::query_as::<_, ScanSummaryRow>(
-        "SELECT id, status, preview, is_archived, sort_order FROM Scan WHERE id = ?1 LIMIT 1",
-    )
-    .bind(scan_id)
-    .fetch_one(&mut *conn)
-    .await?;
-
-    Ok(map_scan_summary(row))
+    fetch_scan_summary(&mut *conn, scan_id).await
 }
 
 pub(super) async fn reorder_scans(
@@ -594,13 +657,26 @@ pub(super) async fn reorder_scans(
     }
 
     let rows = sqlx::query_as::<_, ScanSummaryRow>(
-        "SELECT id, status, preview, is_archived, sort_order \
-         FROM Scan WHERE project_id = ?1 \
-         ORDER BY is_archived ASC, sort_order ASC, rowid DESC",
+        "SELECT s.id, s.status, s.preview, COALESCE(s.created_at, CURRENT_TIMESTAMP) AS created_at, \
+                (SELECT pr.name \
+                 FROM ScanSelectedPlugin ssp \
+                 JOIN PluginRevision pr ON pr.id = ssp.plugin_revision_id \
+                 WHERE ssp.scan_id = s.id \
+                 ORDER BY ssp.rowid ASC \
+                 LIMIT 1) AS plugin_name, \
+                s.is_archived, s.sort_order \
+         FROM Scan s \
+         WHERE s.project_id = ?1 \
+         ORDER BY s.is_archived ASC, s.sort_order ASC, s.rowid DESC",
     )
     .bind(&project_id)
     .fetch_all(&mut *conn)
     .await?;
 
-    Ok(rows.into_iter().map(map_scan_summary).collect())
+    let mut summaries = Vec::with_capacity(rows.len());
+    for row in rows {
+        summaries.push(map_scan_summary(&mut *conn, row).await?);
+    }
+
+    Ok(summaries)
 }

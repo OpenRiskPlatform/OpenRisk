@@ -2,13 +2,14 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": [
-    "main"
-  ],
+  "windows": ["main"],
   "permissions": [
     "shell:allow-open",
     "core:default",
     "dialog:default",
-    "mcp-bridge:default"
+    "mcp-bridge:default",
+    "store:allow-load",
+    "store:allow-set",
+    "store:default"
   ]
 }

@@ -60,7 +60,7 @@ export function ProjectScanPanel({
             {detailError ? <p className="text-sm text-red-600">{detailError}</p> : null}
 
             {!selectedScan || !scanDetail ? (
-                <p className="text-sm text-muted-foreground">Select query from the left panel.</p>
+                <p className="text-sm text-muted-foreground">Select a scan from the history panel.</p>
             ) : (
                 <div className="space-y-4">
                     {scanDetail.status === "Draft" ? (

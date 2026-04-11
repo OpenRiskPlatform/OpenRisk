@@ -11,7 +11,7 @@ use uuid::Uuid;
 // Schema & version constants
 // ---------------------------------------------------------------------------
 
-pub(super) const CURRENT_SCHEMA_VERSION: i64 = 19;
+pub(super) const CURRENT_SCHEMA_VERSION: i64 = 20;
 const MIN_SUPPORTED_SCHEMA_VERSION: i64 = 4;
 
 pub(super) const PROJECT_LEGACY_ERROR_PREFIX: &str = "PROJECT_LEGACY:";
@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS Scan (
     project_id TEXT NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('Draft','Running','Completed','Failed')),
     preview TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     is_archived INTEGER NOT NULL DEFAULT 0,
     sort_order INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (project_id) REFERENCES Project(id) ON DELETE CASCADE
@@ -263,6 +264,7 @@ pub(super) async fn apply_migrations_to_latest(
             17 => migrate_to_v17(conn).await?,
             18 => migrate_to_v18(conn).await?,
             19 => migrate_to_v19(conn).await?,
+            20 => migrate_to_v20(conn).await?,
             _ => {
                 return Err(PersistenceError::Validation(format!(
                     "Missing migration to schema version {}",
@@ -1056,6 +1058,24 @@ async fn migrate_to_v19(conn: &mut SqliteConnection) -> Result<(), PersistenceEr
     let _ = sqlx::query("ALTER TABLE PluginRevision ADD COLUMN update_metrics_fn TEXT")
         .execute(&mut *conn)
         .await;
+    Ok(())
+}
+
+async fn migrate_to_v20(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
+    if !column_exists(conn, "Scan", "created_at").await? {
+        sqlx::query("ALTER TABLE Scan ADD COLUMN created_at TEXT")
+            .execute(&mut *conn)
+            .await?;
+
+        sqlx::query(
+            "UPDATE Scan \
+             SET created_at = CURRENT_TIMESTAMP \
+             WHERE created_at IS NULL OR TRIM(created_at) = ''",
+        )
+        .execute(&mut *conn)
+        .await?;
+    }
+
     Ok(())
 }
 

@@ -14,7 +14,10 @@ import type {
     ScanSummaryRecord,
     SettingValue,
 } from "@/core/backend/bindings";
-import { ProjectQueriesSidebar } from "@/components/project/ProjectQueriesSidebar";
+import {
+    ProjectScanHistorySidebar,
+    type ProjectScanHistoryEntry,
+} from "@/components/project/ProjectScanHistorySidebar";
 import { ProjectScanPanel } from "@/components/project/ProjectScanPanel";
 
 interface ProjectPageProps {
@@ -47,44 +50,89 @@ function scanNameCandidate(
         return "Scan";
     }
 
-    const plugin = findPluginById(plugins, first.pluginId);
-    const entrypoint = plugin?.entrypoints.find((item) => item.id === first.entrypointId);
-
     const preferredFields = [
+        "name",
         "target",
         "search_input",
         "targetName",
-        "name",
+        "subject",
+        "query",
+        "full_name",
+        "person_name",
+        "company_name",
         "ico",
         "org_ico",
     ];
 
-    let targetPart = "";
+    const selectedKeys = new Set(
+        selection.map((item) => `${item.pluginId}::${item.entrypointId}`),
+    );
+
+    const matchingInputs = inputs.filter(
+        (item) =>
+            selectedKeys.has(`${item.pluginId}::${item.entrypointId}`) &&
+            item.value.type !== "null",
+    );
+
     for (const field of preferredFields) {
-        const matched = inputs.find(
-            (item) =>
-                item.pluginId === first.pluginId &&
-                item.entrypointId === first.entrypointId &&
-                item.fieldName === field,
-        );
-        if (!matched || matched.value.type === "null") {
+        const matched = matchingInputs.find((item) => item.fieldName === field);
+        if (!matched) {
             continue;
         }
-        const next = String(matched.value.value ?? "").trim();
+        if (!("value" in matched.value)) {
+            continue;
+        }
+        const next = String(matched.value.value ?? "")
+            .replace(/\s+/g, " ")
+            .trim();
         if (next) {
-            targetPart = next;
-            break;
+            return next;
         }
     }
 
-    const pluginPart = plugin?.name ?? first.pluginId;
-    const entrypointPart = entrypoint?.name ?? first.entrypointId;
-
-    const base = `${pluginPart}: ${entrypointPart}`;
-    if (!targetPart) {
-        return base;
+    const fallbackInput = matchingInputs.find((item) => {
+        if (!("value" in item.value)) {
+            return false;
+        }
+        const next = String(item.value.value ?? "").trim();
+        return next.length > 0;
+    });
+    if (fallbackInput && "value" in fallbackInput.value) {
+        return String(fallbackInput.value.value ?? "")
+            .replace(/\s+/g, " ")
+            .trim();
     }
-    return `${base} - ${targetPart}`;
+
+    const plugin = findPluginById(plugins, first.pluginId);
+    const entrypoint = plugin?.entrypoints.find((item) => item.id === first.entrypointId);
+    return entrypoint?.name ?? "Scan";
+}
+
+function parseStoredTimestamp(value: string): Date | null {
+    if (!value) {
+        return null;
+    }
+
+    const normalized = value.includes("T")
+        ? value
+        : `${value.replace(" ", "T")}Z`;
+    const parsed = new Date(normalized);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatScanPerformedAt(value: string): string {
+    const parsed = parseStoredTimestamp(value);
+    if (!parsed) {
+        return value;
+    }
+
+    return new Intl.DateTimeFormat([], {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    }).format(parsed);
 }
 
 export function ProjectPage({ projectDir }: ProjectPageProps) {
@@ -103,7 +151,6 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     const [detailError, setDetailError] = useState<string | null>(null);
 
     const [querySearch, setQuerySearch] = useState("");
-    const [showArchived, setShowArchived] = useState(false);
     const [creatingScan, setCreatingScan] = useState(false);
     const [running, setRunning] = useState(false);
     const [renamingScanId, setRenamingScanId] = useState<string | null>(null);
@@ -114,11 +161,6 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     const [pluginInputs, setPluginInputs] = useState<Record<string, Record<string, unknown>>>({});
     const searchInputRef = useRef<HTMLInputElement | null>(null);
     const [projectName, setProjectName] = useState("");
-    const [leftPanelWidth, setLeftPanelWidth] = useState<number>(() => {
-        const stored = Number(localStorage.getItem("openrisk:left-panel-width") ?? "");
-        return Number.isFinite(stored) && stored >= 180 && stored <= 720 ? stored : 280;
-    });
-    const resizingRef = useRef(false);
 
     const selectedScan = useMemo(
         () => scans.find((scan) => scan.id === selectedScanId) ?? null,
@@ -126,7 +168,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     );
 
     const filteredScans = useMemo(() => {
-        const visibleScans = showArchived ? scans : scans.filter((scan) => !scan.isArchived);
+        const visibleScans = scans.filter((scan) => !scan.isArchived);
         const q = querySearch.trim().toLowerCase();
         if (!q) {
             return visibleScans;
@@ -135,7 +177,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
             const name = (scan.preview ?? "").toLowerCase();
             return name.includes(q) || scan.id.toLowerCase().includes(q);
         });
-    }, [scans, querySearch, showArchived]);
+    }, [scans, querySearch]);
 
     const pluginNameById = useMemo(() => {
         const map: Record<string, string> = {};
@@ -144,6 +186,42 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
         }
         return map;
     }, [settingsData?.plugins]);
+
+    const scanHistoryEntries = useMemo<ProjectScanHistoryEntry[]>(() => {
+        return filteredScans.map((scan) => {
+            const siblingGroup = scans.filter(
+                (candidate) => candidate.isArchived === scan.isArchived,
+            );
+            const siblingIndex = siblingGroup.findIndex(
+                (candidate) => candidate.id === scan.id,
+            );
+            const pluginName =
+                scan.pluginName ??
+                (
+                    scan.id === selectedScanId && scan.status === "Draft" && selectedPluginId
+                        ? (pluginNameById[selectedPluginId] ?? selectedPluginId)
+                        : null
+                );
+
+            return {
+                id: scan.id,
+                title: scan.preview?.trim() || `New Scan ${scan.id.slice(0, 8)}`,
+                performedAt: formatScanPerformedAt(scan.createdAt),
+                pluginName,
+                resultCount: scan.resultCount,
+                isArchived: scan.isArchived,
+                canMoveUp: siblingIndex > 0,
+                canMoveDown:
+                    siblingIndex !== -1 && siblingIndex < siblingGroup.length - 1,
+            };
+        });
+    }, [
+        filteredScans,
+        pluginNameById,
+        scans,
+        selectedPluginId,
+        selectedScanId,
+    ]);
 
     useEffect(() => {
         let cancelled = false;
@@ -219,47 +297,6 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     }, [projectName, projectDir]);
 
     useEffect(() => {
-        const blockSelection = (event: Event) => {
-            if (!resizingRef.current) {
-                return;
-            }
-            event.preventDefault();
-        };
-
-        const onMouseMove = (event: MouseEvent) => {
-            if (!resizingRef.current) {
-                return;
-            }
-            window.getSelection()?.removeAllRanges();
-            const maxPanelWidth = Math.max(320, Math.min(720, window.innerWidth - 280));
-            const next = Math.max(180, Math.min(maxPanelWidth, event.clientX - 16));
-            setLeftPanelWidth(next);
-        };
-
-        const onMouseUp = () => {
-            if (!resizingRef.current) {
-                return;
-            }
-            resizingRef.current = false;
-            localStorage.setItem("openrisk:left-panel-width", String(leftPanelWidth));
-            document.body.style.cursor = "";
-            document.body.style.userSelect = "";
-            document.documentElement.style.userSelect = "";
-            document.documentElement.style.webkitUserSelect = "";
-        };
-
-        window.addEventListener("mousemove", onMouseMove);
-        window.addEventListener("mouseup", onMouseUp);
-        document.addEventListener("selectstart", blockSelection);
-
-        return () => {
-            window.removeEventListener("mousemove", onMouseMove);
-            window.removeEventListener("mouseup", onMouseUp);
-            document.removeEventListener("selectstart", blockSelection);
-        };
-    }, [leftPanelWidth]);
-
-    useEffect(() => {
         if (!projectDir || !projectSessionReady) {
             return;
         }
@@ -306,14 +343,11 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     }, []);
 
     useEffect(() => {
-        if (showArchived) {
-            return;
-        }
         const selected = scans.find((scan) => scan.id === selectedScanId);
         if (selected?.isArchived) {
             setSelectedScanId(scans.find((scan) => !scan.isArchived)?.id ?? null);
         }
-    }, [showArchived, scans, selectedScanId]);
+    }, [scans, selectedScanId]);
 
     useEffect(() => {
         let cancelled = false;
@@ -522,24 +556,6 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
         }
     };
 
-    const setScanArchived = async (scan: ScanSummaryRecord, archived: boolean) => {
-        if (!projectDir || !projectSessionReady) {
-            return;
-        }
-
-        try {
-            const updated = await unwrap(backendClient.setScanArchived(scan.id, archived));
-            const nextScans = sortScans(scans.map((item) => (item.id === updated.id ? updated : item)));
-            setScans(nextScans);
-
-            if (selectedScanId === updated.id && updated.isArchived && !showArchived) {
-                setSelectedScanId(nextScans.find((item) => !item.isArchived)?.id ?? null);
-            }
-        } catch (err) {
-            setScansError(err instanceof Error ? err.message : String(err));
-        }
-    };
-
     const moveScan = async (scan: ScanSummaryRecord, delta: -1 | 1) => {
         if (!projectDir || !projectSessionReady) {
             return;
@@ -577,7 +593,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
 
     return (
         <MainLayout projectDir={projectDir}>
-            <div className="h-screen w-full overflow-hidden select-none">
+            <div className="flex h-screen w-full min-h-0 overflow-hidden select-none">
                 {!projectDir ? (
                     <Card>
                         <CardHeader>
@@ -590,66 +606,59 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                         </CardContent>
                     </Card>
                 ) : (
-                    <div
-                        className="flex h-full flex-col lg:flex-row gap-0"
-                        style={{ ["--left-panel-width" as string]: `${leftPanelWidth}px` }}
-                    >
-                        <ProjectQueriesSidebar
-                            scans={scans}
-                            filteredScans={filteredScans}
-                            selectedScanId={selectedScanId}
+                    <>
+                        <div className="flex min-w-0 flex-1 overflow-auto">
+                            <ProjectScanPanel
+                                selectedScan={selectedScan}
+                                scanDetail={scanDetail}
+                                settingsData={settingsData}
+                                settingsError={settingsError}
+                                detailError={detailError}
+                                pluginNameById={pluginNameById}
+                                selectedPluginId={selectedPluginId}
+                                enabledPlugins={enabledPlugins}
+                                pluginInputs={pluginInputs}
+                                running={running}
+                                onSelectPlugin={setSelectedPluginId}
+                                onSetPluginEnabled={setPluginEnabled}
+                                onSetPluginField={setPluginField}
+                                onRunScan={() => void runScan()}
+                            />
+                        </div>
+
+                        <ProjectScanHistorySidebar
+                            entries={scanHistoryEntries}
+                            activeId={selectedScanId}
                             querySearch={querySearch}
-                            showArchived={showArchived}
                             creatingScan={creatingScan}
                             renamingScanId={renamingScanId}
                             renamingValue={renamingValue}
                             scansError={scansError}
                             searchInputRef={searchInputRef}
                             onCreateScan={() => void createScan()}
-                            onSelectScan={(scanId) => setSelectedScanId(scanId || null)}
-                            onStartRename={startRename}
+                            onSelect={(scanId) => setSelectedScanId(scanId || null)}
+                            onStartRename={(scanId) => {
+                                const scan = scans.find((candidate) => candidate.id === scanId);
+                                if (scan) {
+                                    startRename(scan);
+                                }
+                            }}
                             onRenamingValueChange={setRenamingValue}
                             onCommitRename={() => void commitRename()}
                             onCancelRename={() => setRenamingScanId(null)}
                             onQuerySearchChange={setQuerySearch}
-                            onShowArchivedChange={setShowArchived}
-                            onMoveScan={(scan, delta) => void moveScan(scan, delta)}
-                            onToggleArchive={(scan, archived) => void setScanArchived(scan, archived)}
+                            onMoveScan={(scanId, delta) => {
+                                const scan = scans.find((candidate) => candidate.id === scanId);
+                                if (scan) {
+                                    void moveScan(scan, delta);
+                                }
+                            }}
+                            onOpenSettings={() =>
+                                window.dispatchEvent(new CustomEvent("openrisk:open-settings"))
+                            }
                             onGoBack={() => void goBack()}
                         />
-
-                        <div className="block lg:hidden h-2 bg-border/90" />
-
-                        <div
-                            className="hidden lg:block w-1 bg-border/70 hover:bg-primary/40 cursor-col-resize"
-                            onMouseDown={() => {
-                                resizingRef.current = true;
-                                window.getSelection()?.removeAllRanges();
-                                document.body.style.cursor = "col-resize";
-                                document.body.style.userSelect = "none";
-                                document.documentElement.style.userSelect = "none";
-                                document.documentElement.style.webkitUserSelect = "none";
-                            }}
-                            title="Resize panel"
-                        />
-
-                        <ProjectScanPanel
-                            selectedScan={selectedScan}
-                            scanDetail={scanDetail}
-                            settingsData={settingsData}
-                            settingsError={settingsError}
-                            detailError={detailError}
-                            pluginNameById={pluginNameById}
-                            selectedPluginId={selectedPluginId}
-                            enabledPlugins={enabledPlugins}
-                            pluginInputs={pluginInputs}
-                            running={running}
-                            onSelectPlugin={setSelectedPluginId}
-                            onSetPluginEnabled={setPluginEnabled}
-                            onSetPluginField={setPluginField}
-                            onRunScan={() => void runScan()}
-                        />
-                    </div>
+                    </>
                 )}
             </div>
         </MainLayout>
