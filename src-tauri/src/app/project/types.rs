@@ -368,7 +368,6 @@ pub struct ProjectLockStatus {
 #[serde(tag = "kind", content = "message", rename_all = "camelCase")]
 pub enum AppError {
     Validation(String),
-    NotFound(String),
     Database(String),
     Internal(String),
 }
@@ -377,7 +376,6 @@ impl fmt::Display for AppError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AppError::Validation(msg) => write!(f, "{}", msg),
-            AppError::NotFound(msg) => write!(f, "Not found: {}", msg),
             AppError::Database(msg) => write!(f, "Database: {}", msg),
             AppError::Internal(msg) => write!(f, "Internal: {}", msg),
         }
