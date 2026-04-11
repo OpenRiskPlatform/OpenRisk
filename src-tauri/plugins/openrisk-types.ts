@@ -75,6 +75,8 @@ interface PersonPayload {
     isSanctioned?: boolean;
     sanctionDatasets?: string[];
     sanctionDescription?: string;
+    /** Short bio / discovery note (e.g. from automated entity recognition). */
+    notes?: string;
 }
 
 /** entity.organization — a legal entity or company. */
@@ -224,6 +226,7 @@ function buildPerson(opts: _OR_Opts<PersonPayload>): DataModelEntity {
     _or_many(props, "addresses", (p.addresses ?? []).map(_tv.addr));
     _or_many(props, "emails", (p.emails ?? []).map(_tv.str));
     _or_many(props, "phones", (p.phones ?? []).map(_tv.str));
+    _or_set(props, "notes", p.notes ? _tv.str(p.notes) : undefined);
     _or_set(props, "pepStatus", p.isPep !== undefined ? _tv.bool(p.isPep) : undefined);
     _or_set(props, "sanctioned", p.isSanctioned !== undefined ? _tv.bool(p.isSanctioned) : undefined);
 
@@ -258,15 +261,15 @@ function buildOrganization(opts: _OR_Opts<OrganizationPayload>): DataModelEntity
     _or_set(props, "address", p.address ? _tv.addr(p.address) : undefined);
     _or_set(props, "status", p.status ? _tv.str(p.status) : undefined);
     _or_many(props, "involvedPersons", (p.involvedPersons ?? []).map(_tv.str));
+    _or_many(props, "legalRoles", (p.legalRoles ?? []).map(_tv.str));
+    _or_many(props, "previousNames", (p.previousNames ?? []).map(_tv.str));
+    _or_many(props, "entryTypes", (p.entryTypes ?? []).map(_tv.str));
+    _or_set(props, "sourceRegister", p.sourceRegister ? _tv.str(p.sourceRegister) : undefined);
+    _or_set(props, "effectiveTo", p.effectiveTo ? _tv.date(p.effectiveTo) : undefined);
     _or_set(props, "pepStatus", p.isPep !== undefined ? _tv.bool(p.isPep) : undefined);
     _or_set(props, "sanctioned", p.isSanctioned !== undefined ? _tv.bool(p.isSanctioned) : undefined);
 
     const extra = _or_extra(opts.extra);
-    if (p.sourceRegister) extra.push(_or_kv("source_register", _tv.str(p.sourceRegister)));
-    if (p.effectiveTo) extra.push(_or_kv("effective_to", _tv.date(p.effectiveTo)));
-    for (const pn of p.previousNames ?? []) extra.push(_or_kv("previous_name", _tv.str(pn)));
-    for (const lr of p.legalRoles ?? []) extra.push(_or_kv("legal_role", _tv.str(lr)));
-    for (const et of p.entryTypes ?? []) extra.push(_or_kv("entry_type", _tv.str(et)));
     for (const ds of p.pepDatasets ?? []) extra.push(_or_kv("pep_dataset", _tv.str(ds)));
     for (const ds of p.sanctionDatasets ?? []) extra.push(_or_kv("sanction_dataset", _tv.str(ds)));
     if (p.sanctionDescription) extra.push(_or_kv("sanction_description", _tv.str(p.sanctionDescription)));
@@ -349,12 +352,14 @@ function buildDetectedEntity(opts: _OR_Opts<DetectedEntityPayload>): DataModelEn
     return { $entity: "entity.detectedEntity", $id: opts.id, $props: props, $extra: extra.length ? extra : undefined, $sources: opts.sources };
 }
 
-/** Slugify parts and join with ':' to form a stable, URL-safe entity ID. */
+/** Slugify parts and join with ':' to form a human-readable, guaranteed-unique entity ID. */
 function buildId(...parts: Array<string | number | undefined>): string {
-    return parts
+    const slug = parts
         .filter((p): p is string | number => p !== undefined && String(p).trim().length > 0)
         .map((p) => String(p).toLowerCase().trim().replace(/\s+/g, "-").replace(/[^a-z0-9-_:.]+/g, "-"))
         .join(":");
+    const rand = Math.random().toString(36).slice(2, 8);
+    return slug ? `${slug}:${rand}` : rand;
 }
 
 // =============================================================================

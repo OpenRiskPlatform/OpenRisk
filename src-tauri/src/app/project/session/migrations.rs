@@ -11,7 +11,7 @@ use uuid::Uuid;
 // Schema & version constants
 // ---------------------------------------------------------------------------
 
-pub(super) const CURRENT_SCHEMA_VERSION: i64 = 16;
+pub(super) const CURRENT_SCHEMA_VERSION: i64 = 17;
 const MIN_SUPPORTED_SCHEMA_VERSION: i64 = 4;
 
 pub(super) const PROJECT_LEGACY_ERROR_PREFIX: &str = "PROJECT_LEGACY:";
@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS ProjectSettings (
     id TEXT PRIMARY KEY,
     description TEXT,
     locale TEXT,
-    theme TEXT
+    theme TEXT,
+    advanced_mode INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS SchemaVersion (
@@ -259,6 +260,7 @@ pub(super) async fn apply_migrations_to_latest(
             14 => migrate_to_v14(conn).await?,
             15 => migrate_to_v15(conn).await?,
             16 => migrate_to_v16(conn).await?,
+            17 => migrate_to_v17(conn).await?,
             _ => {
                 return Err(PersistenceError::Validation(format!(
                     "Missing migration to schema version {}",
@@ -1015,6 +1017,16 @@ async fn migrate_to_v16(conn: &mut SqliteConnection) -> Result<(), PersistenceEr
         .await?;
     }
 
+    Ok(())
+}
+
+async fn migrate_to_v17(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
+    // Add advanced_mode column to ProjectSettings if it does not exist yet.
+    let _ = sqlx::query(
+        "ALTER TABLE ProjectSettings ADD COLUMN advanced_mode INTEGER NOT NULL DEFAULT 0",
+    )
+    .execute(&mut *conn)
+    .await;
     Ok(())
 }
 

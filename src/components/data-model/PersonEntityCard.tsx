@@ -26,6 +26,7 @@ function firstProp(entity: DataModelEntity, key: string): TypedValue | undefined
 
 export function PersonEntityCard({ entity }: PersonEntityCardProps) {
     const name = firstProp(entity, "name");
+    const notes = firstProp(entity, "notes");
     const aliases = propList(entity, "aliases");
     const birthDate = firstProp(entity, "birthDate");
     const birthPlace = firstProp(entity, "birthPlace");
@@ -84,6 +85,12 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
                 <TagField label="Addresses" values={addresses} />
                 <TagField label="Emails" values={emails} />
                 <TagField label="Phones" values={phones} />
+
+                {notes && (
+                    <p className="text-sm text-muted-foreground italic border-l-2 border-border pl-3">
+                        {String(notes.value)}
+                    </p>
+                )}
 
                 <EntityCardFooter entity={entity} />
             </CardContent>

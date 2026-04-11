@@ -19,6 +19,7 @@ pub trait ProjectPersistence: Send + Sync {
         &self,
         name: Option<String>,
         theme: Option<String>,
+        advanced_mode: Option<bool>,
     ) -> Result<ProjectSettingsRecord, PersistenceError>;
     /// Set a single plugin setting value.
     async fn set_plugin_setting(

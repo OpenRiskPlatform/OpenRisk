@@ -84,11 +84,12 @@ pub async fn load_settings(
 pub async fn update_project_settings(
     name: Option<String>,
     theme: Option<String>,
+    advanced_mode: Option<bool>,
     state: tauri::State<'_, ProjectState>,
 ) -> Result<ProjectSettingsRecord, AppError> {
     let project = get_open_project(&state).await?;
     project
-        .update_project_settings(name, theme)
+        .update_project_settings(name, theme, advanced_mode)
         .await
         .map_err(AppError::from)
 }

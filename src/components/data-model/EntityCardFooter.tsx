@@ -1,4 +1,5 @@
 import type { DataModelEntity, TypedValue } from "@/core/data-model/types";
+import { useSettings } from "@/core/settings/SettingsContext";
 import { TypedValueView } from "./TypedValueView";
 
 function isKeyValue(item: TypedValue): item is {
@@ -22,6 +23,9 @@ export function EntityCardFooter({
     entity: DataModelEntity;
     excludeExtraKeys?: string[];
 }) {
+    const { globalSettings } = useSettings();
+    const advancedMode = globalSettings.advancedMode ?? false;
+
     const extra = (entity.$extra ?? []).filter((item) => {
         if (!excludeExtraKeys?.length) return true;
         if (!isKeyValue(item)) return true;
@@ -31,7 +35,9 @@ export function EntityCardFooter({
 
     return (
         <div className="space-y-3 border-t pt-3 mt-1">
-            <p className="text-xs text-muted-foreground font-mono break-all">ID: {entity.$id}</p>
+            {advancedMode && (
+                <p className="text-xs text-muted-foreground font-mono break-all">ID: {entity.$id}</p>
+            )}
 
             {extra.length > 0 && (
                 <div className="space-y-1.5">

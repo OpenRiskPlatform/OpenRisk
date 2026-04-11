@@ -28,6 +28,11 @@ export function OrganizationCard({ entity }: { entity: DataModelEntity }) {
     const address = firstProp(entity, "address");
     const status = firstProp(entity, "status");
     const involvedPersons = propList(entity, "involvedPersons");
+    const legalRoles = propList(entity, "legalRoles");
+    const previousNames = propList(entity, "previousNames");
+    const entryTypes = propList(entity, "entryTypes");
+    const sourceRegister = firstProp(entity, "sourceRegister");
+    const effectiveTo = firstProp(entity, "effectiveTo");
     const pepStatus = firstProp(entity, "pepStatus");
     const sanctioned = firstProp(entity, "sanctioned");
 
@@ -81,7 +86,42 @@ export function OrganizationCard({ entity }: { entity: DataModelEntity }) {
                     <Field label="Registration ID" value={registrationId} />
                     <Field label="Country" value={country} />
                     <Field label="Address" value={address} />
+                    {sourceRegister && <Field label="Register" value={sourceRegister} />}
+                    {effectiveTo && <Field label="Active Until" value={effectiveTo} />}
                 </div>
+
+                {previousNames.length > 0 && (
+                    <div className="space-y-2">
+                        <p className="text-xs uppercase text-muted-foreground">Previous Names</p>
+                        <div className="flex flex-wrap gap-2">
+                            {previousNames.map((v, i) => (
+                                <Badge key={i} variant="outline" className="text-xs">{String(v.value)}</Badge>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {legalRoles.length > 0 && (
+                    <div className="space-y-2">
+                        <p className="text-xs uppercase text-muted-foreground">Legal Roles</p>
+                        <div className="flex flex-wrap gap-2">
+                            {legalRoles.map((v, i) => (
+                                <Badge key={i} variant="secondary" className="text-xs">{String(v.value)}</Badge>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {entryTypes.length > 0 && (
+                    <div className="space-y-2">
+                        <p className="text-xs uppercase text-muted-foreground">Entry Types</p>
+                        <div className="flex flex-wrap gap-2">
+                            {entryTypes.map((v, i) => (
+                                <Badge key={i} variant="outline" className="text-xs">{String(v.value)}</Badge>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {involvedPersons.length > 0 && (
                     <div className="space-y-2">

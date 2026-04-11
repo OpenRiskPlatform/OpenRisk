@@ -39,6 +39,7 @@ pub struct ProjectSettingsRecord {
     pub description: String,
     pub locale: String,
     pub theme: String,
+    pub advanced_mode: bool,
 }
 
 // ---------------------------------------------------------------------------

@@ -7,6 +7,7 @@ import type { ProjectSettingsRecord } from "@/core/backend/bindings";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -38,7 +39,8 @@ export function GeneralSettings({
   onProjectNameUpdated,
 }: GeneralSettingsProps) {
   const backendClient = useBackendClient();
-  const { updateGlobalSettings } = useSettings();
+  const { updateGlobalSettings, globalSettings } = useSettings();
+  const advancedMode = globalSettings.advancedMode ?? false;
   const [savingTheme, setSavingTheme] = useState(false);
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
@@ -53,6 +55,16 @@ export function GeneralSettings({
 
   const theme = projectSettings?.theme ?? "system";
 
+  const handleAdvancedModeChange = async (checked: boolean) => {
+    await updateGlobalSettings({ advancedMode: checked });
+    try {
+      const updated = await unwrap(backendClient.updateProjectSettings(null, null, checked));
+      onProjectSettingsUpdated(updated);
+    } catch (e) {
+      console.error("[GeneralSettings] Failed to persist advancedMode", e);
+    }
+  };
+
   const handleThemeChange = async (value: "light" | "dark" | "system") => {
     if (!projectDir) {
       return;
@@ -60,7 +72,7 @@ export function GeneralSettings({
 
     setSavingTheme(true);
     try {
-      const updated = await unwrap(backendClient.updateProjectSettings(null, value));
+      const updated = await unwrap(backendClient.updateProjectSettings(null, value, null));
       onProjectSettingsUpdated(updated);
       await updateGlobalSettings({ theme: updated.theme as "light" | "dark" | "system" });
     } finally {
@@ -96,7 +108,7 @@ export function GeneralSettings({
     setRenameError(null);
     setRenamingProject(true);
     try {
-      const updated = await unwrap(backendClient.updateProjectSettings(nextName, null));
+      const updated = await unwrap(backendClient.updateProjectSettings(nextName, null, null));
       onProjectSettingsUpdated(updated);
       onProjectNameUpdated?.(nextName);
       window.dispatchEvent(
@@ -260,8 +272,22 @@ export function GeneralSettings({
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Locale: {projectSettings.locale} • Settings ID: {projectSettings.id}
+            Locale: {projectSettings.locale} &bull; Settings ID: {projectSettings.id}
           </p>
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="advanced-mode">Advanced Mode</Label>
+              <p className="text-sm text-muted-foreground">
+                Show entity IDs and low-level technical details in scan results.
+              </p>
+            </div>
+            <Switch
+              id="advanced-mode"
+              checked={advancedMode}
+              onCheckedChange={(checked) => void handleAdvancedModeChange(checked)}
+            />
+          </div>
 
           <div className="rounded-lg border p-4 space-y-3">
             <div className="space-y-0.5">

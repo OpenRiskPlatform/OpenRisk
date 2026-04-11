@@ -83,6 +83,8 @@ interface PersonPayload {
     isSanctioned?: boolean;
     sanctionDatasets?: string[];
     sanctionDescription?: string;
+    /** Short bio / discovery note (e.g. from automated entity recognition). */
+    notes?: string;
 }
 
 /** entity.organization — a legal entity or company. */
@@ -232,6 +234,7 @@ function buildPerson(opts: _OR_Opts<PersonPayload>): DataModelEntity {
     _or_many(props, "addresses", (p.addresses ?? []).map(_tv.addr));
     _or_many(props, "emails", (p.emails ?? []).map(_tv.str));
     _or_many(props, "phones", (p.phones ?? []).map(_tv.str));
+    _or_set(props, "notes", p.notes ? _tv.str(p.notes) : undefined);
     _or_set(props, "pepStatus", p.isPep !== undefined ? _tv.bool(p.isPep) : undefined);
     _or_set(props, "sanctioned", p.isSanctioned !== undefined ? _tv.bool(p.isSanctioned) : undefined);
 
@@ -266,15 +269,15 @@ function buildOrganization(opts: _OR_Opts<OrganizationPayload>): DataModelEntity
     _or_set(props, "address", p.address ? _tv.addr(p.address) : undefined);
     _or_set(props, "status", p.status ? _tv.str(p.status) : undefined);
     _or_many(props, "involvedPersons", (p.involvedPersons ?? []).map(_tv.str));
+    _or_many(props, "legalRoles", (p.legalRoles ?? []).map(_tv.str));
+    _or_many(props, "previousNames", (p.previousNames ?? []).map(_tv.str));
+    _or_many(props, "entryTypes", (p.entryTypes ?? []).map(_tv.str));
+    _or_set(props, "sourceRegister", p.sourceRegister ? _tv.str(p.sourceRegister) : undefined);
+    _or_set(props, "effectiveTo", p.effectiveTo ? _tv.date(p.effectiveTo) : undefined);
     _or_set(props, "pepStatus", p.isPep !== undefined ? _tv.bool(p.isPep) : undefined);
     _or_set(props, "sanctioned", p.isSanctioned !== undefined ? _tv.bool(p.isSanctioned) : undefined);
 
     const extra = _or_extra(opts.extra);
-    if (p.sourceRegister) extra.push(_or_kv("source_register", _tv.str(p.sourceRegister)));
-    if (p.effectiveTo) extra.push(_or_kv("effective_to", _tv.date(p.effectiveTo)));
-    for (const pn of p.previousNames ?? []) extra.push(_or_kv("previous_name", _tv.str(pn)));
-    for (const lr of p.legalRoles ?? []) extra.push(_or_kv("legal_role", _tv.str(lr)));
-    for (const et of p.entryTypes ?? []) extra.push(_or_kv("entry_type", _tv.str(et)));
     for (const ds of p.pepDatasets ?? []) extra.push(_or_kv("pep_dataset", _tv.str(ds)));
     for (const ds of p.sanctionDatasets ?? []) extra.push(_or_kv("sanction_dataset", _tv.str(ds)));
     if (p.sanctionDescription) extra.push(_or_kv("sanction_description", _tv.str(p.sanctionDescription)));
@@ -357,12 +360,14 @@ function buildDetectedEntity(opts: _OR_Opts<DetectedEntityPayload>): DataModelEn
     return { $entity: "entity.detectedEntity", $id: opts.id, $props: props, $extra: extra.length ? extra : undefined, $sources: opts.sources };
 }
 
-/** Slugify parts and join with ':' to form a stable, URL-safe entity ID. */
+/** Slugify parts and join with ':' to form a human-readable, guaranteed-unique entity ID. */
 function buildId(...parts: Array<string | number | undefined>): string {
-    return parts
+    const slug = parts
         .filter((p): p is string | number => p !== undefined && String(p).trim().length > 0)
         .map((p) => String(p).toLowerCase().trim().replace(/\s+/g, "-").replace(/[^a-z0-9-_:.]+/g, "-"))
         .join(":");
+    const rand = Math.random().toString(36).slice(2, 8);
+    return slug ? `${slug}:${rand}` : rand;
 }
 
 // =============================================================================
@@ -628,54 +633,54 @@ function pepResponseToEntity(target: string, data: PepServiceResponse): DataMode
         typeof data.sanctions?.description === "string"
             ? data.sanctions.description
             : Object.entries(data.sanctions?.description ?? {})
-                  .map(([lang, text]) => `[${lang}] ${text}`)
-                  .join("; ") || undefined;
+                .map(([lang, text]) => `[${lang}] ${text}`)
+                .join("; ") || undefined;
 
     const sources = [{ name: "Adversea PEP/Sanctions", source: `${BASE_URL}/screening/pepSanctions` }];
 
     if (isPerson) {
         return buildPerson({
-            id:      buildId("adversea", "pep", info.name ?? target),
+            id: buildId("adversea", "pep", info.name ?? target),
             sources,
             payload: {
-                name:               info.name ?? target,
-                aliases:            info.aliases,
-                birthDate:          info.birth_date,
-                nationalities:      info.countries_full,
-                addresses:          csvToArray(info.addresses),
-                emails:             csvToArray(info.emails),
-                phones:             csvToArray(info.phones),
+                name: info.name ?? target,
+                aliases: info.aliases,
+                birthDate: info.birth_date,
+                nationalities: info.countries_full,
+                addresses: csvToArray(info.addresses),
+                emails: csvToArray(info.emails),
+                phones: csvToArray(info.phones),
                 isPep,
-                pepDatasets:        data.pep?.dataset,
-                pepMunicipality:    data.pep?.municipality,
-                pepState:           data.pep?.state,
-                statePositions:     (data.pep?.state_companies ?? []).map((sc) => ({
-                    companyName:   sc.company_name,
-                    companyId:     sc.company_ico !== undefined ? String(sc.company_ico) : undefined,
-                    position:      sc.position,
-                    address:       sc.address,
+                pepDatasets: data.pep?.dataset,
+                pepMunicipality: data.pep?.municipality,
+                pepState: data.pep?.state,
+                statePositions: (data.pep?.state_companies ?? []).map((sc) => ({
+                    companyName: sc.company_name,
+                    companyId: sc.company_ico !== undefined ? String(sc.company_ico) : undefined,
+                    position: sc.position,
+                    address: sc.address,
                     effectiveFrom: sc.effective_from,
-                    effectiveTo:   sc.effective_to,
+                    effectiveTo: sc.effective_to,
                 })),
                 isSanctioned,
-                sanctionDatasets:    data.sanctions?.dataset,
+                sanctionDatasets: data.sanctions?.dataset,
                 sanctionDescription,
             },
         });
     }
 
     return buildOrganization({
-        id:      buildId("adversea", "pep", info.name ?? target),
+        id: buildId("adversea", "pep", info.name ?? target),
         sources,
         payload: {
-            name:               info.name ?? target,
-            aliases:            info.aliases,
-            country:            info.countries_full?.[0],
-            address:            csvToArray(info.addresses)[0],
+            name: info.name ?? target,
+            aliases: info.aliases,
+            country: info.countries_full?.[0],
+            address: csvToArray(info.addresses)[0],
             isPep,
             isSanctioned,
-            pepDatasets:        data.pep?.dataset,
-            sanctionDatasets:   data.sanctions?.dataset,
+            pepDatasets: data.pep?.dataset,
+            sanctionDatasets: data.sanctions?.dataset,
             sanctionDescription,
         },
     });
@@ -702,25 +707,25 @@ export async function topicReport(inputs: PluginInputs): Promise<DataModelEntity
     const topics = await adverseaGet<SingleTopicResponse[]>(
         "/screening/topic-report",
         {
-            targetName:     target,
-            country:        inputs.country,
+            targetName: target,
+            country: inputs.country,
             outputLanguage: inputs.output_language ?? "English",
-            forceRecreate:  inputs.force_recreate,
+            forceRecreate: inputs.force_recreate,
         },
         apiKey,
     );
 
     const entities = topics.map((topic, idx) =>
         buildRiskTopic({
-            id:      buildId("adversea", "topic", topic.topicId ?? String(idx), target),
+            id: buildId("adversea", "topic", topic.topicId ?? String(idx), target),
             sources: (topic.sources ?? [])
                 .filter((s) => !!s.url)
                 .map((s) => ({ name: s.title || topic.topicId || "source", source: String(s.url) })),
             payload: {
-                targetName:             topic.targetName || target,
-                topicId:                topic.topicId,
-                adverseActivityDetected:topic.adverseActivityDetected,
-                summary:                topic.result,
+                targetName: topic.targetName || target,
+                topicId: topic.topicId,
+                adverseActivityDetected: topic.adverseActivityDetected,
+                summary: topic.result,
             },
         }),
     );
@@ -738,16 +743,16 @@ export async function socialMediaCheck(inputs: PluginInputs): Promise<DataModelE
 
     const entities = profiles.map((profile, idx) =>
         buildSocialProfile({
-            id:      buildId("adversea", "social", target, profile.social_media_platform ?? String(idx), profile.user_id ?? ""),
+            id: buildId("adversea", "social", target, profile.social_media_platform ?? String(idx), profile.user_id ?? ""),
             sources: profile.profile_url
                 ? [{ name: profile.title || profile.social_media_platform || "social-profile", source: profile.profile_url }]
                 : undefined,
             payload: {
-                targetName:   target,
-                platform:     profile.social_media_platform,
+                targetName: target,
+                platform: profile.social_media_platform,
                 profileTitle: profile.title,
-                profileUrl:   profile.profile_url,
-                userId:       profile.user_id,
+                profileUrl: profile.profile_url,
+                userId: profile.user_id,
             },
         }),
     );
@@ -763,24 +768,24 @@ export async function unitAnalysis(inputs: PluginInputs): Promise<DataModelEntit
         const rows = await adverseaGet<UnitAnalysisClaim[]>(
             "/screening/unit-analysis/claims",
             {
-                targetName:     target,
-                country:        inputs.country,
+                targetName: target,
+                country: inputs.country,
                 outputLanguage: inputs.output_language ?? "English",
-                mediaOnly:      inputs.media_only,
-                forceRecreate:  inputs.force_recreate,
+                mediaOnly: inputs.media_only,
+                forceRecreate: inputs.force_recreate,
             },
             apiKey,
         );
         const entities = rows.map((row, idx) =>
             buildMediaMention({
-                id:      buildId("adversea", "unit-analysis-claims", target, row.url ?? String(idx)),
+                id: buildId("adversea", "unit-analysis-claims", target, row.url ?? String(idx)),
                 sources: row.url ? [{ name: row.title || "claims-source", source: row.url }] : undefined,
                 payload: {
-                    targetName:             target,
-                    title:                  row.title,
-                    url:                    row.url,
-                    claims:                 row.claims,
-                    adverseActivityDetected:row.adverseActivityDetected,
+                    targetName: target,
+                    title: row.title,
+                    url: row.url,
+                    claims: row.claims,
+                    adverseActivityDetected: row.adverseActivityDetected,
                 },
             }),
         );
@@ -791,24 +796,24 @@ export async function unitAnalysis(inputs: PluginInputs): Promise<DataModelEntit
     const rows = await adverseaGet<UnitAnalysisText[]>(
         "/screening/unit-analysis/text",
         {
-            targetName:     target,
-            country:        inputs.country,
+            targetName: target,
+            country: inputs.country,
             outputLanguage: inputs.output_language ?? "English",
-            mediaOnly:      inputs.media_only,
-            forceRecreate:  inputs.force_recreate,
+            mediaOnly: inputs.media_only,
+            forceRecreate: inputs.force_recreate,
         },
         apiKey,
     );
     const entities = rows.map((row, idx) =>
         buildMediaMention({
-            id:      buildId("adversea", "unit-analysis-text", target, row.url ?? String(idx)),
+            id: buildId("adversea", "unit-analysis-text", target, row.url ?? String(idx)),
             sources: row.url ? [{ name: row.title || "analysis-source", source: row.url }] : undefined,
             payload: {
-                targetName:             target,
-                title:                  row.title,
-                url:                    row.url,
-                analysisText:           row.analysis,
-                adverseActivityDetected:row.adverseActivityDetected,
+                targetName: target,
+                title: row.title,
+                url: row.url,
+                analysisText: row.analysis,
+                adverseActivityDetected: row.adverseActivityDetected,
             },
         }),
     );
@@ -836,9 +841,9 @@ export async function rpoSearch(inputs: PluginInputs): Promise<DataModelEntity[]
                 businessSubjects = (biz.business_subjects ?? [])
                     .filter((bs) => bs.description)
                     .map((bs) => ({
-                        description:   bs.description!,
+                        description: bs.description!,
                         effectiveFrom: bs.effective_from,
-                        effectiveTo:   bs.effective_to,
+                        effectiveTo: bs.effective_to,
                     }));
             } catch {
                 // Supplemental — skip silently.
@@ -846,18 +851,18 @@ export async function rpoSearch(inputs: PluginInputs): Promise<DataModelEntity[]
         }
 
         return buildOrganization({
-            id:      buildId("adversea", "rpo", row.ico ?? target, idx),
+            id: buildId("adversea", "rpo", row.ico ?? target, idx),
             sources: (row.courts_links ?? []).map((link, i) => ({ name: `Court Link ${i + 1}`, source: link })),
             payload: {
-                name:            row.latest_org_name ?? target,
-                registrationId:  row.ico,
-                country:         "Slovakia",
+                name: row.latest_org_name ?? target,
+                registrationId: row.ico,
+                country: "Slovakia",
                 involvedPersons: row.involved_persons,
-                previousNames:   row.prev_org_names,
-                legalRoles:      row.positions,
-                entryTypes:      row.entry_types,
-                sourceRegister:  row.source_register,
-                effectiveTo:     row.effective_to,
+                previousNames: row.prev_org_names,
+                legalRoles: row.positions,
+                entryTypes: row.entry_types,
+                sourceRegister: row.source_register,
+                effectiveTo: row.effective_to,
                 businessSubjects,
             },
         });
@@ -876,12 +881,12 @@ export async function debtorCheck(inputs: PluginInputs): Promise<DataModelEntity
 
     const entities = rows.map((row, idx) =>
         buildFinancialRecord({
-            id:      buildId("adversea", "debtor", row.name ?? target, row.source ?? String(idx)),
+            id: buildId("adversea", "debtor", row.name ?? target, row.source ?? String(idx)),
             sources: [{ name: "Adversea Debtors", source: `${BASE_URL}/screening/debtors` }],
             payload: {
-                name:       row.name ?? target,
+                name: row.name ?? target,
                 amountOwed: row.amountOwed,
-                location:   row.location,
+                location: row.location,
                 debtSource: row.source,
             },
         }),
@@ -895,21 +900,21 @@ export async function defaultEntityRecognition(inputs: PluginInputs): Promise<Da
     const payload = await adverseaGet<DefaultEntityRecognitionResponse>(
         "/entity/default-entity-recognition",
         {
-            targetName:     target,
-            country:        inputs.country,
+            targetName: target,
+            country: inputs.country,
             outputLanguage: inputs.output_language ?? "English",
-            forceRecreate:  inputs.force_recreate,
+            forceRecreate: inputs.force_recreate,
         },
         apiKey,
     );
 
     const entities = (payload.entities ?? []).map((entity, idx) =>
-        buildDetectedEntity({
-            id:      buildId("adversea", "detected", entity.name ?? target, idx),
+        buildPerson({
+            id: buildId("adversea", "detected", entity.name ?? target, idx),
             sources: (entity.links ?? []).map((link, i) => ({ name: `Link ${i + 1}`, source: link })),
             payload: {
-                name:        entity.name ?? target,
-                description: entity.short_description,
+                name: entity.name ?? target,
+                notes: entity.short_description,
             },
         }),
     );

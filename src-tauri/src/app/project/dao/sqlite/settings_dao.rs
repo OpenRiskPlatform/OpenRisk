@@ -20,11 +20,12 @@ pub(super) async fn load_settings(
         description: Option<String>,
         locale: Option<String>,
         theme: Option<String>,
+        advanced_mode: i64,
     }
 
     let proj = sqlx::query_as::<_, ProjRow>(
         "SELECT p.id, p.name, p.audit, p.project_settings_id, \
-         ps.description, ps.locale, ps.theme \
+         ps.description, ps.locale, ps.theme, ps.advanced_mode \
          FROM Project p \
          INNER JOIN ProjectSettings ps ON ps.id = p.project_settings_id \
          LIMIT 1",
@@ -57,6 +58,7 @@ pub(super) async fn load_settings(
             description: proj.description.unwrap_or_default(),
             locale: proj.locale.unwrap_or_else(|| "en-US".to_string()),
             theme: normalize_theme(proj.theme),
+            advanced_mode: proj.advanced_mode != 0,
         },
         plugins,
     })
@@ -66,6 +68,7 @@ pub(super) async fn update_project_settings(
     this: &SqliteProjectPersistence,
     name: Option<String>,
     theme: Option<String>,
+    advanced_mode: Option<bool>,
 ) -> Result<ProjectSettingsRecord, PersistenceError> {
     if matches!(&name, Some(n) if n.trim().is_empty()) {
         return Err(PersistenceError::Validation(
@@ -94,16 +97,25 @@ pub(super) async fn update_project_settings(
         .execute(&mut *conn)
         .await?;
 
+    if let Some(am) = advanced_mode {
+        sqlx::query("UPDATE ProjectSettings SET advanced_mode = ?1 WHERE id = ?2")
+            .bind(am as i64)
+            .bind(&psid)
+            .execute(&mut *conn)
+            .await?;
+    }
+
     #[derive(sqlx::FromRow)]
     struct Row {
         id: String,
         description: Option<String>,
         locale: Option<String>,
         theme: Option<String>,
+        advanced_mode: i64,
     }
 
     let row = sqlx::query_as::<_, Row>(
-        "SELECT id, description, locale, theme FROM ProjectSettings WHERE id = ?1",
+        "SELECT id, description, locale, theme, advanced_mode FROM ProjectSettings WHERE id = ?1",
     )
     .bind(&psid)
     .fetch_one(&mut *conn)
@@ -114,6 +126,7 @@ pub(super) async fn update_project_settings(
         description: row.description.unwrap_or_default(),
         locale: row.locale.unwrap_or_else(|| "en-US".to_string()),
         theme: normalize_theme(row.theme),
+        advanced_mode: row.advanced_mode != 0,
     })
 }
 

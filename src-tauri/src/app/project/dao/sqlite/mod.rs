@@ -20,8 +20,9 @@ impl ProjectPersistence for SqliteProjectPersistence {
         &self,
         name: Option<String>,
         theme: Option<String>,
+        advanced_mode: Option<bool>,
     ) -> Result<ProjectSettingsRecord, PersistenceError> {
-        settings_dao::update_project_settings(self, name, theme).await
+        settings_dao::update_project_settings(self, name, theme, advanced_mode).await
     }
     async fn set_plugin_setting(
         &self,

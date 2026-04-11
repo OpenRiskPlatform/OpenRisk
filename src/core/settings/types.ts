@@ -4,6 +4,8 @@
 
 export interface GlobalSettings {
   theme: "light" | "dark" | "system";
+  /** Show technical details (entity IDs, raw keys) in the UI. */
+  advancedMode?: boolean;
 }
 
 export type PluginSettings = Record<string, string | number | boolean | null>;
