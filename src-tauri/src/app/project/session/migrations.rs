@@ -11,11 +11,3 @@ pub(super) async fn apply_schema(conn: &mut SqliteConnection) -> Result<(), Pers
 
     Ok(())
 }
-
-/// Legacy custom version chain was removed.
-/// SQLx migrations are now the only migration source of truth.
-pub(super) async fn apply_migrations_to_latest(
-    _conn: &mut SqliteConnection,
-) -> Result<(), PersistenceError> {
-    Ok(())
-}

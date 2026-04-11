@@ -1,6 +1,6 @@
 //! DAO functions for the scan lifecycle.
 
-use super::helpers::{conn_unavailable, load_scan_logs};
+use super::helpers::{conn_unavailable, load_scan_logs, project_id, project_settings_id};
 use crate::app::project::session::SqliteProjectPersistence;
 use crate::app::project::types::*;
 use sqlx::SqliteConnection;
@@ -28,20 +28,398 @@ fn map_scan_summary(row: ScanSummaryRow) -> ScanSummaryRecord {
     }
 }
 
-async fn project_id(conn: &mut SqliteConnection) -> Result<String, PersistenceError> {
-    let row = sqlx::query!(r#"SELECT id as "id!: String" FROM Project LIMIT 1"#)
-        .fetch_one(conn)
-        .await?;
-    Ok(row.id)
+async fn fetch_scan_summary_by_id(
+    conn: &mut SqliteConnection,
+    scan_id: &str,
+) -> Result<ScanSummaryRecord, PersistenceError> {
+    let row = sqlx::query!(
+        r#"SELECT id as "id!", status as "status!", preview,
+                  COALESCE(created_at, CURRENT_TIMESTAMP) as "created_at!: String",
+                  is_archived as "is_archived!", sort_order as "sort_order!"
+           FROM Scan WHERE id = ?1 LIMIT 1"#,
+        scan_id,
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+
+    Ok(map_scan_summary(ScanSummaryRow {
+        id: row.id,
+        status: row.status,
+        preview: row.preview,
+        created_at: row.created_at,
+        is_archived: row.is_archived,
+        sort_order: row.sort_order,
+    }))
 }
 
-async fn project_settings_id(conn: &mut SqliteConnection) -> Result<String, PersistenceError> {
-    let row = sqlx::query!(
-        r#"SELECT project_settings_id as "project_settings_id!: String" FROM Project LIMIT 1"#
+async fn list_scan_summaries_by_project(
+    conn: &mut SqliteConnection,
+    project_id: &str,
+) -> Result<Vec<ScanSummaryRecord>, PersistenceError> {
+    let rows = sqlx::query!(
+        r#"SELECT id as "id!", status as "status!", preview,
+                  COALESCE(created_at, CURRENT_TIMESTAMP) as "created_at!: String",
+                  is_archived as "is_archived!", sort_order as "sort_order!"
+           FROM Scan WHERE project_id = ?1
+           ORDER BY is_archived ASC, sort_order ASC, rowid DESC"#,
+        project_id,
     )
-    .fetch_one(conn)
+    .fetch_all(&mut *conn)
     .await?;
-    Ok(row.project_settings_id)
+
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            map_scan_summary(ScanSummaryRow {
+                id: row.id,
+                status: row.status,
+                preview: row.preview,
+                created_at: row.created_at,
+                is_archived: row.is_archived,
+                sort_order: row.sort_order,
+            })
+        })
+        .collect())
+}
+
+async fn load_scan_preview_if_draft(
+    conn: &mut SqliteConnection,
+    scan_id: &str,
+) -> Result<Option<String>, PersistenceError> {
+    let row = sqlx::query!(
+        r#"SELECT status as "status!", preview FROM Scan WHERE id = ?1 LIMIT 1"#,
+        scan_id,
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+
+    if row.status != "Draft" {
+        return Err(PersistenceError::Validation(
+            "Scan already launched and cannot be rerun".into(),
+        ));
+    }
+
+    Ok(row.preview)
+}
+
+async fn prepare_scan_for_run(
+    conn: &mut SqliteConnection,
+    scan_id: &str,
+) -> Result<(), PersistenceError> {
+    sqlx::query!(
+        r#"UPDATE Scan SET status = 'Running' WHERE id = ?1"#,
+        scan_id
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    sqlx::query!(
+        r#"DELETE FROM ScanSelectedPlugin WHERE scan_id = ?1"#,
+        scan_id
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    sqlx::query!(
+        "DELETE FROM ScanEntrypointInput WHERE scan_id = ?1",
+        scan_id
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    sqlx::query!(
+        r#"DELETE FROM ScanPluginResult WHERE scan_id = ?1"#,
+        scan_id
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    Ok(())
+}
+
+async fn resolve_plugin_revision_id(
+    conn: &mut SqliteConnection,
+    project_id: &str,
+    plugin_id: &str,
+) -> Result<String, PersistenceError> {
+    let revision_row = sqlx::query!(
+        r#"SELECT COALESCE(pp.pinned_revision_id, p.current_revision_id) as "revision_id!: String"
+           FROM Plugin p
+           LEFT JOIN ProjectPlugin pp ON pp.plugin_id = p.id AND pp.project_id = ?2
+           WHERE p.id = ?1
+           LIMIT 1"#,
+        plugin_id,
+        project_id,
+    )
+    .fetch_optional(&mut *conn)
+    .await?;
+
+    revision_row.map(|r| r.revision_id).ok_or_else(|| {
+        PersistenceError::Validation(format!("Plugin '{}' has no active revision", plugin_id))
+    })
+}
+
+async fn persist_selected_plugins(
+    conn: &mut SqliteConnection,
+    scan_id: &str,
+    project_id: &str,
+    selected_plugins: &[PluginEntrypointSelection],
+) -> Result<HashMap<(String, String), String>, PersistenceError> {
+    let mut selected_revision_map: HashMap<(String, String), String> = HashMap::new();
+
+    for sel in selected_plugins {
+        let revision_id = resolve_plugin_revision_id(conn, project_id, &sel.plugin_id).await?;
+        let revision_id_for_selected = revision_id.clone();
+
+        sqlx::query!(
+            "INSERT OR IGNORE INTO ScanSelectedPlugin \
+             (scan_id, plugin_id, plugin_revision_id, entrypoint_id) VALUES (?1, ?2, ?3, ?4)",
+            scan_id,
+            sel.plugin_id,
+            revision_id_for_selected,
+            sel.entrypoint_id,
+        )
+        .execute(&mut *conn)
+        .await?;
+
+        selected_revision_map.insert(
+            (sel.plugin_id.clone(), sel.entrypoint_id.clone()),
+            revision_id,
+        );
+    }
+
+    Ok(selected_revision_map)
+}
+
+async fn persist_scan_inputs(
+    conn: &mut SqliteConnection,
+    scan_id: &str,
+    inputs: &[ScanEntrypointInput],
+    selected_revision_map: &HashMap<(String, String), String>,
+) -> Result<(), PersistenceError> {
+    for inp in inputs {
+        let value_json = inp.value.to_json_string();
+        let revision_id = selected_revision_map
+            .get(&(inp.plugin_id.clone(), inp.entrypoint_id.clone()))
+            .cloned()
+            .ok_or_else(|| {
+                PersistenceError::Validation(format!(
+                    "Input references unselected plugin entrypoint '{}::{}'",
+                    inp.plugin_id, inp.entrypoint_id
+                ))
+            })?;
+
+        sqlx::query!(
+            "INSERT OR IGNORE INTO ScanEntrypointInput \
+             (scan_id, plugin_id, plugin_revision_id, entrypoint_id, field_name, value_json) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            scan_id,
+            inp.plugin_id,
+            revision_id,
+            inp.entrypoint_id,
+            inp.field_name,
+            value_json,
+        )
+        .execute(&mut *conn)
+        .await?;
+    }
+
+    Ok(())
+}
+
+async fn load_plugin_run_data(
+    conn: &mut SqliteConnection,
+    psid: &str,
+    sel: &PluginEntrypointSelection,
+    revision_id: String,
+) -> Result<PluginLoadData, PersistenceError> {
+    let revision_id_for_code = revision_id.clone();
+    let code = sqlx::query_scalar!(
+        r#"SELECT code FROM PluginRevision WHERE id = ?1 LIMIT 1"#,
+        revision_id_for_code,
+    )
+    .fetch_optional(&mut *conn)
+    .await?
+    .flatten()
+    .filter(|c: &String| !c.trim().is_empty());
+
+    let revision_id_for_metrics_fn = revision_id.clone();
+    let update_metrics_fn = sqlx::query_scalar!(
+        "SELECT update_metrics_fn FROM PluginRevision WHERE id = ?1 LIMIT 1",
+        revision_id_for_metrics_fn,
+    )
+    .fetch_optional(&mut *conn)
+    .await?
+    .flatten();
+
+    let revision_id_for_entrypoint = revision_id.clone();
+    let ep_fn = sqlx::query_scalar!(
+        r#"SELECT function_name as "function_name!" FROM PluginRevisionEntrypoint
+           WHERE revision_id = ?1 AND id = ?2 LIMIT 1"#,
+        revision_id_for_entrypoint,
+        sel.entrypoint_id,
+    )
+    .fetch_optional(&mut *conn)
+    .await?;
+
+    let entrypoint_function = ep_fn.unwrap_or_else(|| sel.entrypoint_id.clone());
+
+    let sv_rows = sqlx::query!(
+        r#"SELECT setting_name as "setting_name!", value_json as "value_json!"
+           FROM ProjectPluginSettingValue
+           WHERE plugin_id = ?1 AND project_settings_id = ?2"#,
+        sel.plugin_id,
+        psid,
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+
+    let settings = sv_rows
+        .into_iter()
+        .map(|row| {
+            let value = serde_json::from_str::<serde_json::Value>(&row.value_json)
+                .map(|v| SettingValue::from_json(&v))
+                .unwrap_or(SettingValue::Null);
+            PluginSettingValue {
+                name: row.setting_name,
+                value,
+            }
+        })
+        .collect();
+
+    let revision_id_for_metric_defs = revision_id.clone();
+    let metric_rows = sqlx::query!(
+        r#"SELECT name as "name!", title as "title!",
+             type_json as "type_json!", description
+         FROM PluginRevisionMetricDef WHERE revision_id = ?1 ORDER BY rowid"#,
+        revision_id_for_metric_defs,
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+
+    let metric_defs = metric_rows
+        .into_iter()
+        .map(|row| PluginMetricDef {
+            name: row.name,
+            title: row.title,
+            type_: serde_json::from_str::<PluginFieldTypeDef>(&row.type_json).unwrap_or(
+                PluginFieldTypeDef {
+                    name: "string".to_string(),
+                    values: None,
+                },
+            ),
+            description: row.description,
+        })
+        .collect();
+
+    Ok(PluginLoadData {
+        plugin_id: sel.plugin_id.clone(),
+        plugin_revision_id: revision_id,
+        entrypoint_id: sel.entrypoint_id.clone(),
+        entrypoint_function,
+        metric_defs,
+        settings,
+        code,
+        update_metrics_fn,
+    })
+}
+
+async fn persist_scan_results(
+    conn: &mut SqliteConnection,
+    scan_id: &str,
+    results: &[ScanPluginResultRecord],
+) -> Result<(), PersistenceError> {
+    for result in results {
+        let plugin_revision_id = result.plugin_revision_id.clone().ok_or_else(|| {
+            PersistenceError::Validation(format!(
+                "Plugin result '{}::{}' is missing plugin revision id",
+                result.plugin_id, result.entrypoint_id
+            ))
+        })?;
+
+        let result_id = Uuid::new_v4().to_string();
+        let ok_i64 = result.output.ok as i64;
+        let error = result.output.error.as_deref();
+        let data_json = result.output.data_json.as_deref();
+
+        sqlx::query!(
+            "INSERT INTO ScanPluginResult \
+               (id, plugin_id, plugin_revision_id, entrypoint_id, scan_id, ok, error, data_json) \
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            result_id,
+            result.plugin_id,
+            plugin_revision_id,
+            result.entrypoint_id,
+            scan_id,
+            ok_i64,
+            error,
+            data_json,
+        )
+        .execute(&mut *conn)
+        .await?;
+
+        for log in &result.output.logs {
+            let level = match log.level {
+                LogLevel::Warn => "warn",
+                LogLevel::Error => "error",
+                LogLevel::Log => "log",
+            };
+            let log_id = Uuid::new_v4().to_string();
+
+            sqlx::query!(
+                "INSERT INTO ScanPluginLog (id, scan_result_id, level, message) \
+                 VALUES (?1, ?2, ?3, ?4)",
+                log_id,
+                result_id,
+                level,
+                log.message,
+            )
+            .execute(&mut *conn)
+            .await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn complete_scan(
+    conn: &mut SqliteConnection,
+    scan_id: &str,
+    preview: Option<&str>,
+) -> Result<(), PersistenceError> {
+    sqlx::query!(
+        "UPDATE Scan SET status = 'Completed', \
+         preview = COALESCE(?1, preview) WHERE id = ?2",
+        preview,
+        scan_id,
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    Ok(())
+}
+
+async fn upsert_scan_metrics(
+    conn: &mut SqliteConnection,
+    results: &[ScanPluginResultRecord],
+) -> Result<(), PersistenceError> {
+    for result in results {
+        for metric in &result.metrics {
+            let metric_value_json = metric.value.to_json_string();
+            sqlx::query!(
+                "INSERT INTO PluginMetric (plugin_id, metric_name, value_json) \
+                 VALUES (?1, ?2, ?3) \
+                 ON CONFLICT(plugin_id, metric_name) DO UPDATE SET value_json = excluded.value_json",
+                result.plugin_id,
+                metric.name,
+                metric_value_json,
+            )
+            .execute(&mut *conn)
+            .await?;
+        }
+    }
+
+    Ok(())
 }
 
 pub(super) async fn create_scan(
@@ -102,31 +480,7 @@ pub(super) async fn list_scans(
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
     let project_id = project_id(&mut *conn).await?;
-
-    let rows = sqlx::query!(
-        r#"SELECT id as "id!", status as "status!", preview,
-                COALESCE(created_at, CURRENT_TIMESTAMP) as "created_at!: String",
-                  is_archived as "is_archived!", sort_order as "sort_order!"
-           FROM Scan WHERE project_id = ?1
-           ORDER BY is_archived ASC, sort_order ASC, rowid DESC"#,
-        project_id,
-    )
-    .fetch_all(&mut *conn)
-    .await?;
-
-    Ok(rows
-        .into_iter()
-        .map(|row| {
-            map_scan_summary(ScanSummaryRow {
-                id: row.id,
-                status: row.status,
-                preview: row.preview,
-                created_at: row.created_at,
-                is_archived: row.is_archived,
-                sort_order: row.sort_order,
-            })
-        })
-        .collect())
+    list_scan_summaries_by_project(&mut *conn, &project_id).await
 }
 
 pub(super) async fn get_scan(
@@ -136,28 +490,7 @@ pub(super) async fn get_scan(
     let mut guard = this.conn.lock().await;
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
-    #[derive(sqlx::FromRow)]
-    struct ScanRow {
-        id: String,
-        status: String,
-        preview: Option<String>,
-        created_at: String,
-    }
-
-    let scan_row = sqlx::query!(
-        r#"SELECT id as "id!", status as "status!", preview,
-                  COALESCE(created_at, CURRENT_TIMESTAMP) as "created_at!: String"
-           FROM Scan WHERE id = ?1 LIMIT 1"#,
-        scan_id,
-    )
-    .fetch_one(&mut *conn)
-    .await?;
-    let scan = ScanRow {
-        id: scan_row.id,
-        status: scan_row.status,
-        preview: scan_row.preview,
-        created_at: scan_row.created_at,
-    };
+    let scan = fetch_scan_summary_by_id(&mut *conn, scan_id).await?;
 
     let sel_rows = sqlx::query!(
         r#"SELECT plugin_id as "plugin_id!", entrypoint_id as "entrypoint_id!"
@@ -264,117 +597,15 @@ pub(super) async fn begin_scan_run(
 ) -> Result<ScanRunContext, PersistenceError> {
     let mut guard = this.conn.lock().await;
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
-
-    #[derive(sqlx::FromRow)]
-    struct ScanRow {
-        status: String,
-        preview: Option<String>,
-    }
-
-    let scan_row = sqlx::query!(
-        r#"SELECT status as "status!", preview FROM Scan WHERE id = ?1 LIMIT 1"#,
-        scan_id,
-    )
-    .fetch_one(&mut *conn)
-    .await?;
-    let scan = ScanRow {
-        status: scan_row.status,
-        preview: scan_row.preview,
-    };
-
-    if scan.status != "Draft" {
-        return Err(PersistenceError::Validation(
-            "Scan already launched and cannot be rerun".into(),
-        ));
-    }
+    let scan_preview = load_scan_preview_if_draft(&mut *conn, scan_id).await?;
 
     let psid = project_settings_id(&mut *conn).await?;
     let project_id = project_id(&mut *conn).await?;
+    prepare_scan_for_run(&mut *conn, scan_id).await?;
 
-    sqlx::query!("UPDATE Scan SET status = 'Running' WHERE id = ?1", scan_id)
-        .execute(&mut *conn)
-        .await?;
-
-    sqlx::query!("DELETE FROM ScanSelectedPlugin WHERE scan_id = ?1", scan_id)
-        .execute(&mut *conn)
-        .await?;
-
-    let mut selected_revision_map: HashMap<(String, String), String> = HashMap::new();
-    for sel in selected_plugins {
-        let project_id_for_query = project_id.clone();
-        let revision_row = sqlx::query!(
-                r#"SELECT COALESCE(pp.pinned_revision_id, p.current_revision_id) as "revision_id!: String"
-               FROM Plugin p
-               LEFT JOIN ProjectPlugin pp ON pp.plugin_id = p.id AND pp.project_id = ?2
-               WHERE p.id = ?1
-               LIMIT 1"#,
-            sel.plugin_id,
-            project_id_for_query,
-        )
-        .fetch_optional(&mut *conn)
-        .await?;
-
-        let revision_id = revision_row.map(|r| r.revision_id).ok_or_else(|| {
-            PersistenceError::Validation(format!(
-                "Plugin '{}' has no active revision",
-                sel.plugin_id
-            ))
-        })?;
-
-        let revision_id_for_selected = revision_id.clone();
-        sqlx::query!(
-            "INSERT OR IGNORE INTO ScanSelectedPlugin \
-             (scan_id, plugin_id, plugin_revision_id, entrypoint_id) VALUES (?1, ?2, ?3, ?4)",
-            scan_id,
-            sel.plugin_id,
-            revision_id_for_selected,
-            sel.entrypoint_id,
-        )
-        .execute(&mut *conn)
-        .await?;
-
-        selected_revision_map.insert(
-            (sel.plugin_id.clone(), sel.entrypoint_id.clone()),
-            revision_id,
-        );
-    }
-
-    sqlx::query!(
-        "DELETE FROM ScanEntrypointInput WHERE scan_id = ?1",
-        scan_id
-    )
-    .execute(&mut *conn)
-    .await?;
-    for inp in inputs {
-        let vj = inp.value.to_json_string();
-        let revision_id = selected_revision_map
-            .get(&(inp.plugin_id.clone(), inp.entrypoint_id.clone()))
-            .cloned()
-            .ok_or_else(|| {
-                PersistenceError::Validation(format!(
-                    "Input references unselected plugin entrypoint '{}::{}'",
-                    inp.plugin_id, inp.entrypoint_id
-                ))
-            })?;
-        let revision_id_for_input = revision_id.clone();
-        sqlx::query!(
-            "INSERT OR IGNORE INTO ScanEntrypointInput \
-             (scan_id, plugin_id, plugin_revision_id, entrypoint_id, field_name, value_json) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            scan_id,
-            inp.plugin_id,
-            revision_id_for_input,
-            inp.entrypoint_id,
-            inp.field_name,
-            vj,
-        )
-        .execute(&mut *conn)
-        .await?;
-    }
-
-    sqlx::query!("DELETE FROM ScanPluginResult WHERE scan_id = ?1", scan_id)
-        .execute(&mut *conn)
-        .await?;
+    let selected_revision_map =
+        persist_selected_plugins(&mut *conn, scan_id, &project_id, selected_plugins).await?;
+    persist_scan_inputs(&mut *conn, scan_id, inputs, &selected_revision_map).await?;
 
     let mut plugins = Vec::new();
     for sel in selected_plugins {
@@ -388,100 +619,11 @@ pub(super) async fn begin_scan_run(
                 ))
             })?;
 
-        let revision_id_for_code = revision_id.clone();
-        let code = sqlx::query_scalar!(
-            r#"SELECT code FROM PluginRevision WHERE id = ?1 LIMIT 1"#,
-            revision_id_for_code,
-        )
-        .fetch_optional(&mut *conn)
-        .await?
-        .flatten()
-        .filter(|c: &String| !c.trim().is_empty());
-
-        let revision_id_for_metrics_fn = revision_id.clone();
-        let update_metrics_fn = sqlx::query_scalar!(
-            "SELECT update_metrics_fn FROM PluginRevision WHERE id = ?1 LIMIT 1",
-            revision_id_for_metrics_fn,
-        )
-        .fetch_optional(&mut *conn)
-        .await?
-        .flatten();
-
-        let revision_id_for_ep = revision_id.clone();
-        let ep_fn = sqlx::query_scalar!(
-            r#"SELECT function_name as "function_name!" FROM PluginRevisionEntrypoint
-               WHERE revision_id = ?1 AND id = ?2 LIMIT 1"#,
-            revision_id_for_ep,
-            sel.entrypoint_id,
-        )
-        .fetch_optional(&mut *conn)
-        .await?;
-
-        let entrypoint_function = ep_fn.unwrap_or_else(|| sel.entrypoint_id.clone());
-
-        let psid_for_settings = psid.clone();
-        let sv_rows = sqlx::query!(
-            r#"SELECT setting_name as "setting_name!", value_json as "value_json!"
-               FROM ProjectPluginSettingValue
-               WHERE plugin_id = ?1 AND project_settings_id = ?2"#,
-            sel.plugin_id,
-            psid_for_settings,
-        )
-        .fetch_all(&mut *conn)
-        .await?;
-
-        let settings = sv_rows
-            .into_iter()
-            .map(|row| {
-                let value = serde_json::from_str::<serde_json::Value>(&row.value_json)
-                    .map(|v| SettingValue::from_json(&v))
-                    .unwrap_or(SettingValue::Null);
-                PluginSettingValue {
-                    name: row.setting_name,
-                    value,
-                }
-            })
-            .collect();
-
-        let revision_id_for_metric_defs = revision_id.clone();
-        let metric_rows = sqlx::query!(
-            r#"SELECT name as "name!", title as "title!",
-                 type_json as "type_json!", description
-             FROM PluginRevisionMetricDef WHERE revision_id = ?1 ORDER BY rowid"#,
-            revision_id_for_metric_defs,
-        )
-        .fetch_all(&mut *conn)
-        .await?;
-
-        let metric_defs = metric_rows
-            .into_iter()
-            .map(|row| PluginMetricDef {
-                name: row.name,
-                title: row.title,
-                type_: serde_json::from_str::<PluginFieldTypeDef>(&row.type_json).unwrap_or(
-                    PluginFieldTypeDef {
-                        name: "string".to_string(),
-                        values: None,
-                    },
-                ),
-                description: row.description,
-            })
-            .collect();
-
-        plugins.push(PluginLoadData {
-            plugin_id: sel.plugin_id.clone(),
-            plugin_revision_id: revision_id,
-            entrypoint_id: sel.entrypoint_id.clone(),
-            entrypoint_function,
-            metric_defs,
-            settings,
-            code,
-            update_metrics_fn,
-        });
+        plugins.push(load_plugin_run_data(&mut *conn, &psid, sel, revision_id).await?);
     }
 
     Ok(ScanRunContext {
-        scan_preview: scan.preview,
+        scan_preview,
         plugins,
     })
 }
@@ -495,101 +637,11 @@ pub(super) async fn end_scan_run(
     let mut guard = this.conn.lock().await;
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
-    for result in &results {
-        let plugin_revision_id = result.plugin_revision_id.clone().ok_or_else(|| {
-            PersistenceError::Validation(format!(
-                "Plugin result '{}::{}' is missing plugin revision id",
-                result.plugin_id, result.entrypoint_id
-            ))
-        })?;
+    persist_scan_results(&mut *conn, scan_id, &results).await?;
+    complete_scan(&mut *conn, scan_id, preview.as_deref()).await?;
+    upsert_scan_metrics(&mut *conn, &results).await?;
 
-        let rid = Uuid::new_v4().to_string();
-        let rid_for_result = rid.clone();
-        let ok_i64 = result.output.ok as i64;
-        let error = result.output.error.as_deref();
-        let data_json = result.output.data_json.as_deref();
-        sqlx::query!(
-            "INSERT INTO ScanPluginResult \
-               (id, plugin_id, plugin_revision_id, entrypoint_id, scan_id, ok, error, data_json) \
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            rid_for_result,
-            result.plugin_id,
-            plugin_revision_id,
-            result.entrypoint_id,
-            scan_id,
-            ok_i64,
-            error,
-            data_json,
-        )
-        .execute(&mut *conn)
-        .await?;
-
-        for log in &result.output.logs {
-            let level = match log.level {
-                LogLevel::Warn => "warn",
-                LogLevel::Error => "error",
-                LogLevel::Log => "log",
-            };
-            let log_id = Uuid::new_v4().to_string();
-            let rid_for_log = rid.clone();
-            sqlx::query!(
-                "INSERT INTO ScanPluginLog (id, scan_result_id, level, message) \
-                 VALUES (?1, ?2, ?3, ?4)",
-                log_id,
-                rid_for_log,
-                level,
-                log.message,
-            )
-            .execute(&mut *conn)
-            .await?;
-        }
-    }
-
-    let preview_value = preview.as_deref();
-    sqlx::query!(
-        "UPDATE Scan SET status = 'Completed', \
-         preview = COALESCE(?1, preview) WHERE id = ?2",
-        preview_value,
-        scan_id,
-    )
-    .execute(&mut *conn)
-    .await?;
-
-    // UPSERT collected metric values into the per-plugin store.
-    for result in &results {
-        for metric in &result.metrics {
-            let metric_value_json = metric.value.to_json_string();
-            sqlx::query!(
-                "INSERT INTO PluginMetric (plugin_id, metric_name, value_json) \
-                 VALUES (?1, ?2, ?3) \
-                 ON CONFLICT(plugin_id, metric_name) DO UPDATE SET value_json = excluded.value_json",
-                result.plugin_id,
-                metric.name,
-                metric_value_json,
-            )
-            .execute(&mut *conn)
-            .await?;
-        }
-    }
-
-    let row = sqlx::query!(
-        r#"SELECT id as "id!", status as "status!", preview,
-                        COALESCE(created_at, CURRENT_TIMESTAMP) as "created_at!: String",
-                is_archived as "is_archived!", sort_order as "sort_order!"
-            FROM Scan WHERE id = ?1 LIMIT 1"#,
-        scan_id,
-    )
-    .fetch_one(&mut *conn)
-    .await?;
-
-    Ok(map_scan_summary(ScanSummaryRow {
-        id: row.id,
-        status: row.status,
-        preview: row.preview,
-        created_at: row.created_at,
-        is_archived: row.is_archived,
-        sort_order: row.sort_order,
-    }))
+    fetch_scan_summary_by_id(&mut *conn, scan_id).await
 }
 
 pub(super) async fn update_scan_preview(
@@ -607,28 +659,15 @@ pub(super) async fn update_scan_preview(
     let mut guard = this.conn.lock().await;
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
 
-    sqlx::query!("UPDATE Scan SET preview = ?1 WHERE id = ?2", next, scan_id)
-        .execute(&mut *conn)
-        .await?;
-
-    let row = sqlx::query!(
-        r#"SELECT id as "id!", status as "status!", preview,
-                        COALESCE(created_at, CURRENT_TIMESTAMP) as "created_at!: String",
-                is_archived as "is_archived!", sort_order as "sort_order!"
-            FROM Scan WHERE id = ?1 LIMIT 1"#,
-        scan_id,
+    sqlx::query!(
+        r#"UPDATE Scan SET preview = ?1 WHERE id = ?2"#,
+        next,
+        scan_id
     )
-    .fetch_one(&mut *conn)
+    .execute(&mut *conn)
     .await?;
 
-    Ok(map_scan_summary(ScanSummaryRow {
-        id: row.id,
-        status: row.status,
-        preview: row.preview,
-        created_at: row.created_at,
-        is_archived: row.is_archived,
-        sort_order: row.sort_order,
-    }))
+    fetch_scan_summary_by_id(&mut *conn, scan_id).await
 }
 
 pub(super) async fn set_scan_archived(
@@ -648,24 +687,7 @@ pub(super) async fn set_scan_archived(
     .execute(&mut *conn)
     .await?;
 
-    let row = sqlx::query!(
-        r#"SELECT id as "id!", status as "status!", preview,
-                        COALESCE(created_at, CURRENT_TIMESTAMP) as "created_at!: String",
-                is_archived as "is_archived!", sort_order as "sort_order!"
-            FROM Scan WHERE id = ?1 LIMIT 1"#,
-        scan_id,
-    )
-    .fetch_one(&mut *conn)
-    .await?;
-
-    Ok(map_scan_summary(ScanSummaryRow {
-        id: row.id,
-        status: row.status,
-        preview: row.preview,
-        created_at: row.created_at,
-        is_archived: row.is_archived,
-        sort_order: row.sort_order,
-    }))
+    fetch_scan_summary_by_id(&mut *conn, scan_id).await
 }
 
 pub(super) async fn reorder_scans(
@@ -712,28 +734,5 @@ pub(super) async fn reorder_scans(
         .await?;
     }
 
-    let rows = sqlx::query!(
-        r#"SELECT id as "id!", status as "status!", preview,
-                COALESCE(created_at, CURRENT_TIMESTAMP) as "created_at!: String",
-                  is_archived as "is_archived!", sort_order as "sort_order!"
-           FROM Scan WHERE project_id = ?1
-           ORDER BY is_archived ASC, sort_order ASC, rowid DESC"#,
-        project_id,
-    )
-    .fetch_all(&mut *conn)
-    .await?;
-
-    Ok(rows
-        .into_iter()
-        .map(|row| {
-            map_scan_summary(ScanSummaryRow {
-                id: row.id,
-                status: row.status,
-                preview: row.preview,
-                created_at: row.created_at,
-                is_archived: row.is_archived,
-                sort_order: row.sort_order,
-            })
-        })
-        .collect())
+    list_scan_summaries_by_project(&mut *conn, &project_id).await
 }

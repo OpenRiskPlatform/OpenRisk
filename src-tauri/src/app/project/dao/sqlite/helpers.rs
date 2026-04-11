@@ -19,6 +19,24 @@ pub(super) fn normalize_theme(value: Option<String>) -> String {
     }
 }
 
+pub(super) async fn project_id(conn: &mut SqliteConnection) -> Result<String, PersistenceError> {
+    let row = sqlx::query!(r#"SELECT id as "id!: String" FROM Project LIMIT 1"#)
+        .fetch_one(conn)
+        .await?;
+    Ok(row.id)
+}
+
+pub(super) async fn project_settings_id(
+    conn: &mut SqliteConnection,
+) -> Result<String, PersistenceError> {
+    let row = sqlx::query!(
+        r#"SELECT project_settings_id as "project_settings_id!: String" FROM Project LIMIT 1"#
+    )
+    .fetch_one(conn)
+    .await?;
+    Ok(row.project_settings_id)
+}
+
 pub(super) async fn load_scan_logs(
     conn: &mut SqliteConnection,
     scan_result_id: &str,
@@ -48,12 +66,51 @@ pub(super) async fn load_scan_logs(
         .collect())
 }
 
-pub(super) async fn load_plugin_record(
+fn parse_setting_value_json(value_json: &str) -> SettingValue {
+    serde_json::from_str::<serde_json::Value>(value_json)
+        .map(|v| SettingValue::from_json(&v))
+        .unwrap_or(SettingValue::Null)
+}
+
+fn parse_field_type(type_json: &str, enum_values_json: Option<&str>) -> PluginFieldTypeDef {
+    let mut field_type =
+        serde_json::from_str::<PluginFieldTypeDef>(type_json).unwrap_or(PluginFieldTypeDef {
+            name: "string".to_string(),
+            values: None,
+        });
+
+    if field_type.values.is_none() {
+        field_type.values = enum_values_json.and_then(|s| {
+            serde_json::from_str::<Vec<String>>(s)
+                .ok()
+                .filter(|v| !v.is_empty())
+        });
+    }
+
+    field_type
+}
+
+fn parse_default_setting_value(default_value_json: Option<&str>) -> Option<SettingValue> {
+    default_value_json.and_then(|s| {
+        serde_json::from_str::<serde_json::Value>(s)
+            .ok()
+            .map(|v| SettingValue::from_json(&v))
+    })
+}
+
+struct PluginHead {
+    id: String,
+    name: String,
+    version: String,
+    enabled: bool,
+    manifest: PluginManifestRecord,
+}
+
+async fn load_plugin_head(
     conn: &mut SqliteConnection,
     plugin_id: &str,
     project_id: &str,
-    project_settings_id: &str,
-) -> Result<PluginRecord, PersistenceError> {
+) -> Result<PluginHead, PersistenceError> {
     let row = sqlx::query!(
         r#"SELECT p.id as "id!", pr.name as "name!",
               pr.version as "version!", COALESCE(pp.enabled, 1) as "enabled!: i64",
@@ -80,16 +137,30 @@ pub(super) async fn load_plugin_record(
         id: row.id.clone(),
         name: row.name.clone(),
         version: row.version.clone(),
-        description: row.description.clone().unwrap_or_default(),
-        license: row.license.clone().unwrap_or_default(),
+        description: row.description.unwrap_or_default(),
+        license: row.license.unwrap_or_default(),
         authors,
-        icon: row.icon.clone(),
-        homepage: row.homepage.clone(),
-        update_metrics_fn: row.update_metrics_fn.clone(),
+        icon: row.icon,
+        homepage: row.homepage,
+        update_metrics_fn: row.update_metrics_fn,
     };
 
-    let ep_rows = sqlx::query!(
-         r#"SELECT pre.id as "id!", pre.name as "name!",
+    Ok(PluginHead {
+        id: row.id,
+        name: row.name,
+        version: row.version,
+        enabled: row.enabled != 0,
+        manifest,
+    })
+}
+
+async fn load_plugin_entrypoints(
+    conn: &mut SqliteConnection,
+    plugin_id: &str,
+    project_id: &str,
+) -> Result<Vec<PluginEntrypointRecord>, PersistenceError> {
+    let rows = sqlx::query!(
+        r#"SELECT pre.id as "id!", pre.name as "name!",
                 pre.function_name as "function_name!", pre.description
             FROM Plugin p
             LEFT JOIN ProjectPlugin pp ON pp.plugin_id = p.id AND pp.project_id = ?2
@@ -102,18 +173,24 @@ pub(super) async fn load_plugin_record(
     .fetch_all(&mut *conn)
     .await?;
 
-    let entrypoints = ep_rows
+    Ok(rows
         .into_iter()
-        .map(|ep| PluginEntrypointRecord {
-            id: ep.id,
-            name: ep.name,
-            function_name: ep.function_name,
-            description: ep.description,
+        .map(|row| PluginEntrypointRecord {
+            id: row.id,
+            name: row.name,
+            function_name: row.function_name,
+            description: row.description,
         })
-        .collect();
+        .collect())
+}
 
-    let input_rows = sqlx::query!(
-            r#"SELECT prid.entrypoint_id as "entrypoint_id!",
+async fn load_plugin_input_defs(
+    conn: &mut SqliteConnection,
+    plugin_id: &str,
+    project_id: &str,
+) -> Result<Vec<PluginInputDef>, PersistenceError> {
+    let rows = sqlx::query!(
+        r#"SELECT prid.entrypoint_id as "entrypoint_id!",
                       prid.name as "name!", prid.title as "title!",
                       prid.type_json as "type_json!", prid.enum_values_json,
                       prid.optional, prid.description, prid.default_value_json
@@ -122,46 +199,33 @@ pub(super) async fn load_plugin_record(
                INNER JOIN PluginRevisionInputDef prid ON prid.revision_id = COALESCE(pp.pinned_revision_id, p.current_revision_id)
                WHERE p.id = ?1
                ORDER BY prid.rowid"#,
-            plugin_id,
-            project_id,
-        )
-        .fetch_all(&mut *conn)
-        .await?;
+        plugin_id,
+        project_id,
+    )
+    .fetch_all(&mut *conn)
+    .await?;
 
-    let input_defs = input_rows
+    Ok(rows
         .into_iter()
-        .map(|row| {
-            let mut field_type = serde_json::from_str::<PluginFieldTypeDef>(&row.type_json)
-                .unwrap_or(PluginFieldTypeDef {
-                    name: "string".to_string(),
-                    values: None,
-                });
-            if field_type.values.is_none() {
-                field_type.values = row.enum_values_json.as_deref().and_then(|s| {
-                    serde_json::from_str::<Vec<String>>(s)
-                        .ok()
-                        .filter(|v| !v.is_empty())
-                });
-            }
-            let default_value = row.default_value_json.as_deref().and_then(|s| {
-                serde_json::from_str::<serde_json::Value>(s)
-                    .ok()
-                    .map(|v| SettingValue::from_json(&v))
-            });
-            PluginInputDef {
-                entrypoint_id: row.entrypoint_id,
-                name: row.name,
-                title: row.title,
-                type_: field_type,
-                optional: row.optional != 0,
-                description: row.description,
-                default_value,
-            }
+        .map(|row| PluginInputDef {
+            entrypoint_id: row.entrypoint_id,
+            name: row.name,
+            title: row.title,
+            type_: parse_field_type(&row.type_json, row.enum_values_json.as_deref()),
+            optional: row.optional != 0,
+            description: row.description,
+            default_value: parse_default_setting_value(row.default_value_json.as_deref()),
         })
-        .collect();
+        .collect())
+}
 
-    let sdef_rows = sqlx::query!(
-            r#"SELECT prs.name as "name!", prs.title as "title!",
+async fn load_plugin_setting_defs(
+    conn: &mut SqliteConnection,
+    plugin_id: &str,
+    project_id: &str,
+) -> Result<Vec<PluginSettingDef>, PersistenceError> {
+    let rows = sqlx::query!(
+        r#"SELECT prs.name as "name!", prs.title as "title!",
                       prs.type_json as "type_json!", prs.enum_values_json, prs.description,
                       prs.required, prs.default_value_json
                FROM Plugin p
@@ -169,44 +233,31 @@ pub(super) async fn load_plugin_record(
                INNER JOIN PluginRevisionSettingDef prs ON prs.revision_id = COALESCE(pp.pinned_revision_id, p.current_revision_id)
                WHERE p.id = ?1
                ORDER BY prs.rowid"#,
-            plugin_id,
-            project_id,
-        )
-        .fetch_all(&mut *conn)
-        .await?;
+        plugin_id,
+        project_id,
+    )
+    .fetch_all(&mut *conn)
+    .await?;
 
-    let setting_defs = sdef_rows
+    Ok(rows
         .into_iter()
-        .map(|row| {
-            let mut field_type = serde_json::from_str::<PluginFieldTypeDef>(&row.type_json)
-                .unwrap_or(PluginFieldTypeDef {
-                    name: "string".to_string(),
-                    values: None,
-                });
-            if field_type.values.is_none() {
-                field_type.values = row.enum_values_json.as_deref().and_then(|s| {
-                    serde_json::from_str::<Vec<String>>(s)
-                        .ok()
-                        .filter(|v| !v.is_empty())
-                });
-            }
-            let default_value = row.default_value_json.as_deref().and_then(|s| {
-                serde_json::from_str::<serde_json::Value>(s)
-                    .ok()
-                    .map(|v| SettingValue::from_json(&v))
-            });
-            PluginSettingDef {
-                name: row.name,
-                title: row.title,
-                type_: field_type,
-                description: row.description,
-                required: row.required != 0,
-                default_value,
-            }
+        .map(|row| PluginSettingDef {
+            name: row.name,
+            title: row.title,
+            type_: parse_field_type(&row.type_json, row.enum_values_json.as_deref()),
+            description: row.description,
+            required: row.required != 0,
+            default_value: parse_default_setting_value(row.default_value_json.as_deref()),
         })
-        .collect();
+        .collect())
+}
 
-    let mdef_rows = sqlx::query!(
+async fn load_plugin_metric_defs(
+    conn: &mut SqliteConnection,
+    plugin_id: &str,
+    project_id: &str,
+) -> Result<Vec<PluginMetricDef>, PersistenceError> {
+    let rows = sqlx::query!(
         r#"SELECT prm.name as "name!", prm.title as "title!",
                   prm.type_json as "type_json!", prm.enum_values_json, prm.description
            FROM Plugin p
@@ -220,33 +271,24 @@ pub(super) async fn load_plugin_record(
     .fetch_all(&mut *conn)
     .await?;
 
-    let metric_defs = mdef_rows
+    Ok(rows
         .into_iter()
-        .map(|row| {
-            let mut field_type = serde_json::from_str::<PluginFieldTypeDef>(&row.type_json)
-                .unwrap_or(PluginFieldTypeDef {
-                    name: "string".to_string(),
-                    values: None,
-                });
-            if field_type.values.is_none() {
-                field_type.values = row.enum_values_json.as_deref().and_then(|s| {
-                    serde_json::from_str::<Vec<String>>(s)
-                        .ok()
-                        .filter(|v| !v.is_empty())
-                });
-            }
-
-            PluginMetricDef {
-                name: row.name,
-                title: row.title,
-                type_: field_type,
-                description: row.description,
-            }
+        .map(|row| PluginMetricDef {
+            name: row.name,
+            title: row.title,
+            type_: parse_field_type(&row.type_json, row.enum_values_json.as_deref()),
+            description: row.description,
         })
-        .collect();
+        .collect())
+}
 
-    let mval_rows = sqlx::query!(
-                r#"SELECT m.metric_name as "metric_name!", d.type_json as "type_json!",
+async fn load_plugin_metric_values(
+    conn: &mut SqliteConnection,
+    plugin_id: &str,
+    project_id: &str,
+) -> Result<Vec<PluginMetricValue>, PersistenceError> {
+    let rows = sqlx::query!(
+        r#"SELECT m.metric_name as "metric_name!", d.type_json as "type_json!",
                                     m.value_json as "value_json!", d.description,
                                       COALESCE(d.title, m.metric_name) as "title!: String"
                      FROM PluginMetric m
@@ -266,29 +308,24 @@ pub(super) async fn load_plugin_record(
     .fetch_all(&mut *conn)
     .await?;
 
-    let metric_values = mval_rows
+    Ok(rows
         .into_iter()
-        .map(|row| {
-            let type_ = serde_json::from_str::<PluginFieldTypeDef>(&row.type_json).unwrap_or(
-                PluginFieldTypeDef {
-                    name: "string".to_string(),
-                    values: None,
-                },
-            );
-            let value = serde_json::from_str::<serde_json::Value>(&row.value_json)
-                .map(|v| SettingValue::from_json(&v))
-                .unwrap_or(SettingValue::Null);
-            PluginMetricValue {
-                name: row.metric_name,
-                title: row.title,
-                type_,
-                description: row.description,
-                value,
-            }
+        .map(|row| PluginMetricValue {
+            name: row.metric_name,
+            title: row.title,
+            type_: parse_field_type(&row.type_json, None),
+            description: row.description,
+            value: parse_setting_value_json(&row.value_json),
         })
-        .collect();
+        .collect())
+}
 
-    let sv_rows = sqlx::query!(
+async fn load_plugin_setting_values(
+    conn: &mut SqliteConnection,
+    plugin_id: &str,
+    project_settings_id: &str,
+) -> Result<Vec<PluginSettingValue>, PersistenceError> {
+    let rows = sqlx::query!(
         r#"SELECT setting_name as "setting_name!", value_json as "value_json!"
            FROM ProjectPluginSettingValue
            WHERE plugin_id = ?1 AND project_settings_id = ?2"#,
@@ -298,25 +335,35 @@ pub(super) async fn load_plugin_record(
     .fetch_all(&mut *conn)
     .await?;
 
-    let setting_values = sv_rows
+    Ok(rows
         .into_iter()
-        .map(|row| {
-            let value = serde_json::from_str::<serde_json::Value>(&row.value_json)
-                .map(|v| SettingValue::from_json(&v))
-                .unwrap_or(SettingValue::Null);
-            PluginSettingValue {
-                name: row.setting_name,
-                value,
-            }
+        .map(|row| PluginSettingValue {
+            name: row.setting_name,
+            value: parse_setting_value_json(&row.value_json),
         })
-        .collect();
+        .collect())
+}
+
+pub(super) async fn load_plugin_record(
+    conn: &mut SqliteConnection,
+    plugin_id: &str,
+    project_id: &str,
+    project_settings_id: &str,
+) -> Result<PluginRecord, PersistenceError> {
+    let head = load_plugin_head(conn, plugin_id, project_id).await?;
+    let entrypoints = load_plugin_entrypoints(conn, plugin_id, project_id).await?;
+    let input_defs = load_plugin_input_defs(conn, plugin_id, project_id).await?;
+    let setting_defs = load_plugin_setting_defs(conn, plugin_id, project_id).await?;
+    let metric_defs = load_plugin_metric_defs(conn, plugin_id, project_id).await?;
+    let metric_values = load_plugin_metric_values(conn, plugin_id, project_id).await?;
+    let setting_values = load_plugin_setting_values(conn, plugin_id, project_settings_id).await?;
 
     Ok(PluginRecord {
-        id: row.id,
-        name: row.name,
-        version: row.version,
-        enabled: row.enabled != 0,
-        manifest,
+        id: head.id,
+        name: head.name,
+        version: head.version,
+        enabled: head.enabled,
+        manifest: head.manifest,
         entrypoints,
         input_defs,
         setting_defs,

@@ -1,25 +1,28 @@
 //! DAO functions for project settings, plugin records, and plugin setting values.
 
-use super::helpers::{conn_unavailable, load_plugin_record, normalize_theme};
+use super::helpers::{
+    conn_unavailable, load_plugin_record, normalize_theme, project_id, project_settings_id,
+};
 use crate::app::project::plugins::LocalPluginBundle;
 use crate::app::project::session::SqliteProjectPersistence;
 use crate::app::project::types::*;
-use sqlx::SqliteConnection;
 
-async fn project_settings_id(conn: &mut SqliteConnection) -> Result<String, PersistenceError> {
-    let row = sqlx::query!(
-        r#"SELECT project_settings_id as "project_settings_id!" FROM Project LIMIT 1"#
+async fn ensure_project_plugin_link(
+    conn: &mut sqlx::SqliteConnection,
+    project_id: &str,
+    plugin_id: &str,
+) -> Result<(), PersistenceError> {
+    sqlx::query!(
+        r#"INSERT INTO ProjectPlugin (project_id, plugin_id, pinned_revision_id, enabled)
+           VALUES (?1, ?2, (SELECT current_revision_id FROM Plugin WHERE id = ?2), 1)
+           ON CONFLICT(project_id, plugin_id) DO UPDATE SET enabled = 1"#,
+        project_id,
+        plugin_id,
     )
-    .fetch_one(conn)
+    .execute(&mut *conn)
     .await?;
-    Ok(row.project_settings_id)
-}
 
-async fn project_id(conn: &mut SqliteConnection) -> Result<String, PersistenceError> {
-    let row = sqlx::query!(r#"SELECT id as "id!" FROM Project LIMIT 1"#)
-        .fetch_one(conn)
-        .await?;
-    Ok(row.id)
+    Ok(())
 }
 
 pub(super) async fn load_settings(
@@ -145,15 +148,7 @@ pub(super) async fn set_plugin_setting(
     let psid = project_settings_id(&mut *conn).await?;
     let project_id = project_id(&mut *conn).await?;
 
-    sqlx::query!(
-        r#"INSERT INTO ProjectPlugin (project_id, plugin_id, pinned_revision_id, enabled)
-           VALUES (?1, ?2, (SELECT current_revision_id FROM Plugin WHERE id = ?2), 1)
-           ON CONFLICT(project_id, plugin_id) DO UPDATE SET enabled = 1"#,
-        project_id,
-        plugin_id,
-    )
-    .execute(&mut *conn)
-    .await?;
+    ensure_project_plugin_link(&mut *conn, &project_id, plugin_id).await?;
 
     let value_json = value.to_json_string();
     sqlx::query!(
@@ -226,15 +221,7 @@ pub(super) async fn save_plugin_setting_values(
     let psid = project_settings_id(&mut *conn).await?;
     let project_id = project_id(&mut *conn).await?;
 
-    sqlx::query!(
-        r#"INSERT INTO ProjectPlugin (project_id, plugin_id, pinned_revision_id, enabled)
-           VALUES (?1, ?2, (SELECT current_revision_id FROM Plugin WHERE id = ?2), 1)
-           ON CONFLICT(project_id, plugin_id) DO UPDATE SET enabled = 1"#,
-        project_id,
-        plugin_id,
-    )
-    .execute(&mut *conn)
-    .await?;
+    ensure_project_plugin_link(&mut *conn, &project_id, plugin_id).await?;
 
     for sv in values {
         let vj = sv.value.to_json_string();

@@ -95,7 +95,7 @@ impl SqliteProjectPersistence {
 
         let project_settings_id = Uuid::new_v4().to_string();
         sqlx::query!(
-            "INSERT INTO ProjectSettings (id, description, locale, theme) VALUES (?1, ?2, ?3, ?4)",
+            r#"INSERT INTO ProjectSettings (id, description, locale, theme) VALUES (?1, ?2, ?3, ?4)"#,
             project_settings_id,
             "",
             "en-US",
@@ -107,7 +107,7 @@ impl SqliteProjectPersistence {
         let project_id = Uuid::new_v4().to_string();
         let project_id_for_insert = project_id.clone();
         sqlx::query!(
-            "INSERT INTO Project (id, name, audit, project_settings_id) VALUES (?1, ?2, ?3, ?4)",
+            r#"INSERT INTO Project (id, name, audit, project_settings_id) VALUES (?1, ?2, ?3, ?4)"#,
             project_id_for_insert,
             trimmed_name,
             Option::<String>::None,
@@ -193,10 +193,9 @@ impl SqliteProjectPersistence {
         };
 
         migrations::apply_schema(&mut conn).await?;
-        migrations::apply_migrations_to_latest(&mut conn).await?;
 
         let project_row = sqlx::query!(
-            "SELECT id as \"id!: String\", name as \"name!: String\", audit FROM Project LIMIT 1"
+            r#"SELECT id as "id!: String", name as "name!: String", audit FROM Project LIMIT 1"#
         )
         .fetch_one(&mut conn)
         .await?;
@@ -241,14 +240,14 @@ impl SqliteProjectPersistence {
         }
 
         // Force SQLCipher key validation by reading the schema.
-        let _ = sqlx::query_scalar!("SELECT count(1) FROM sqlite_master")
+        let _ = sqlx::query_scalar!(r#"SELECT count(1) FROM sqlite_master"#)
             .fetch_one(&mut conn)
             .await?;
 
-        sqlx::query("PRAGMA foreign_keys = ON;")
+        sqlx::query(r#"PRAGMA foreign_keys = ON;"#)
             .execute(&mut conn)
             .await?;
-        sqlx::query("PRAGMA journal_mode = WAL;")
+        sqlx::query(r#"PRAGMA journal_mode = WAL;"#)
             .execute(&mut conn)
             .await?;
 
@@ -329,20 +328,20 @@ impl SqliteProjectPersistence {
         let authors_json = serde_json::to_string(&plugin.manifest.authors)?;
 
         sqlx::query!(
-            "INSERT INTO Plugin \
-             (id, current_revision_id) \
-             VALUES (?1, NULL) \
-             ON CONFLICT(id) DO UPDATE SET \
-                 id = excluded.id",
+            r#"INSERT INTO Plugin
+             (id, current_revision_id)
+             VALUES (?1, NULL)
+             ON CONFLICT(id) DO UPDATE SET
+                 id = excluded.id"#,
             plugin.id,
         )
         .execute(&mut *conn)
         .await?;
 
         sqlx::query!(
-            "INSERT INTO PluginRevision \
-               (id, plugin_id, version, name, description, license, authors_json, icon, homepage, update_metrics_fn, code) \
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                r#"INSERT INTO PluginRevision
+                    (id, plugin_id, version, name, description, license, authors_json, icon, homepage, update_metrics_fn, code)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)"#,
             revision_id,
             plugin.id,
             version,
@@ -359,24 +358,24 @@ impl SqliteProjectPersistence {
         .await?;
 
         sqlx::query!(
-            "UPDATE Plugin SET current_revision_id = ?1 WHERE id = ?2",
+            r#"UPDATE Plugin SET current_revision_id = ?1 WHERE id = ?2"#,
             revision_id,
             plugin.id,
         )
         .execute(&mut *conn)
         .await?;
 
-        let project_id = sqlx::query_scalar!("SELECT id FROM Project LIMIT 1")
+        let project_id = sqlx::query_scalar!(r#"SELECT id FROM Project LIMIT 1"#)
             .fetch_optional(&mut *conn)
             .await?
             .flatten();
         if let Some(project_id) = project_id {
             sqlx::query!(
-                "INSERT INTO ProjectPlugin (project_id, plugin_id, pinned_revision_id, enabled) \
-                 VALUES (?1, ?2, ?3, 1) \
-                 ON CONFLICT(project_id, plugin_id) DO UPDATE SET \
-                     pinned_revision_id = excluded.pinned_revision_id, \
-                     enabled = excluded.enabled",
+                r#"INSERT INTO ProjectPlugin (project_id, plugin_id, pinned_revision_id, enabled)
+                 VALUES (?1, ?2, ?3, 1)
+                 ON CONFLICT(project_id, plugin_id) DO UPDATE SET
+                     pinned_revision_id = excluded.pinned_revision_id,
+                     enabled = excluded.enabled"#,
                 project_id,
                 plugin.id,
                 revision_id,
@@ -390,8 +389,8 @@ impl SqliteProjectPersistence {
             let ep_name: String = ep.name.clone().into();
             let ep_fn: String = ep.function.clone().into();
             sqlx::query!(
-                "INSERT INTO PluginRevisionEntrypoint (revision_id, id, name, function_name, description) \
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                r#"INSERT INTO PluginRevisionEntrypoint (revision_id, id, name, function_name, description)
+                 VALUES (?1, ?2, ?3, ?4, ?5)"#,
                 revision_id,
                 ep_id,
                 ep_name,
@@ -432,9 +431,9 @@ impl SqliteProjectPersistence {
                     .as_ref()
                     .map(|v| serde_json::to_string(v).unwrap_or_default());
                 sqlx::query!(
-                    "INSERT INTO PluginRevisionInputDef \
-                     (revision_id, entrypoint_id, name, title, type_, type_json, enum_values_json, optional, description, default_value_json) \
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                    r#"INSERT INTO PluginRevisionInputDef
+                     (revision_id, entrypoint_id, name, title, type_, type_json, enum_values_json, optional, description, default_value_json)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"#,
                     revision_id,
                     ep_id,
                     name_str,
@@ -478,9 +477,9 @@ impl SqliteProjectPersistence {
                 .as_ref()
                 .map(|v| serde_json::to_string(v).unwrap_or_default());
             sqlx::query!(
-                "INSERT INTO PluginRevisionSettingDef \
-                 (revision_id, name, title, type_, type_json, enum_values_json, description, required, default_value_json) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                r#"INSERT INTO PluginRevisionSettingDef
+                 (revision_id, name, title, type_, type_json, enum_values_json, description, required, default_value_json)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"#,
                 revision_id,
                 name_str,
                 title_str,
@@ -506,9 +505,9 @@ impl SqliteProjectPersistence {
                 .filter(|v| !v.is_empty())
                 .map(|v| serde_json::to_string(&v).unwrap_or_default());
             sqlx::query!(
-                "INSERT INTO PluginRevisionMetricDef \
-                 (revision_id, name, title, type_, type_json, enum_values_json, description) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                r#"INSERT INTO PluginRevisionMetricDef
+                 (revision_id, name, title, type_, type_json, enum_values_json, description)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"#,
                 revision_id,
                 metric.name,
                 metric.title,
@@ -608,10 +607,10 @@ impl SqliteProjectPersistence {
         };
 
         sqlx::query(&attach_sql).execute(&mut conn).await?;
-        sqlx::query("SELECT sqlcipher_export('__openrisk_rekey__');")
+        sqlx::query(r#"SELECT sqlcipher_export('__openrisk_rekey__');"#)
             .execute(&mut conn)
             .await?;
-        sqlx::query("DETACH DATABASE __openrisk_rekey__;")
+        sqlx::query(r#"DETACH DATABASE __openrisk_rekey__;"#)
             .execute(&mut conn)
             .await?;
         drop(conn);
