@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { unwrap } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -15,12 +15,14 @@ function unknownToSettingValue(v: unknown): SettingValue {
 
 interface PluginSettingsCardProps {
     plugin: PluginRecord;
+    metricsRefreshToken: number;
     onPluginUpdated: (plugin: PluginRecord) => void;
     backendClient: ReturnType<typeof useBackendClient>;
 }
 
 export function PluginSettingsCard({
     plugin,
+    metricsRefreshToken,
     onPluginUpdated,
     backendClient,
 }: PluginSettingsCardProps) {
@@ -35,6 +37,7 @@ export function PluginSettingsCard({
     const [saveError, setSaveError] = useState<string | null>(null);
     const [savedAt, setSavedAt] = useState<number | null>(null);
     const [refreshingMetrics, setRefreshingMetrics] = useState(false);
+    const lastRefreshKeyRef = useRef<string | null>(null);
 
     const handleSave = async () => {
         setSaveError(null);
@@ -68,8 +71,15 @@ export function PluginSettingsCard({
 
     useEffect(() => {
         if (!plugin.manifest.updateMetricsFn) {
+            lastRefreshKeyRef.current = null;
             return;
         }
+
+        const refreshKey = `${metricsRefreshToken}:${plugin.id}:${plugin.manifest.updateMetricsFn}`;
+        if (lastRefreshKeyRef.current === refreshKey) {
+            return;
+        }
+        lastRefreshKeyRef.current = refreshKey;
 
         let cancelled = false;
         setRefreshingMetrics(true);
@@ -96,7 +106,14 @@ export function PluginSettingsCard({
         return () => {
             cancelled = true;
         };
-    }, [plugin.id, plugin.manifest.updateMetricsFn, backendClient, onPluginUpdated]);
+    }, [metricsRefreshToken, plugin.id, plugin.manifest.updateMetricsFn, backendClient, onPluginUpdated]);
+
+    useEffect(() => {
+        // If values are already present, hide the loading hint even if refresh resolves later.
+        if (refreshingMetrics && plugin.metricValues.length > 0) {
+            setRefreshingMetrics(false);
+        }
+    }, [refreshingMetrics, plugin.metricValues.length]);
 
     return (
         <div className="border rounded-lg p-4 space-y-4">
@@ -180,7 +197,7 @@ export function PluginSettingsCard({
 
             <div className="space-y-2">
                 <p className="text-sm font-medium">Current Stats Values</p>
-                {refreshingMetrics ? (
+                {refreshingMetrics && plugin.metricValues.length === 0 ? (
                     <p className="text-xs text-muted-foreground">Refreshing stats...</p>
                 ) : null}
                 {plugin.metricValues.length === 0 ? (

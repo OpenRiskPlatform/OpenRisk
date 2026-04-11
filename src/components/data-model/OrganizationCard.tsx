@@ -2,7 +2,6 @@ import { Badge } from "@/components/ui/badge";
 import {
     Card,
     CardContent,
-    CardDescription,
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
@@ -18,6 +17,14 @@ function propList(entity: DataModelEntity, key: string): TypedValue[] {
 
 function firstProp(entity: DataModelEntity, key: string): TypedValue | undefined {
     return propList(entity, key)[0];
+}
+
+function hasDisplayValue(value: TypedValue | undefined): boolean {
+    if (!value) return false;
+    const raw = value.value;
+    if (raw === null || raw === undefined) return false;
+    if (typeof raw === "string" && raw.trim() === "") return false;
+    return true;
 }
 
 export function OrganizationCard({ entity }: { entity: DataModelEntity }) {
@@ -53,7 +60,6 @@ export function OrganizationCard({ entity }: { entity: DataModelEntity }) {
                             aka {aliases.map((a) => String(a.value)).join(", ")}
                         </p>
                     )}
-                    <CardDescription>ID: {entity.$id}</CardDescription>
                     <div className="flex flex-wrap gap-1.5 pt-1">
                         {isSanctioned && (
                             <Badge variant="destructive" className="text-xs font-semibold">
@@ -141,6 +147,10 @@ export function OrganizationCard({ entity }: { entity: DataModelEntity }) {
 }
 
 function Field({ label, value }: { label: string; value: TypedValue | undefined }) {
+    if (!hasDisplayValue(value)) {
+        return null;
+    }
+
     return (
         <div className="space-y-1">
             <p className="text-xs uppercase text-muted-foreground">{label}</p>

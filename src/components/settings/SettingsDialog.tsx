@@ -3,7 +3,7 @@
  */
 
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { SettingsSidebar } from "./SettingsSidebar";
 import { GeneralSettings } from "./GeneralSettings";
 import { PluginSettings } from "./PluginSettings";
@@ -25,6 +25,7 @@ interface SettingsDialogProps {
 export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialogProps) {
   const [activeCategory, setActiveCategory] =
     useState<SettingsCategory>("info");
+  const [metricsRefreshToken, setMetricsRefreshToken] = useState(0);
   const backendClient = useBackendClient();
   const { updateGlobalSettings } = useSettings();
   const [settingsData, setSettingsData] = useState<ProjectSettingsPayload | null>(
@@ -32,6 +33,12 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
   );
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setMetricsRefreshToken((prev) => prev + 1);
+    }
+  }, [open]);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,7 +80,7 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
     };
   }, [open, projectDir, backendClient, updateGlobalSettings]);
 
-  const handleProjectSettingsUpdated = (
+  const handleProjectSettingsUpdated = useCallback((
     settings: ProjectSettingsPayload["projectSettings"]
   ) => {
     setSettingsData((prev) => {
@@ -85,9 +92,9 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
         projectSettings: settings,
       };
     });
-  };
+  }, []);
 
-  const handleProjectNameUpdated = (name: string) => {
+  const handleProjectNameUpdated = useCallback((name: string) => {
     setSettingsData((prev) => {
       if (!prev) {
         return prev;
@@ -100,9 +107,9 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
         },
       };
     });
-  };
+  }, []);
 
-  const handlePluginUpdated = (plugin: ProjectSettingsPayload["plugins"][number]) => {
+  const handlePluginUpdated = useCallback((plugin: ProjectSettingsPayload["plugins"][number]) => {
     setSettingsData((prev) => {
       if (!prev) {
         return prev;
@@ -123,7 +130,7 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
         detail: { pluginId: plugin.id },
       })
     );
-  };
+  }, []);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -163,6 +170,7 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
                 projectDir={projectDir}
                 projectSettings={settingsData?.projectSettings ?? null}
                 plugins={settingsData?.plugins ?? []}
+                metricsRefreshToken={metricsRefreshToken}
                 loading={settingsLoading}
                 error={
                   projectDir

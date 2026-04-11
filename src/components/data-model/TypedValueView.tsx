@@ -6,7 +6,15 @@ interface TypedValueViewProps {
 
 export function TypedValueView({ item }: TypedValueViewProps) {
     if (!item) {
-        return <span className="text-muted-foreground">-</span>;
+        return null;
+    }
+
+    if (item.value === null || item.value === undefined) {
+        return null;
+    }
+
+    if (typeof item.value === "string" && item.value.trim() === "") {
+        return null;
     }
 
     if (item.$type === "image-url" && typeof item.value === "string") {

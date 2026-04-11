@@ -560,6 +560,44 @@ function requireTarget(inputs: PluginInputs): string {
 // HTTP client
 // ---------------------------------------------------------------------------
 
+const ADVERSEA_MAX_429_RETRIES = 3;
+const ADVERSEA_BASE_RETRY_DELAY_MS = 800;
+
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function retryDelayMs(attempt: number, retryAfterHeader: string | null): number {
+    const retryAfterSeconds = Number(retryAfterHeader);
+    if (!Number.isNaN(retryAfterSeconds) && retryAfterSeconds > 0) {
+        return retryAfterSeconds * 1000;
+    }
+    return ADVERSEA_BASE_RETRY_DELAY_MS * Math.pow(2, attempt);
+}
+
+async function adverseaFetchWithRetry(url: URL, apiKey: string): Promise<Response> {
+    let last429Body = "";
+    for (let attempt = 0; attempt <= ADVERSEA_MAX_429_RETRIES; attempt++) {
+        const res = await fetch(url.toString(), {
+            headers: { "X-Adversea-Api-Key": apiKey, Accept: "application/json" },
+        });
+
+        if (res.status !== 429) {
+            return res;
+        }
+
+        last429Body = await res.text().catch(() => res.statusText);
+        if (attempt === ADVERSEA_MAX_429_RETRIES) {
+            break;
+        }
+
+        const delayMs = retryDelayMs(attempt, res.headers.get("retry-after"));
+        await sleep(delayMs);
+    }
+
+    throw new Error(`Adversea 429: ${last429Body}`);
+}
+
 async function adverseaGet<T>(
     path: string,
     params: Record<string, string | number | boolean | undefined>,
@@ -571,9 +609,7 @@ async function adverseaGet<T>(
             url.searchParams.set(k, String(v));
         }
     }
-    const res = await fetch(url.toString(), {
-        headers: { "X-Adversea-Api-Key": apiKey, Accept: "application/json" },
-    });
+    const res = await adverseaFetchWithRetry(url, apiKey);
     if (!res.ok) {
         const msg = await res.text().catch(() => res.statusText);
         throw new Error(`Adversea ${res.status}: ${msg}`);
@@ -592,9 +628,7 @@ async function adverseaGetNumber(
             url.searchParams.set(k, String(v));
         }
     }
-    const res = await fetch(url.toString(), {
-        headers: { "X-Adversea-Api-Key": apiKey, Accept: "application/json" },
-    });
+    const res = await adverseaFetchWithRetry(url, apiKey);
     if (!res.ok) {
         const msg = await res.text().catch(() => res.statusText);
         throw new Error(`Adversea ${res.status}: ${msg}`);

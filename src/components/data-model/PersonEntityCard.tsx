@@ -2,7 +2,6 @@ import { Badge } from "@/components/ui/badge";
 import {
     Card,
     CardContent,
-    CardDescription,
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
@@ -24,6 +23,14 @@ function firstProp(entity: DataModelEntity, key: string): TypedValue | undefined
     return propList(entity, key)[0];
 }
 
+function hasDisplayValue(value: TypedValue | undefined): boolean {
+    if (!value) return false;
+    const raw = value.value;
+    if (raw === null || raw === undefined) return false;
+    if (typeof raw === "string" && raw.trim() === "") return false;
+    return true;
+}
+
 export function PersonEntityCard({ entity }: PersonEntityCardProps) {
     const name = firstProp(entity, "name");
     const notes = firstProp(entity, "notes");
@@ -37,6 +44,12 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
 
     const pepStatus = firstProp(entity, "pepStatus");
     const sanctioned = firstProp(entity, "sanctioned");
+    const notesText = notes
+        && notes.value !== null
+        && notes.value !== undefined
+        && (typeof notes.value !== "string" || notes.value.trim() !== "")
+        ? String(notes.value)
+        : null;
 
     const isPep = pepStatus?.value === true;
     const isSanctioned = sanctioned?.value === true;
@@ -54,7 +67,6 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
                             aka {aliases.map((a) => String(a.value)).join(", ")}
                         </p>
                     )}
-                    <CardDescription>ID: {entity.$id}</CardDescription>
                     <div className="flex flex-wrap gap-1.5 pt-1">
                         {isSanctioned && (
                             <Badge variant="destructive" className="text-xs font-semibold">
@@ -86,9 +98,9 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
                 <TagField label="Emails" values={emails} />
                 <TagField label="Phones" values={phones} />
 
-                {notes && (
+                {notesText && (
                     <p className="text-sm text-muted-foreground italic border-l-2 border-border pl-3">
-                        {String(notes.value)}
+                        {notesText}
                     </p>
                 )}
 
@@ -105,6 +117,10 @@ function Field({
     label: string;
     value: TypedValue | undefined;
 }) {
+    if (!hasDisplayValue(value)) {
+        return null;
+    }
+
     return (
         <div className="space-y-1">
             <p className="text-xs uppercase text-muted-foreground">{label}</p>
@@ -116,7 +132,14 @@ function Field({
 }
 
 function TagField({ label, values }: { label: string; values: TypedValue[] }) {
-    if (!values.length) {
+    const displayValues = values.filter((value) => {
+        const raw = value.value;
+        if (raw === null || raw === undefined) return false;
+        if (typeof raw === "string" && raw.trim() === "") return false;
+        return true;
+    });
+
+    if (!displayValues.length) {
         return null;
     }
 
@@ -124,7 +147,7 @@ function TagField({ label, values }: { label: string; values: TypedValue[] }) {
         <div className="space-y-2">
             <p className="text-xs uppercase text-muted-foreground">{label}</p>
             <div className="flex flex-wrap gap-2">
-                {values.map((value, index) => (
+                {displayValues.map((value, index) => (
                     <Badge key={`${label}-${index}`} variant="secondary">
                         {String(value.value)}
                     </Badge>

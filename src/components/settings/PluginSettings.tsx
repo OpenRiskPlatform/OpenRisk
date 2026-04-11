@@ -13,6 +13,7 @@ interface PluginSettingsProps {
     projectDir?: string;
     projectSettings: ProjectSettingsRecord | null;
     plugins: PluginRecord[];
+    metricsRefreshToken: number;
     loading: boolean;
     error?: string | null;
     onPluginUpdated: (plugin: PluginRecord) => void;
@@ -22,6 +23,7 @@ export function PluginSettings({
     projectDir,
     projectSettings,
     plugins,
+    metricsRefreshToken,
     loading,
     error,
     onPluginUpdated,
@@ -71,6 +73,7 @@ export function PluginSettings({
                         <PluginSettingsCard
                             key={plugin.id}
                             plugin={plugin}
+                            metricsRefreshToken={metricsRefreshToken}
                             onPluginUpdated={onPluginUpdated}
                             backendClient={backendClient}
                         />
