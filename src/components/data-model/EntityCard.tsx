@@ -1,42 +1,42 @@
 import {
     Card,
     CardContent,
-    CardDescription,
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
 import type { DataModelEntity, TypedValue } from "@/core/data-model/types";
+import { DetectedEntityCard } from "./DetectedEntityCard";
+import { EntityCardFooter } from "./EntityCardFooter";
+import { EntityTypeBadge } from "./EntityTypeBadge";
+import { FinancialRecordCard } from "./FinancialRecordCard";
+import { MediaMentionCard } from "./MediaMentionCard";
+import { OrganizationCard } from "./OrganizationCard";
 import { PersonEntityCard } from "./PersonEntityCard";
+import { SocialProfileCard } from "./SocialProfileCard";
 import { TypedValueView } from "./TypedValueView";
 
 interface EntityCardProps {
     entity: DataModelEntity;
 }
 
-function isKeyValue(item: TypedValue): item is {
-    $type: "key-value";
-    value: { key: TypedValue<string>; value: TypedValue };
-} {
-    if (item.$type !== "key-value") {
-        return false;
-    }
-    if (!item.value || typeof item.value !== "object") {
-        return false;
-    }
-    const candidate = item.value as { key?: TypedValue<string>; value?: TypedValue };
-    return Boolean(candidate.key && candidate.value);
-}
-
 export function EntityCard({ entity }: EntityCardProps) {
-    if (entity.$entity === "entity.person") {
-        return <PersonEntityCard entity={entity} />;
-    }
+    if (entity.$entity === "entity.person") return <PersonEntityCard entity={entity} />;
+    if (entity.$entity === "entity.organization") return <OrganizationCard entity={entity} />;
+    if (entity.$entity === "entity.mediaMention") return <MediaMentionCard entity={entity} />;
+    if (entity.$entity === "entity.socialProfile") return <SocialProfileCard entity={entity} />;
+    if (entity.$entity === "entity.financialRecord") return <FinancialRecordCard entity={entity} />;
+    if (entity.$entity === "entity.detectedEntity") return <DetectedEntityCard entity={entity} />;
+
+    const nameValue = (entity.$props?.["name"] as TypedValue[] | undefined)?.[0]?.value;
+    const displayName = nameValue != null ? String(nameValue) : undefined;
 
     return (
         <Card>
             <CardHeader>
-                <CardTitle>{entity.$entity}</CardTitle>
-                <CardDescription>ID: {entity.$id}</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+                    <EntityTypeBadge entityType={entity.$entity} />
+                    {displayName ?? entity.$entity}
+                </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="space-y-3">
@@ -52,48 +52,7 @@ export function EntityCard({ entity }: EntityCardProps) {
                     ))}
                 </div>
 
-                {entity.$sources && entity.$sources.length > 0 ? (
-                    <div className="space-y-2">
-                        <p className="text-xs uppercase text-muted-foreground">Sources</p>
-                        <div className="space-y-1">
-                            {entity.$sources.map((source) => (
-                                <a
-                                    key={`${entity.$id}-${source.name}-${source.source}`}
-                                    href={source.source}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="block text-sm text-primary underline underline-offset-4 break-all"
-                                >
-                                    {source.name}
-                                </a>
-                            ))}
-                        </div>
-                    </div>
-                ) : null}
-
-                {entity.$extra && entity.$extra.length > 0 ? (
-                    <div className="space-y-2">
-                        <p className="text-xs text-muted-foreground">Extra</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {entity.$extra.map((item, idx) =>
-                                isKeyValue(item) ? (
-                                    <div key={`${entity.$id}-extra-${idx}`} className="rounded border bg-muted/20 p-2 space-y-1">
-                                        <p className="text-xs text-muted-foreground">
-                                            {String(item.value.key.value)}
-                                        </p>
-                                        <div className="text-sm">
-                                            <TypedValueView item={item.value.value} />
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div key={`${entity.$id}-extra-${idx}`} className="rounded border bg-muted/20 p-2 text-sm">
-                                        <TypedValueView item={item} />
-                                    </div>
-                                )
-                            )}
-                        </div>
-                    </div>
-                ) : null}
+                <EntityCardFooter entity={entity} />
             </CardContent>
         </Card>
     );

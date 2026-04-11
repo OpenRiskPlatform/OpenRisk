@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EntityTypeBadge } from "./EntityTypeBadge";
 import type { DataModelEntity } from "@/core/data-model/types";
 
 interface RiskTopicGroupCardProps {
@@ -46,7 +47,8 @@ export function RiskTopicGroupCard({ topics }: RiskTopicGroupCardProps) {
         <Card>
             <CardHeader className="pb-3">
                 <div className="flex items-center justify-between gap-3">
-                    <CardTitle className="text-base">
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <EntityTypeBadge entityType="entity.riskTopic" />
                         Topic Report{targetName ? `: ${targetName}` : ""}
                     </CardTitle>
                     <div className="flex gap-2 shrink-0">

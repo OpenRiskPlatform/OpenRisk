@@ -11,10 +11,6 @@ import { EntityCardFooter } from "./EntityCardFooter";
 import { EntityTypeBadge } from "./EntityTypeBadge";
 import { TypedValueView } from "./TypedValueView";
 
-interface PersonEntityCardProps {
-    entity: DataModelEntity;
-}
-
 function propList(entity: DataModelEntity, key: string): TypedValue[] {
     const values = entity.$props?.[key];
     return Array.isArray(values) ? values : [];
@@ -24,29 +20,28 @@ function firstProp(entity: DataModelEntity, key: string): TypedValue | undefined
     return propList(entity, key)[0];
 }
 
-export function PersonEntityCard({ entity }: PersonEntityCardProps) {
+export function OrganizationCard({ entity }: { entity: DataModelEntity }) {
     const name = firstProp(entity, "name");
     const aliases = propList(entity, "aliases");
-    const birthDate = firstProp(entity, "birthDate");
-    const birthPlace = firstProp(entity, "birthPlace");
-    const nationalities = propList(entity, "nationalities");
-    const addresses = propList(entity, "addresses");
-    const emails = propList(entity, "emails");
-    const phones = propList(entity, "phones");
-
+    const registrationId = firstProp(entity, "registrationId");
+    const country = firstProp(entity, "country");
+    const address = firstProp(entity, "address");
+    const status = firstProp(entity, "status");
+    const involvedPersons = propList(entity, "involvedPersons");
     const pepStatus = firstProp(entity, "pepStatus");
     const sanctioned = firstProp(entity, "sanctioned");
 
     const isPep = pepStatus?.value === true;
     const isSanctioned = sanctioned?.value === true;
+    const statusStr = status ? String(status.value) : undefined;
 
     return (
         <Card>
             <CardHeader>
                 <div className="space-y-1">
                     <CardTitle className="text-lg flex items-center gap-2">
-                        <EntityTypeBadge entityType="entity.person" />
-                        {name ? String(name.value) : "Unknown"}
+                        <EntityTypeBadge entityType="entity.organization" />
+                        {name ? String(name.value) : "Unknown Organization"}
                     </CardTitle>
                     {aliases.length > 0 && (
                         <p className="text-xs text-muted-foreground">
@@ -65,9 +60,16 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
                                 ⚠️ PEP
                             </Badge>
                         )}
-                        {!isSanctioned && !isPep && (pepStatus !== undefined || sanctioned !== undefined) && (
-                            <Badge variant="secondary" className="text-xs font-semibold text-green-700 dark:text-green-400">
-                                ✓ No PEP / No Sanctions
+                        {statusStr && (
+                            <Badge
+                                variant={statusStr === "active" ? "secondary" : "outline"}
+                                className={
+                                    statusStr === "active"
+                                        ? "text-xs text-green-700 dark:text-green-400"
+                                        : "text-xs"
+                                }
+                            >
+                                {statusStr.charAt(0).toUpperCase() + statusStr.slice(1)}
                             </Badge>
                         )}
                     </div>
@@ -76,14 +78,21 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
 
             <CardContent className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2">
-                    <Field label="Birth Date" value={birthDate} />
-                    <Field label="Birth Place" value={birthPlace} />
+                    <Field label="Registration ID" value={registrationId} />
+                    <Field label="Country" value={country} />
+                    <Field label="Address" value={address} />
                 </div>
 
-                <TagField label="Nationalities" values={nationalities} />
-                <TagField label="Addresses" values={addresses} />
-                <TagField label="Emails" values={emails} />
-                <TagField label="Phones" values={phones} />
+                {involvedPersons.length > 0 && (
+                    <div className="space-y-2">
+                        <p className="text-xs uppercase text-muted-foreground">Involved Persons</p>
+                        <div className="flex flex-wrap gap-2">
+                            {involvedPersons.map((v, i) => (
+                                <Badge key={i} variant="secondary">{String(v.value)}</Badge>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 <EntityCardFooter entity={entity} />
             </CardContent>
@@ -91,37 +100,12 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
     );
 }
 
-function Field({
-    label,
-    value,
-}: {
-    label: string;
-    value: TypedValue | undefined;
-}) {
+function Field({ label, value }: { label: string; value: TypedValue | undefined }) {
     return (
         <div className="space-y-1">
             <p className="text-xs uppercase text-muted-foreground">{label}</p>
             <div className="text-sm">
                 <TypedValueView item={value} />
-            </div>
-        </div>
-    );
-}
-
-function TagField({ label, values }: { label: string; values: TypedValue[] }) {
-    if (!values.length) {
-        return null;
-    }
-
-    return (
-        <div className="space-y-2">
-            <p className="text-xs uppercase text-muted-foreground">{label}</p>
-            <div className="flex flex-wrap gap-2">
-                {values.map((value, index) => (
-                    <Badge key={`${label}-${index}`} variant="secondary">
-                        {String(value.value)}
-                    </Badge>
-                ))}
             </div>
         </div>
     );
