@@ -60,6 +60,11 @@ export const commands = {
 	 */
 	setPluginEnabled: (pluginId: string, enabled: boolean) => typedError<PluginRecord, AppError>(__TAURI_INVOKE("set_plugin_enabled", { pluginId, enabled })),
 	/**
+	 *  Refresh persisted plugin metrics by calling plugin-defined `update_metrics_fn` when available.
+	 *  #
+	 */
+	refreshPluginMetrics: (pluginId: string) => typedError<PluginRecord, AppError>(__TAURI_INVOKE("refresh_plugin_metrics", { pluginId })),
+	/**
 	 *  Create a new scan in Draft status.
 	 *  #
 	 */
@@ -178,6 +183,8 @@ export type PluginManifestRecord = {
 	authors: PluginAuthor[],
 	icon: string | null,
 	homepage: string | null,
+	// JS function name to call to refresh plugin metrics (optional).
+	updateMetricsFn: string | null,
 };
 
 // Definition of one runtime metric declared by a plugin.
@@ -207,8 +214,6 @@ export type PluginOutput = {
 	error: string | null,
 	// Console log entries captured during execution.
 	logs: LogEntry[],
-	// Runtime metrics collected via plugin metrics receiver.
-	metrics: PluginMetricValue[],
 };
 
 // Complete descriptor for a plugin as configured within a project.

@@ -11,7 +11,7 @@ use uuid::Uuid;
 // Schema & version constants
 // ---------------------------------------------------------------------------
 
-pub(super) const CURRENT_SCHEMA_VERSION: i64 = 17;
+pub(super) const CURRENT_SCHEMA_VERSION: i64 = 19;
 const MIN_SUPPORTED_SCHEMA_VERSION: i64 = 4;
 
 pub(super) const PROJECT_LEGACY_ERROR_PREFIX: &str = "PROJECT_LEGACY:";
@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS PluginRevision (
     authors_json TEXT,
     icon TEXT,
     homepage TEXT,
+    update_metrics_fn TEXT,
     code TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE
@@ -190,13 +191,12 @@ CREATE TABLE IF NOT EXISTS PluginRevisionMetricDef (
     FOREIGN KEY (revision_id) REFERENCES PluginRevision(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS ScanPluginMetric (
-    scan_result_id TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS PluginMetric (
+    plugin_id TEXT NOT NULL,
     metric_name TEXT NOT NULL,
-    type_json TEXT NOT NULL,
     value_json TEXT NOT NULL DEFAULT 'null',
-    PRIMARY KEY (scan_result_id, metric_name),
-    FOREIGN KEY (scan_result_id) REFERENCES ScanPluginResult(id) ON DELETE CASCADE
+    PRIMARY KEY (plugin_id, metric_name),
+    FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE
 );
 "#;
 
@@ -261,6 +261,8 @@ pub(super) async fn apply_migrations_to_latest(
             15 => migrate_to_v15(conn).await?,
             16 => migrate_to_v16(conn).await?,
             17 => migrate_to_v17(conn).await?,
+            18 => migrate_to_v18(conn).await?,
+            19 => migrate_to_v19(conn).await?,
             _ => {
                 return Err(PersistenceError::Validation(format!(
                     "Missing migration to schema version {}",
@@ -1027,6 +1029,33 @@ async fn migrate_to_v17(conn: &mut SqliteConnection) -> Result<(), PersistenceEr
     )
     .execute(&mut *conn)
     .await;
+    Ok(())
+}
+
+async fn migrate_to_v18(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
+    // Replace per-scan-result metric storage with a per-plugin KV store.
+    let _ = sqlx::query("DROP TABLE IF EXISTS ScanPluginMetric")
+        .execute(&mut *conn)
+        .await;
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS PluginMetric (\
+         plugin_id TEXT NOT NULL,\
+         metric_name TEXT NOT NULL,\
+         value_json TEXT NOT NULL DEFAULT 'null',\
+         PRIMARY KEY (plugin_id, metric_name),\
+         FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE\
+         )",
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+async fn migrate_to_v19(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
+    // Add optional metrics refresh function name to plugin revisions.
+    let _ = sqlx::query("ALTER TABLE PluginRevision ADD COLUMN update_metrics_fn TEXT")
+        .execute(&mut *conn)
+        .await;
     Ok(())
 }
 

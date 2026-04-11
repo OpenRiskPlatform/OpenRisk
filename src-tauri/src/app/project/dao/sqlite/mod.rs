@@ -51,6 +51,19 @@ impl ProjectPersistence for SqliteProjectPersistence {
     async fn get_plugin_record(&self, plugin_id: &str) -> Result<PluginRecord, PersistenceError> {
         settings_dao::get_plugin_record(self, plugin_id).await
     }
+    async fn get_plugin_load_data_for_metrics(
+        &self,
+        plugin_id: &str,
+    ) -> Result<PluginLoadData, PersistenceError> {
+        settings_dao::get_plugin_load_data_for_metrics(self, plugin_id).await
+    }
+    async fn upsert_plugin_metrics(
+        &self,
+        plugin_id: &str,
+        metrics: &[PluginMetricValue],
+    ) -> Result<(), PersistenceError> {
+        settings_dao::upsert_plugin_metrics(self, plugin_id, metrics).await
+    }
     async fn set_plugin_enabled(
         &self,
         plugin_id: &str,

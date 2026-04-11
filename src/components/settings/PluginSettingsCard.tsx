@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { unwrap } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -34,6 +34,7 @@ export function PluginSettingsCard({
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [savedAt, setSavedAt] = useState<number | null>(null);
+    const [refreshingMetrics, setRefreshingMetrics] = useState(false);
 
     const handleSave = async () => {
         setSaveError(null);
@@ -64,6 +65,38 @@ export function PluginSettingsCard({
             [key]: value,
         }));
     };
+
+    useEffect(() => {
+        if (!plugin.manifest.updateMetricsFn) {
+            return;
+        }
+
+        let cancelled = false;
+        setRefreshingMetrics(true);
+        void unwrap(backendClient.refreshPluginMetrics(plugin.id))
+            .then((updated) => {
+                if (!cancelled) {
+                    onPluginUpdated(updated);
+                }
+            })
+            .catch((error) => {
+                if (!cancelled) {
+                    console.warn(
+                        `[PluginSettingsCard] Failed to refresh metrics for '${plugin.id}':`,
+                        error,
+                    );
+                }
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setRefreshingMetrics(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [plugin.id, plugin.manifest.updateMetricsFn, backendClient, onPluginUpdated]);
 
     return (
         <div className="border rounded-lg p-4 space-y-4">
@@ -147,6 +180,9 @@ export function PluginSettingsCard({
 
             <div className="space-y-2">
                 <p className="text-sm font-medium">Current Stats Values</p>
+                {refreshingMetrics ? (
+                    <p className="text-xs text-muted-foreground">Refreshing stats...</p>
+                ) : null}
                 {plugin.metricValues.length === 0 ? (
                     <p className="text-xs text-muted-foreground">
                         No values yet. Run plugin entrypoints to populate stats.

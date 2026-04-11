@@ -424,6 +424,124 @@ impl<'de> ::serde::Deserialize<'de> for InputDefinitionName {
             })
     }
 }
+#[doc = "`MetricDefinition`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"name\","]
+#[doc = "    \"title\","]
+#[doc = "    \"type\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"description\": {"]
+#[doc = "      \"description\": \"Metric purpose shown in UI\","]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"name\": {"]
+#[doc = "      \"description\": \"Metric key used by openrisk.metrics.set/get/inc\","]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"pattern\": \"^[a-z][a-z0-9_]{1,63}$\""]
+#[doc = "    },"]
+#[doc = "    \"title\": {"]
+#[doc = "      \"description\": \"Human-readable metric name\","]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"type\": {"]
+#[doc = "      \"$ref\": \"#/definitions/FieldType\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": false"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct MetricDefinition {
+    #[doc = "Metric purpose shown in UI"]
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub description: ::std::option::Option<::std::string::String>,
+    #[doc = "Metric key used by openrisk.metrics.set/get/inc"]
+    pub name: MetricDefinitionName,
+    #[doc = "Human-readable metric name"]
+    pub title: ::std::string::String,
+    #[serde(rename = "type")]
+    pub type_: FieldType,
+}
+#[doc = "Metric key used by openrisk.metrics.set/get/inc"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"description\": \"Metric key used by openrisk.metrics.set/get/inc\","]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"pattern\": \"^[a-z][a-z0-9_]{1,63}$\""]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct MetricDefinitionName(::std::string::String);
+impl ::std::ops::Deref for MetricDefinitionName {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<MetricDefinitionName> for ::std::string::String {
+    fn from(value: MetricDefinitionName) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for MetricDefinitionName {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
+            ::std::sync::LazyLock::new(|| ::regress::Regex::new("^[a-z][a-z0-9_]{1,63}$").unwrap());
+        if PATTERN.find(value).is_none() {
+            return Err("doesn't match pattern \"^[a-z][a-z0-9_]{1,63}$\"".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for MetricDefinitionName {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for MetricDefinitionName {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for MetricDefinitionName {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for MetricDefinitionName {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
 #[doc = "Schema for OpenRisk plugin manifest (plugin.json)"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -523,6 +641,13 @@ impl<'de> ::serde::Deserialize<'de> for InputDefinitionName {
 #[doc = "      \"type\": \"string\","]
 #[doc = "      \"pattern\": \"^[^/].*\\\\.(ts|js)$\""]
 #[doc = "    },"]
+#[doc = "    \"metrics\": {"]
+#[doc = "      \"description\": \"Runtime metrics emitted by plugin code through openrisk.metrics.* receiver.\","]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/MetricDefinition\""]
+#[doc = "      }"]
+#[doc = "    },"]
 #[doc = "    \"name\": {"]
 #[doc = "      \"description\": \"Human-readable plugin name\","]
 #[doc = "      \"type\": \"string\","]
@@ -540,6 +665,11 @@ impl<'de> ::serde::Deserialize<'de> for InputDefinitionName {
 #[doc = "      \"items\": {"]
 #[doc = "        \"$ref\": \"#/definitions/SettingDefinition\""]
 #[doc = "      }"]
+#[doc = "    },"]
+#[doc = "    \"update_metrics_fn\": {"]
+#[doc = "      \"description\": \"Optional function name to call for refreshing declared metrics in settings.\","]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"pattern\": \"^[a-zA-Z_$][a-zA-Z0-9_$]*$\""]
 #[doc = "    },"]
 #[doc = "    \"version\": {"]
 #[doc = "      \"description\": \"Plugin version in semver format (e.g., 0.1.0)\","]
@@ -575,6 +705,9 @@ pub struct OpenRiskPluginManifest {
     pub license: OpenRiskPluginManifestLicense,
     #[doc = "Main TypeScript/JavaScript file (relative to plugin directory)"]
     pub main: OpenRiskPluginManifestMain,
+    #[doc = "Runtime metrics emitted by plugin code through openrisk.metrics.* receiver."]
+    #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
+    pub metrics: ::std::vec::Vec<MetricDefinition>,
     #[doc = "Human-readable plugin name"]
     pub name: OpenRiskPluginManifestName,
     #[doc = "Plugin source code repository URL"]
@@ -590,6 +723,9 @@ pub struct OpenRiskPluginManifest {
     #[doc = "Plugin configuration settings"]
     #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
     pub settings: ::std::vec::Vec<SettingDefinition>,
+    #[doc = "Optional function name to call for refreshing declared metrics in settings."]
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub update_metrics_fn: ::std::option::Option<OpenRiskPluginManifestUpdateMetricsFn>,
     #[doc = "Plugin version in semver format (e.g., 0.1.0)"]
     pub version: OpenRiskPluginManifestVersion,
 }
@@ -1056,6 +1192,79 @@ impl ::std::convert::TryFrom<::std::string::String> for OpenRiskPluginManifestNa
     }
 }
 impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifestName {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "Optional function name to call for refreshing declared metrics in settings."]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"description\": \"Optional function name to call for refreshing declared metrics in settings.\","]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"pattern\": \"^[a-zA-Z_$][a-zA-Z0-9_$]*$\""]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct OpenRiskPluginManifestUpdateMetricsFn(::std::string::String);
+impl ::std::ops::Deref for OpenRiskPluginManifestUpdateMetricsFn {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<OpenRiskPluginManifestUpdateMetricsFn> for ::std::string::String {
+    fn from(value: OpenRiskPluginManifestUpdateMetricsFn) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for OpenRiskPluginManifestUpdateMetricsFn {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
+            ::std::sync::LazyLock::new(|| {
+                ::regress::Regex::new("^[a-zA-Z_$][a-zA-Z0-9_$]*$").unwrap()
+            });
+        if PATTERN.find(value).is_none() {
+            return Err("doesn't match pattern \"^[a-zA-Z_$][a-zA-Z0-9_$]*$\"".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for OpenRiskPluginManifestUpdateMetricsFn {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for OpenRiskPluginManifestUpdateMetricsFn {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for OpenRiskPluginManifestUpdateMetricsFn {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifestUpdateMetricsFn {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
     where
         D: ::serde::Deserializer<'de>,

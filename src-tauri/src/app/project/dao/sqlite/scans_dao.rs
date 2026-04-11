@@ -1,6 +1,6 @@
 //! DAO functions for the scan lifecycle.
 
-use super::helpers::{conn_unavailable, load_scan_logs, load_scan_metrics};
+use super::helpers::{conn_unavailable, load_scan_logs};
 use crate::app::project::session::SqliteProjectPersistence;
 use crate::app::project::types::*;
 use std::collections::HashMap;
@@ -179,8 +179,8 @@ pub(super) async fn get_scan(
                 data_json: row.data_json,
                 error: row.error,
                 logs,
-                metrics: load_scan_metrics(conn, &row.id).await?,
             },
+            metrics: vec![],
         });
     }
 
@@ -332,6 +332,14 @@ pub(super) async fn begin_scan_run(
                 .flatten()
                 .filter(|c: &String| !c.trim().is_empty());
 
+        let update_metrics_fn: Option<String> = sqlx::query_scalar(
+            "SELECT update_metrics_fn FROM PluginRevision WHERE id = ?1 LIMIT 1",
+        )
+        .bind(&revision_id)
+        .fetch_optional(&mut *conn)
+        .await?
+        .flatten();
+
         let ep_fn: Option<String> = sqlx::query_scalar(
             "SELECT function_name FROM PluginRevisionEntrypoint \
              WHERE revision_id = ?1 AND id = ?2 LIMIT 1",
@@ -393,6 +401,7 @@ pub(super) async fn begin_scan_run(
             metric_defs,
             settings,
             code,
+            update_metrics_fn,
         });
     }
 
@@ -453,22 +462,6 @@ pub(super) async fn end_scan_run(
             .execute(&mut *conn)
             .await?;
         }
-
-        for metric in &result.output.metrics {
-            let type_json = serde_json::to_string(&metric.type_)
-                .unwrap_or_else(|_| "{\"name\":\"string\"}".to_string());
-            let value_json = metric.value.to_json_string();
-            sqlx::query(
-                "INSERT INTO ScanPluginMetric (scan_result_id, metric_name, type_json, value_json) \
-                 VALUES (?1, ?2, ?3, ?4)",
-            )
-            .bind(&rid)
-            .bind(&metric.name)
-            .bind(&type_json)
-            .bind(&value_json)
-            .execute(&mut *conn)
-            .await?;
-        }
     }
 
     sqlx::query(
@@ -479,6 +472,22 @@ pub(super) async fn end_scan_run(
     .bind(scan_id)
     .execute(&mut *conn)
     .await?;
+
+    // UPSERT collected metric values into the per-plugin store.
+    for result in &results {
+        for metric in &result.metrics {
+            sqlx::query(
+                "INSERT INTO PluginMetric (plugin_id, metric_name, value_json) \
+                 VALUES (?1, ?2, ?3) \
+                 ON CONFLICT(plugin_id, metric_name) DO UPDATE SET value_json = excluded.value_json",
+            )
+            .bind(&result.plugin_id)
+            .bind(&metric.name)
+            .bind(&metric.value.to_json_string())
+            .execute(&mut *conn)
+            .await?;
+        }
+    }
 
     let row = sqlx::query_as::<_, ScanSummaryRow>(
         "SELECT id, status, preview, is_archived, sort_order FROM Scan WHERE id = ?1 LIMIT 1",

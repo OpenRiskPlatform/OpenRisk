@@ -275,6 +275,137 @@ pub(super) async fn get_plugin_record(
     load_plugin_record(conn, plugin_id, &project_id, &psid).await
 }
 
+pub(super) async fn get_plugin_load_data_for_metrics(
+    this: &SqliteProjectPersistence,
+    plugin_id: &str,
+) -> Result<PluginLoadData, PersistenceError> {
+    let mut guard = this.conn.lock().await;
+    let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
+
+    let psid: String = sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
+        .fetch_one(&mut *conn)
+        .await?;
+    let project_id: String = sqlx::query_scalar("SELECT id FROM Project LIMIT 1")
+        .fetch_one(&mut *conn)
+        .await?;
+
+    let revision_id: String = sqlx::query_scalar(
+        "SELECT COALESCE(pp.pinned_revision_id, p.current_revision_id) \
+         FROM Plugin p \
+         LEFT JOIN ProjectPlugin pp ON pp.plugin_id = p.id AND pp.project_id = ?2 \
+         WHERE p.id = ?1 \
+         LIMIT 1",
+    )
+    .bind(plugin_id)
+    .bind(&project_id)
+    .fetch_optional(&mut *conn)
+    .await?
+    .flatten()
+    .ok_or_else(|| PersistenceError::Validation(format!("Plugin '{}' has no active revision", plugin_id)))?;
+
+    let code: Option<String> =
+        sqlx::query_scalar("SELECT code FROM PluginRevision WHERE id = ?1 LIMIT 1")
+            .bind(&revision_id)
+            .fetch_optional(&mut *conn)
+            .await?
+            .flatten();
+
+    let update_metrics_fn: Option<String> =
+        sqlx::query_scalar("SELECT update_metrics_fn FROM PluginRevision WHERE id = ?1 LIMIT 1")
+            .bind(&revision_id)
+            .fetch_optional(&mut *conn)
+            .await?
+            .flatten();
+
+    let sv_rows: Vec<(String, String)> = sqlx::query_as(
+        "SELECT setting_name, value_json FROM ProjectPluginSettingValue \
+         WHERE plugin_id = ?1 AND project_settings_id = ?2",
+    )
+    .bind(plugin_id)
+    .bind(&psid)
+    .fetch_all(&mut *conn)
+    .await?;
+
+    let settings = sv_rows
+        .into_iter()
+        .map(|(name, vj)| {
+            let value = serde_json::from_str::<serde_json::Value>(&vj)
+                .map(|v| SettingValue::from_json(&v))
+                .unwrap_or(SettingValue::Null);
+            PluginSettingValue { name, value }
+        })
+        .collect();
+
+    let metric_rows: Vec<(String, String, String, Option<String>, Option<String>)> =
+        sqlx::query_as(
+            "SELECT name, title, type_json, enum_values_json, description \
+             FROM PluginRevisionMetricDef WHERE revision_id = ?1 ORDER BY rowid",
+        )
+        .bind(&revision_id)
+        .fetch_all(&mut *conn)
+        .await?;
+
+    let metric_defs = metric_rows
+        .into_iter()
+        .map(|(name, title, type_json, enum_values_json, description)| {
+            let mut field_type = serde_json::from_str::<PluginFieldTypeDef>(&type_json)
+                .unwrap_or(PluginFieldTypeDef {
+                    name: "string".to_string(),
+                    values: None,
+                });
+            if field_type.values.is_none() {
+                field_type.values = enum_values_json.as_deref().and_then(|s| {
+                    serde_json::from_str::<Vec<String>>(s)
+                        .ok()
+                        .filter(|v| !v.is_empty())
+                });
+            }
+            PluginMetricDef {
+                name,
+                title,
+                type_: field_type,
+                description,
+            }
+        })
+        .collect();
+
+    Ok(PluginLoadData {
+        plugin_id: plugin_id.to_string(),
+        plugin_revision_id: revision_id,
+        // Not used for metrics refresh path.
+        entrypoint_id: "update_metrics".to_string(),
+        entrypoint_function: "update_metrics".to_string(),
+        metric_defs,
+        settings,
+        code,
+        update_metrics_fn,
+    })
+}
+
+pub(super) async fn upsert_plugin_metrics(
+    this: &SqliteProjectPersistence,
+    plugin_id: &str,
+    metrics: &[PluginMetricValue],
+) -> Result<(), PersistenceError> {
+    let mut guard = this.conn.lock().await;
+    let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
+
+    for metric in metrics {
+        sqlx::query(
+            "INSERT INTO PluginMetric (plugin_id, metric_name, value_json) \
+             VALUES (?1, ?2, ?3) \
+             ON CONFLICT(plugin_id, metric_name) DO UPDATE SET value_json = excluded.value_json",
+        )
+        .bind(plugin_id)
+        .bind(&metric.name)
+        .bind(metric.value.to_json_string())
+        .execute(&mut *conn)
+        .await?;
+    }
+
+    Ok(())
+}
+
 pub(super) async fn set_plugin_enabled(
     this: &SqliteProjectPersistence,
     plugin_id: &str,

@@ -13,6 +13,7 @@
     "icon": "icon.png",
     "license": "MIT",
     "main": "index.ts",
+    "update_metrics_fn": "updateMetrics",
     "entrypoints": [
         {
             "id": "pep-sanctions",
@@ -54,7 +55,10 @@
                     "name": "output_language",
                     "type": {
                         "name": "enum",
-                        "values": ["English", "Slovak"]
+                        "values": [
+                            "English",
+                            "Slovak"
+                        ]
                     },
                     "optional": true,
                     "title": "Output Language",
@@ -65,7 +69,39 @@
                     "name": "country",
                     "type": {
                         "name": "enum",
-                        "values": ["usa","australia","new_zealand","great_britain","germany","czechia","slovakia","italy","austria","belgium","bulgaria","croatia","cyprus","denmark","estonia","finland","france","greece","hungary","ireland","latvia","lithuania","luxembourg","malta","netherlands","poland","portugal","romania","slovenia","spain","sweden"]
+                        "values": [
+                            "usa",
+                            "australia",
+                            "new_zealand",
+                            "great_britain",
+                            "germany",
+                            "czechia",
+                            "slovakia",
+                            "italy",
+                            "austria",
+                            "belgium",
+                            "bulgaria",
+                            "croatia",
+                            "cyprus",
+                            "denmark",
+                            "estonia",
+                            "finland",
+                            "france",
+                            "greece",
+                            "hungary",
+                            "ireland",
+                            "latvia",
+                            "lithuania",
+                            "luxembourg",
+                            "malta",
+                            "netherlands",
+                            "poland",
+                            "portugal",
+                            "romania",
+                            "slovenia",
+                            "spain",
+                            "sweden"
+                        ]
                     },
                     "optional": true,
                     "title": "Country",
@@ -121,7 +157,10 @@
                     "name": "mode",
                     "type": {
                         "name": "enum",
-                        "values": ["text", "claims"]
+                        "values": [
+                            "text",
+                            "claims"
+                        ]
                     },
                     "optional": true,
                     "title": "Mode",
@@ -132,7 +171,10 @@
                     "name": "output_language",
                     "type": {
                         "name": "enum",
-                        "values": ["English", "Slovak"]
+                        "values": [
+                            "English",
+                            "Slovak"
+                        ]
                     },
                     "optional": true,
                     "title": "Output Language",
@@ -143,7 +185,39 @@
                     "name": "country",
                     "type": {
                         "name": "enum",
-                        "values": ["usa","australia","new_zealand","great_britain","germany","czechia","slovakia","italy","austria","belgium","bulgaria","croatia","cyprus","denmark","estonia","finland","france","greece","hungary","ireland","latvia","lithuania","luxembourg","malta","netherlands","poland","portugal","romania","slovenia","spain","sweden"]
+                        "values": [
+                            "usa",
+                            "australia",
+                            "new_zealand",
+                            "great_britain",
+                            "germany",
+                            "czechia",
+                            "slovakia",
+                            "italy",
+                            "austria",
+                            "belgium",
+                            "bulgaria",
+                            "croatia",
+                            "cyprus",
+                            "denmark",
+                            "estonia",
+                            "finland",
+                            "france",
+                            "greece",
+                            "hungary",
+                            "ireland",
+                            "latvia",
+                            "lithuania",
+                            "luxembourg",
+                            "malta",
+                            "netherlands",
+                            "poland",
+                            "portugal",
+                            "romania",
+                            "slovenia",
+                            "spain",
+                            "sweden"
+                        ]
                     },
                     "optional": true,
                     "title": "Country",
@@ -230,7 +304,10 @@
                     "name": "output_language",
                     "type": {
                         "name": "enum",
-                        "values": ["English", "Slovak"]
+                        "values": [
+                            "English",
+                            "Slovak"
+                        ]
                     },
                     "optional": true,
                     "title": "Output Language",
@@ -241,7 +318,39 @@
                     "name": "country",
                     "type": {
                         "name": "enum",
-                        "values": ["usa","australia","new_zealand","great_britain","germany","czechia","slovakia","italy","austria","belgium","bulgaria","croatia","cyprus","denmark","estonia","finland","france","greece","hungary","ireland","latvia","lithuania","luxembourg","malta","netherlands","poland","portugal","romania","slovenia","spain","sweden"]
+                        "values": [
+                            "usa",
+                            "australia",
+                            "new_zealand",
+                            "great_britain",
+                            "germany",
+                            "czechia",
+                            "slovakia",
+                            "italy",
+                            "austria",
+                            "belgium",
+                            "bulgaria",
+                            "croatia",
+                            "cyprus",
+                            "denmark",
+                            "estonia",
+                            "finland",
+                            "france",
+                            "greece",
+                            "hungary",
+                            "ireland",
+                            "latvia",
+                            "lithuania",
+                            "luxembourg",
+                            "malta",
+                            "netherlands",
+                            "poland",
+                            "portugal",
+                            "romania",
+                            "slovenia",
+                            "spain",
+                            "sweden"
+                        ]
                     },
                     "optional": true,
                     "title": "Country",

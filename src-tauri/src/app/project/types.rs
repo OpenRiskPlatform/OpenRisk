@@ -65,6 +65,8 @@ pub struct PluginManifestRecord {
     pub authors: Vec<PluginAuthor>,
     pub icon: Option<String>,
     pub homepage: Option<String>,
+    /// JS function name to call to refresh plugin metrics (optional).
+    pub update_metrics_fn: Option<String>,
 }
 
 /// Named entrypoint exposed by a plugin.
@@ -290,8 +292,6 @@ pub struct PluginOutput {
     pub error: Option<String>,
     /// Console log entries captured during execution.
     pub logs: Vec<LogEntry>,
-    /// Runtime metrics collected via plugin metrics receiver.
-    pub metrics: Vec<PluginMetricValue>,
 }
 
 /// Single plugin result stored in a completed scan.
@@ -302,6 +302,10 @@ pub struct ScanPluginResultRecord {
     pub plugin_revision_id: Option<String>,
     pub entrypoint_id: String,
     pub output: PluginOutput,
+    /// Metrics collected during execution — upserted to PluginMetric on scan end, not sent to frontend.
+    #[serde(skip)]
+    #[specta(skip)]
+    pub metrics: Vec<PluginMetricValue>,
 }
 
 /// Full scan details: metadata, selected plugins, inputs, and all plugin results.
@@ -331,6 +335,8 @@ pub struct PluginLoadData {
     pub metric_defs: Vec<PluginMetricDef>,
     pub settings: Vec<PluginSettingValue>,
     pub code: Option<String>,
+    /// JS function to call for metrics refresh (from plugin manifest).
+    pub update_metrics_fn: Option<String>,
 }
 
 /// Everything returned by `begin_scan_run`: context needed to execute all plugins.

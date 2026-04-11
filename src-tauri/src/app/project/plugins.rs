@@ -14,6 +14,7 @@ pub struct LocalPluginBundle {
     pub id: String,
     pub manifest: OpenRiskPluginManifest,
     pub metric_defs: Vec<PluginMetricDef>,
+    pub update_metrics_fn: Option<String>,
     pub code: String,
 }
 
@@ -26,16 +27,6 @@ pub struct PluginMetricDef {
     pub description: Option<String>,
 }
 
-#[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-struct RawMetricDef {
-    name: String,
-    #[serde(rename = "type")]
-    type_: PluginFieldType,
-    title: String,
-    #[serde(default)]
-    description: Option<String>,
-}
 ///
 /// Uses relaxed manifest validation to tolerate missing optional fields; suited for user imports.
 pub fn load_plugin_bundle_with_id(
@@ -51,10 +42,10 @@ pub fn load_plugin_bundle_with_id(
     }
 
     let manifest_raw = fs::read_to_string(&manifest_path)?;
-    let metric_defs = parse_metric_defs(&manifest_raw)
-        .map_err(|e| PersistenceError::Validation(e.to_string()))?;
     let manifest = parse_manifest_relaxed(&manifest_raw)
         .map_err(|e| PersistenceError::Validation(e.to_string()))?;
+    let metric_defs = metric_defs_from_manifest(&manifest).map_err(PersistenceError::Validation)?;
+    let update_metrics_fn = manifest.update_metrics_fn.clone().map(Into::into);
 
     let code_path = dir.join(manifest.main.clone().to_string());
     if !code_path.exists() {
@@ -69,6 +60,7 @@ pub fn load_plugin_bundle_with_id(
         id: plugin_id,
         manifest,
         metric_defs,
+        update_metrics_fn,
         code,
     })
 }
@@ -90,26 +82,12 @@ pub fn load_plugin_bundle_from_zip(zip_path: &Path) -> Result<LocalPluginBundle,
         s
     };
 
-    let metric_defs =
-        parse_metric_defs(&manifest_raw).map_err(|e| PersistenceError::Validation(e))?;
-
     let manifest =
         parse_manifest_relaxed(&manifest_raw).map_err(|e| PersistenceError::Validation(e))?;
+    let metric_defs = metric_defs_from_manifest(&manifest).map_err(PersistenceError::Validation)?;
+    let update_metrics_fn = manifest.update_metrics_fn.clone().map(Into::into);
 
-    let plugin_id = serde_json::from_str::<Value>(&manifest_raw)
-        .ok()
-        .and_then(|v| {
-            v.get("id")
-                .and_then(|s| s.as_str())
-                .map(|s| s.trim().to_string())
-        })
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| {
-            zip_path
-                .file_stem()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_else(|| "plugin".to_string())
-        });
+    let plugin_id: String = manifest.id.clone().into();
 
     let entrypoint = manifest.main.clone().to_string();
     let code = {
@@ -125,11 +103,12 @@ pub fn load_plugin_bundle_from_zip(zip_path: &Path) -> Result<LocalPluginBundle,
         id: plugin_id,
         manifest,
         metric_defs,
+        update_metrics_fn,
         code,
     })
 }
 
-/// Extract the `id` field directly from a `plugin.json` without full schema validation.
+/// Extract plugin `id` from `plugin.json` via generated manifest types.
 pub fn extract_manifest_id(dir: &Path) -> Result<String, PersistenceError> {
     let manifest_path = dir.join("plugin.json");
     if !manifest_path.exists() {
@@ -139,15 +118,9 @@ pub fn extract_manifest_id(dir: &Path) -> Result<String, PersistenceError> {
         )));
     }
     let raw = fs::read_to_string(&manifest_path)?;
-    let value: Value = serde_json::from_str(&raw)?;
-    value
-        .get("id")
-        .and_then(|v| v.as_str())
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| {
-            PersistenceError::Validation("Manifest must contain non-empty id".to_string())
-        })
+    let manifest =
+        parse_manifest_relaxed(&raw).map_err(|e| PersistenceError::Validation(e.to_string()))?;
+    Ok(manifest.id.into())
 }
 
 /// Build a list of default setting values from a manifest's `settings` array.
@@ -192,8 +165,6 @@ pub fn parse_manifest_relaxed(raw: &str) -> Result<OpenRiskPluginManifest, Strin
     if !obj.contains_key("settings") {
         obj.insert("settings".to_string(), Value::Array(vec![]));
     }
-    // Runtime metrics are parsed separately to avoid coupling schema-generated structs.
-    obj.remove("metrics");
     if !obj.contains_key("entrypoints") {
         obj.insert("entrypoints".to_string(), Value::Array(vec![]));
     }
@@ -210,32 +181,21 @@ pub fn parse_manifest_relaxed(raw: &str) -> Result<OpenRiskPluginManifest, Strin
     parse_manifest(&normalized).map_err(|e| e.to_string())
 }
 
-fn parse_metric_defs(raw: &str) -> Result<Vec<PluginMetricDef>, String> {
-    let value: Value =
-        serde_json::from_str(raw).map_err(|e| format!("Invalid plugin.json: {}", e))?;
-    let metrics_value = match value.get("metrics") {
-        Some(v) => v,
-        None => return Ok(vec![]),
-    };
-
-    let raw_defs: Vec<RawMetricDef> = serde_json::from_value(metrics_value.clone())
-        .map_err(|e| format!("Invalid plugin metrics: {}", e))?;
-
+fn metric_defs_from_manifest(
+    manifest: &OpenRiskPluginManifest,
+) -> Result<Vec<PluginMetricDef>, String> {
     let mut names = std::collections::HashSet::new();
-    let mut defs = Vec::with_capacity(raw_defs.len());
-    for def in raw_defs {
-        let name = def.name.trim().to_string();
-        if name.is_empty() {
-            return Err("Metric name must not be empty".to_string());
-        }
+    let mut defs = Vec::with_capacity(manifest.metrics.len());
+    for metric in &manifest.metrics {
+        let name: String = metric.name.clone().into();
         if !names.insert(name.clone()) {
             return Err(format!("Duplicate metric name '{}'", name));
         }
         defs.push(PluginMetricDef {
             name,
-            title: def.title,
-            type_: def.type_,
-            description: def.description,
+            title: metric.title.clone(),
+            type_: metric.type_.clone(),
+            description: metric.description.clone(),
         });
     }
 
@@ -258,20 +218,11 @@ pub async fn load_plugin_bundle_from_url(
         .await
         .map_err(|e| PersistenceError::Http(e.to_string()))?;
 
-    let plugin_id = serde_json::from_str::<serde_json::Value>(&manifest_raw)
-        .ok()
-        .and_then(|v| {
-            v.get("id")
-                .and_then(|s| s.as_str())
-                .map(|s| s.trim().to_string())
-        })
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| PersistenceError::Validation("Manifest must contain non-empty id".into()))?;
-
-    let metric_defs =
-        parse_metric_defs(&manifest_raw).map_err(|e| PersistenceError::Validation(e))?;
     let manifest =
         parse_manifest_relaxed(&manifest_raw).map_err(|e| PersistenceError::Validation(e))?;
+    let plugin_id: String = manifest.id.clone().into();
+    let metric_defs = metric_defs_from_manifest(&manifest).map_err(PersistenceError::Validation)?;
+    let update_metrics_fn = manifest.update_metrics_fn.clone().map(Into::into);
 
     // Derive base URL: everything up to and including the last '/'
     let base_url = manifest_url
@@ -293,6 +244,7 @@ pub async fn load_plugin_bundle_from_url(
         id: plugin_id,
         manifest,
         metric_defs,
+        update_metrics_fn,
         code,
     })
 }

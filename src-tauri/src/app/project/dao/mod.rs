@@ -43,6 +43,17 @@ pub trait ProjectPersistence: Send + Sync {
     ) -> Result<(), PersistenceError>;
     /// Fetch the full plugin record (defs + current settings) by plugin_id.
     async fn get_plugin_record(&self, plugin_id: &str) -> Result<PluginRecord, PersistenceError>;
+    /// Load plugin runtime context (code/settings/metric defs) for metrics refresh execution.
+    async fn get_plugin_load_data_for_metrics(
+        &self,
+        plugin_id: &str,
+    ) -> Result<PluginLoadData, PersistenceError>;
+    /// Upsert persisted metric values for a plugin.
+    async fn upsert_plugin_metrics(
+        &self,
+        plugin_id: &str,
+        metrics: &[PluginMetricValue],
+    ) -> Result<(), PersistenceError>;
     /// Enable or disable a plugin within this project.
     async fn set_plugin_enabled(
         &self,

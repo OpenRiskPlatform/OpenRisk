@@ -619,6 +619,16 @@ async function finalizeRun(apiKey: string, entities: DataModelEntity[]): Promise
     return entities;
 }
 
+/**
+ * Optional metrics refresh hook used by OpenRisk settings page.
+ * It updates declared metrics and returns no entities.
+ */
+export async function updateMetrics(inputs: PluginInputs): Promise<DataModelEntity[]> {
+    const apiKey = requireApiKey(inputs);
+    await finalizeRun(apiKey, []);
+    return [];
+}
+
 // ---------------------------------------------------------------------------
 // PEP / Sanctions response → canonical entity
 // ---------------------------------------------------------------------------

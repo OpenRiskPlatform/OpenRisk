@@ -92,6 +92,11 @@
             "description": "Main TypeScript/JavaScript file (relative to plugin directory)",
             "pattern": "^[^/].*\\.(ts|js)$"
         },
+        "update_metrics_fn": {
+            "type": "string",
+            "description": "Optional function name to call for refreshing declared metrics in settings.",
+            "pattern": "^[a-zA-Z_$][a-zA-Z0-9_$]*$"
+        },
         "settings": {
             "type": "array",
             "description": "Plugin configuration settings",

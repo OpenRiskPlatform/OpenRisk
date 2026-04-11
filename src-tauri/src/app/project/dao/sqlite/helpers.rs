@@ -44,46 +44,6 @@ pub(super) async fn load_scan_logs(
         .collect())
 }
 
-pub(super) async fn load_scan_metrics(
-    conn: &mut SqliteConnection,
-    scan_result_id: &str,
-) -> Result<Vec<PluginMetricValue>, PersistenceError> {
-    let rows: Vec<(String, String, String, Option<String>, String)> = sqlx::query_as(
-        "SELECT m.metric_name, m.type_json, m.value_json, d.description, COALESCE(d.title, m.metric_name) \
-         FROM ScanPluginMetric m \
-         LEFT JOIN ScanPluginResult r ON r.id = m.scan_result_id \
-         LEFT JOIN PluginRevisionMetricDef d \
-           ON d.revision_id = r.plugin_revision_id AND d.name = m.metric_name \
-         WHERE m.scan_result_id = ?1 \
-         ORDER BY m.metric_name",
-    )
-    .bind(scan_result_id)
-    .fetch_all(&mut *conn)
-    .await?;
-
-    Ok(rows
-        .into_iter()
-        .map(|(name, type_json, value_json, description, title)| {
-            let type_ = serde_json::from_str::<PluginFieldTypeDef>(&type_json).unwrap_or(
-                PluginFieldTypeDef {
-                    name: "string".to_string(),
-                    values: None,
-                },
-            );
-            let value = serde_json::from_str::<serde_json::Value>(&value_json)
-                .map(|v| SettingValue::from_json(&v))
-                .unwrap_or(SettingValue::Null);
-            PluginMetricValue {
-                name,
-                title,
-                type_,
-                description,
-                value,
-            }
-        })
-        .collect())
-}
-
 pub(super) async fn load_plugin_record(
     conn: &mut SqliteConnection,
     plugin_id: &str,
@@ -101,11 +61,12 @@ pub(super) async fn load_plugin_record(
         authors_json: Option<String>,
         icon: Option<String>,
         homepage: Option<String>,
+        update_metrics_fn: Option<String>,
     }
 
     let row = sqlx::query_as::<_, PluginRow>(
         "SELECT p.id, pr.name, pr.version, COALESCE(pp.enabled, 1) as enabled, \
-         pr.description, pr.license, pr.authors_json, pr.icon, pr.homepage \
+         pr.description, pr.license, pr.authors_json, pr.icon, pr.homepage, pr.update_metrics_fn \
          FROM Plugin p \
          LEFT JOIN ProjectPlugin pp ON pp.plugin_id = p.id AND pp.project_id = ?2 \
          INNER JOIN PluginRevision pr ON pr.id = COALESCE(pp.pinned_revision_id, p.current_revision_id) \
@@ -133,6 +94,7 @@ pub(super) async fn load_plugin_record(
         authors,
         icon: row.icon.clone(),
         homepage: row.homepage.clone(),
+        update_metrics_fn: row.update_metrics_fn.clone(),
     };
 
     #[derive(sqlx::FromRow)]
@@ -329,25 +291,18 @@ pub(super) async fn load_plugin_record(
         .collect();
 
     let mval_rows: Vec<(String, String, String, Option<String>, String)> = sqlx::query_as(
-        "SELECT m.metric_name, m.type_json, m.value_json, d.description, d.title \
-         FROM ScanPluginMetric m \
-         INNER JOIN ScanPluginResult r ON r.id = m.scan_result_id \
-         INNER JOIN PluginRevisionMetricDef d \
-            ON d.name = m.metric_name \
-            AND d.revision_id = ( \
-               SELECT COALESCE(pp2.pinned_revision_id, p2.current_revision_id) \
-               FROM Plugin p2 \
-               LEFT JOIN ProjectPlugin pp2 ON pp2.plugin_id = p2.id AND pp2.project_id = ?2 \
-               WHERE p2.id = ?1 \
-            ) \
-         WHERE r.plugin_id = ?1 \
-           AND r.rowid = ( \
-              SELECT MAX(r2.rowid) \
-              FROM ScanPluginResult r2 \
-              INNER JOIN ScanPluginMetric m2 ON m2.scan_result_id = r2.id \
-              WHERE r2.plugin_id = ?1 AND m2.metric_name = m.metric_name \
-           ) \
-         ORDER BY m.metric_name",
+          "SELECT m.metric_name, d.type_json, m.value_json, d.description, COALESCE(d.title, m.metric_name) \
+            FROM PluginMetric m \
+            INNER JOIN PluginRevisionMetricDef d \
+              ON d.name = m.metric_name \
+              AND d.revision_id = ( \
+                  SELECT COALESCE(pp2.pinned_revision_id, p2.current_revision_id) \
+                  FROM Plugin p2 \
+                  LEFT JOIN ProjectPlugin pp2 ON pp2.plugin_id = p2.id AND pp2.project_id = ?2 \
+                  WHERE p2.id = ?1 \
+              ) \
+            WHERE m.plugin_id = ?1 \
+            ORDER BY m.metric_name",
     )
     .bind(plugin_id)
     .bind(project_id)

@@ -26,6 +26,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::project::upsert_project_plugin_from_zip,
         commands::project::install_plugin_from_url,
         commands::project::set_plugin_enabled,
+        commands::project::refresh_plugin_metrics,
         commands::project::create_scan,
         commands::project::list_scans,
         commands::project::get_scan,

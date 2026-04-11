@@ -172,6 +172,20 @@ pub async fn set_plugin_enabled(
         .map_err(AppError::from)
 }
 
+/// Refresh persisted plugin metrics by calling plugin-defined `update_metrics_fn` when available.
+/// #
+#[tauri::command]
+#[specta::specta]
+pub async fn refresh_plugin_metrics(
+    plugin_id: String,
+    state: tauri::State<'_, ProjectState>,
+) -> Result<PluginRecord, AppError> {
+    let project = get_open_project(&state).await?;
+    service::refresh_plugin_metrics(project.as_ref(), &plugin_id)
+        .await
+        .map_err(AppError::from)
+}
+
 /// Create a new scan in Draft status.
 /// #
 #[tauri::command]

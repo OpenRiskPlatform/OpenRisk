@@ -37,17 +37,19 @@ pub async fn run_scan(
     let mut results: Vec<ScanPluginResultRecord> = Vec::with_capacity(ctx.plugins.len());
 
     for load_data in ctx.plugins {
-        let output = match load_data.code.filter(|c| !c.trim().is_empty()) {
-            None => PluginOutput {
-                ok: false,
-                data_json: None,
-                error: Some(format!(
-                    "Plugin '{}' not found or has no code in database",
-                    load_data.plugin_id
-                )),
-                logs: vec![],
-                metrics: vec![],
-            },
+        let (output, metrics) = match load_data.code.filter(|c| !c.trim().is_empty()) {
+            None => (
+                PluginOutput {
+                    ok: false,
+                    data_json: None,
+                    error: Some(format!(
+                        "Plugin '{}' not found or has no code in database",
+                        load_data.plugin_id
+                    )),
+                    logs: vec![],
+                },
+                vec![],
+            ),
             Some(code) => {
                 // Build settings Value for the JS runtime.
                 let mut settings_map = Map::new();
@@ -92,21 +94,25 @@ pub async fn run_scan(
                         let mut logs = parse_logs(&logs_val);
                         let metrics =
                             parse_metrics(&metrics_val, &load_data.metric_defs, &mut logs);
-                        PluginOutput {
-                            ok: true,
-                            data_json,
-                            error: None,
-                            logs,
+                        (
+                            PluginOutput {
+                                ok: true,
+                                data_json,
+                                error: None,
+                                logs,
+                            },
                             metrics,
-                        }
+                        )
                     }
-                    Err(err) => PluginOutput {
-                        ok: false,
-                        data_json: None,
-                        error: Some(err),
-                        logs: vec![],
-                        metrics: vec![],
-                    },
+                    Err(err) => (
+                        PluginOutput {
+                            ok: false,
+                            data_json: None,
+                            error: Some(err),
+                            logs: vec![],
+                        },
+                        vec![],
+                    ),
                 }
             }
         };
@@ -116,10 +122,56 @@ pub async fn run_scan(
             plugin_revision_id: Some(load_data.plugin_revision_id),
             entrypoint_id: load_data.entrypoint_id,
             output,
+            metrics,
         });
     }
 
     dao.end_scan_run(scan_id, ctx.scan_preview, results).await
+}
+
+/// Refresh persisted plugin metrics by calling optional `update_metrics_fn` from plugin manifest.
+pub async fn refresh_plugin_metrics(
+    dao: &dyn ProjectPersistence,
+    plugin_id: &str,
+) -> Result<PluginRecord, PersistenceError> {
+    let load_data = dao.get_plugin_load_data_for_metrics(plugin_id).await?;
+    let Some(update_metrics_fn) = load_data.update_metrics_fn.clone() else {
+        return dao.get_plugin_record(plugin_id).await;
+    };
+
+    let Some(code) = load_data.code.filter(|c| !c.trim().is_empty()) else {
+        return Err(PersistenceError::Validation(format!(
+            "Plugin '{}' not found or has no code in database",
+            plugin_id
+        )));
+    };
+
+    let mut settings_map = Map::new();
+    for sv in &load_data.settings {
+        settings_map.insert(sv.name.clone(), sv.value.to_json());
+    }
+    let plugin_settings = Value::Object(settings_map);
+
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        crate::app::plugin::execute_plugin_code_with_settings(
+            code,
+            Value::Object(Map::new()),
+            plugin_settings,
+            update_metrics_fn,
+        )
+    })
+    .await
+    .map_err(|e| {
+        PersistenceError::Validation(format!("Failed to join plugin execution task: {}", e))
+    })?;
+
+    let (_, logs_val, metrics_val) = result
+        .map_err(|e| PersistenceError::Validation(format!("update_metrics failed: {}", e)))?;
+    let mut logs = parse_logs(&logs_val);
+    let metrics = parse_metrics(&metrics_val, &load_data.metric_defs, &mut logs);
+
+    dao.upsert_plugin_metrics(plugin_id, &metrics).await?;
+    dao.get_plugin_record(plugin_id).await
 }
 
 // ---------------------------------------------------------------------------

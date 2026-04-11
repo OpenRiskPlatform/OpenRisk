@@ -327,6 +327,7 @@ impl SqliteProjectPersistence {
         let license: String = plugin.manifest.license.clone().into();
         let icon: Option<String> = plugin.manifest.icon.as_ref().map(|s| s.to_string());
         let homepage: Option<String> = plugin.manifest.homepage.clone();
+        let update_metrics_fn: Option<String> = plugin.update_metrics_fn.clone();
         let authors_json = serde_json::to_string(&plugin.manifest.authors)?;
 
         sqlx::query(
@@ -342,8 +343,8 @@ impl SqliteProjectPersistence {
 
         sqlx::query(
             "INSERT INTO PluginRevision \
-             (id, plugin_id, version, name, description, license, authors_json, icon, homepage, code) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+               (id, plugin_id, version, name, description, license, authors_json, icon, homepage, update_metrics_fn, code) \
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         )
         .bind(&revision_id)
         .bind(&plugin.id)
@@ -354,6 +355,7 @@ impl SqliteProjectPersistence {
         .bind(&authors_json)
         .bind(&icon)
         .bind(&homepage)
+        .bind(&update_metrics_fn)
         .bind(&plugin.code)
         .execute(&mut *conn)
         .await?;
