@@ -442,8 +442,6 @@ export async function topicReport(inputs: PluginInputs): Promise<DataModelEntity
         pushProp(props, "adverseActivityDetected", tv.bool(Boolean(topic.adverseActivityDetected)));
         pushProp(props, "summary", topic.result ? tv.string(topic.result) : undefined);
 
-        pushExtra(extra, "output_language", tv.string(inputs.output_language ?? "English"));
-        pushExtra(extra, "country", inputs.country ? tv.string(inputs.country) : undefined);
 
         return {
             $entity: "entity.riskTopic",
@@ -532,10 +530,6 @@ export async function unitAnalysis(inputs: PluginInputs): Promise<DataModelEntit
                 pushExtra(extra, "claim", tv.string(claim));
             }
 
-            pushExtra(extra, "output_language", tv.string(inputs.output_language ?? "English"));
-            pushExtra(extra, "country", inputs.country ? tv.string(inputs.country) : undefined);
-            pushExtra(extra, "media_only", tv.bool(Boolean(inputs.media_only)));
-
             return {
                 $entity: "entity.mediaMention",
                 $id: buildEntityId("unit-analysis-claims", target, row.url ?? String(idx)),
@@ -570,10 +564,6 @@ export async function unitAnalysis(inputs: PluginInputs): Promise<DataModelEntit
         pushProp(props, "url", row.url ? tv.url(row.url) : undefined);
         pushProp(props, "analysis", row.analysis ? tv.string(row.analysis) : undefined);
         pushProp(props, "adverseActivityDetected", tv.bool(Boolean(row.adverseActivityDetected)));
-
-        pushExtra(extra, "output_language", tv.string(inputs.output_language ?? "English"));
-        pushExtra(extra, "country", inputs.country ? tv.string(inputs.country) : undefined);
-        pushExtra(extra, "media_only", tv.bool(Boolean(inputs.media_only)));
 
         return {
             $entity: "entity.mediaMention",
@@ -634,9 +624,10 @@ export async function rpoSearch(inputs: PluginInputs): Promise<DataModelEntity[]
                     apiKey,
                 );
                 for (const [bIdx, subject] of (bizPayload.business_subjects ?? []).entries()) {
-                    pushExtra(extra, `business_subject_${bIdx}_description`, subject.description ? tv.string(subject.description) : undefined);
-                    pushExtra(extra, `business_subject_${bIdx}_effective_from`, subject.effective_from ? tv.dateLike(subject.effective_from) : undefined);
-                    pushExtra(extra, `business_subject_${bIdx}_effective_to`, subject.effective_to ? tv.dateLike(subject.effective_to) : undefined);
+                    const n = bIdx + 1;
+                    pushExtra(extra, `business_subject_${n}_description`, subject.description ? tv.string(subject.description) : undefined);
+                    pushExtra(extra, `business_subject_${n}_effective_from`, subject.effective_from ? tv.dateLike(subject.effective_from) : undefined);
+                    pushExtra(extra, `business_subject_${n}_effective_to`, subject.effective_to ? tv.dateLike(subject.effective_to) : undefined);
                 }
             } catch {
                 // Business subjects are supplemental; skip silently if unavailable.
@@ -674,9 +665,10 @@ export async function debtorCheck(inputs: PluginInputs): Promise<DataModelEntity
     const entities = rows.map((row, idx): DataModelEntity => {
         const props: Record<string, TypedValue[]> = {};
 
+        const locationClean = row.location?.replace(/[,\s]/g, "");
         pushProp(props, "name", row.name ? tv.string(row.name) : tv.string(target));
         pushProp(props, "amountOwed", row.amountOwed ? tv.string(row.amountOwed) : undefined);
-        pushProp(props, "location", row.location ? tv.address(row.location) : undefined);
+        pushProp(props, "location", locationClean ? tv.address(row.location!) : undefined);
         pushProp(props, "debtSource", row.source ? tv.string(row.source) : undefined);
 
         return {

@@ -4756,6 +4756,7 @@ dependencies = [
  "once_cell",
  "openssl",
  "regress",
+ "reqwest 0.12.8",
  "rustyscript",
  "serde",
  "serde_bytes",

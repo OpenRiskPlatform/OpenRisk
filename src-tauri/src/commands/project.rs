@@ -138,6 +138,23 @@ pub async fn upsert_project_plugin_from_zip(
         .map_err(AppError::from)
 }
 
+/// Install a plugin from a remote `plugin.json` URL.
+///
+/// Downloads the manifest and main entrypoint file from the same remote directory,
+/// then registers the plugin in the active project database.
+/// #
+#[tauri::command]
+#[specta::specta]
+pub async fn install_plugin_from_url(
+    manifest_url: String,
+    state: tauri::State<'_, ProjectState>,
+) -> Result<PluginRecord, AppError> {
+    let project = get_open_project(&state).await?;
+    service::upsert_plugin_from_url(project.as_ref(), &manifest_url)
+        .await
+        .map_err(AppError::from)
+}
+
 /// Enable or disable a plugin within the active project.
 /// #
 #[tauri::command]

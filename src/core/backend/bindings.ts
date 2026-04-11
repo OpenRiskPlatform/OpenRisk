@@ -47,6 +47,14 @@ export const commands = {
 	 */
 	upsertProjectPluginFromZip: (zipPath: string) => typedError<PluginRecord, AppError>(__TAURI_INVOKE("upsert_project_plugin_from_zip", { zipPath })),
 	/**
+	 *  Install a plugin from a remote `plugin.json` URL.
+	 * 
+	 *  Downloads the manifest and main entrypoint file from the same remote directory,
+	 *  then registers the plugin in the active project database.
+	 *  #
+	 */
+	installPluginFromUrl: (manifestUrl: string) => typedError<PluginRecord, AppError>(__TAURI_INVOKE("install_plugin_from_url", { manifestUrl })),
+	/**
 	 *  Enable or disable a plugin within the active project.
 	 *  #
 	 */

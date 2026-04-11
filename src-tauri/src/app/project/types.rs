@@ -381,7 +381,14 @@ impl From<PersistenceError> for AppError {
             PersistenceError::Validation(msg) => AppError::Validation(msg),
             PersistenceError::Database(err) => AppError::Database(err.to_string()),
             PersistenceError::Io(err) => AppError::Internal(err.to_string()),
+            PersistenceError::Http(msg) => AppError::Internal(msg),
         }
+    }
+}
+
+impl From<reqwest::Error> for PersistenceError {
+    fn from(e: reqwest::Error) -> Self {
+        Self::Http(e.to_string())
     }
 }
 
@@ -398,6 +405,8 @@ pub enum PersistenceError {
     Io(std::io::Error),
     /// SQLite / sqlx error.
     Database(sqlx::Error),
+    /// HTTP error when fetching remote resources.
+    Http(String),
 }
 
 impl fmt::Display for PersistenceError {
@@ -406,6 +415,7 @@ impl fmt::Display for PersistenceError {
             PersistenceError::Validation(msg) => write!(f, "{}", msg),
             PersistenceError::Io(err) => write!(f, "{}", err),
             PersistenceError::Database(err) => write!(f, "{}", err),
+            PersistenceError::Http(msg) => write!(f, "HTTP error: {}", msg),
         }
     }
 }

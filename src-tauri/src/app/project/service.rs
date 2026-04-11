@@ -2,8 +2,8 @@
 
 use super::dao::ProjectPersistence;
 use super::plugins::{
-    build_default_settings, extract_manifest_id, load_plugin_bundle_from_zip,
-    load_plugin_bundle_with_id,
+    build_default_settings, extract_manifest_id, load_plugin_bundle_from_url,
+    load_plugin_bundle_from_zip, load_plugin_bundle_with_id,
 };
 use super::types::{
     LogEntry, PersistenceError, PluginEntrypointSelection, PluginMetricDef, PluginMetricValue,
@@ -90,7 +90,8 @@ pub async fn run_scan(
                             .ok()
                             .filter(|s| s != "null");
                         let mut logs = parse_logs(&logs_val);
-                        let metrics = parse_metrics(&metrics_val, &load_data.metric_defs, &mut logs);
+                        let metrics =
+                            parse_metrics(&metrics_val, &load_data.metric_defs, &mut logs);
                         PluginOutput {
                             ok: true,
                             data_json,
@@ -132,6 +133,26 @@ pub async fn upsert_plugin_from_dir(
 ) -> Result<PluginRecord, PersistenceError> {
     let plugin_id = extract_manifest_id(plugin_dir)?;
     let bundle = load_plugin_bundle_with_id(plugin_dir, plugin_id.clone())?;
+
+    dao.save_plugin(&bundle).await?;
+
+    let existing = dao.get_plugin_setting_values(&plugin_id).await?;
+    let defaults = build_default_settings(&bundle.manifest);
+    let merged = merge_with_defaults(existing, defaults);
+    dao.save_plugin_setting_values(&plugin_id, &merged).await?;
+
+    dao.get_plugin_record(&plugin_id).await
+}
+
+/// Register or refresh a plugin fetched from a remote `plugin.json` URL.
+///
+/// Downloads `plugin.json` and the plugin main file from the same remote directory.
+pub async fn upsert_plugin_from_url(
+    dao: &dyn ProjectPersistence,
+    manifest_url: &str,
+) -> Result<PluginRecord, PersistenceError> {
+    let bundle = load_plugin_bundle_from_url(manifest_url).await?;
+    let plugin_id = bundle.id.clone();
 
     dao.save_plugin(&bundle).await?;
 
@@ -204,8 +225,7 @@ fn parse_metrics(
                 level: super::types::LogLevel::Warn,
                 message: format!(
                     "Metric '{}' ignored: value does not match declared type '{}'",
-                    def.name,
-                    def.type_.name
+                    def.name, def.type_.name
                 ),
             });
             continue;
@@ -223,7 +243,11 @@ fn parse_metrics(
     metrics
 }
 
-fn metric_value_matches_type(raw_value: &Value, type_name: &str, enum_values: Option<&[String]>) -> bool {
+fn metric_value_matches_type(
+    raw_value: &Value,
+    type_name: &str,
+    enum_values: Option<&[String]>,
+) -> bool {
     match type_name {
         "string" | "date" | "url" => raw_value.is_string(),
         "number" => raw_value.is_number(),

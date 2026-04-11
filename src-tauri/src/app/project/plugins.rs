@@ -242,6 +242,61 @@ fn parse_metric_defs(raw: &str) -> Result<Vec<PluginMetricDef>, String> {
     Ok(defs)
 }
 
+/// Download and parse a plugin from a remote `plugin.json` URL.
+///
+/// Fetches the manifest from `manifest_url`, derives the base URL (directory),
+/// then fetches the `main` entrypoint file from the same base directory.
+pub async fn load_plugin_bundle_from_url(
+    manifest_url: &str,
+) -> Result<LocalPluginBundle, PersistenceError> {
+    let manifest_raw = reqwest::get(manifest_url)
+        .await
+        .map_err(|e| PersistenceError::Http(e.to_string()))?
+        .error_for_status()
+        .map_err(|e| PersistenceError::Http(format!("Failed to fetch manifest: {}", e)))?
+        .text()
+        .await
+        .map_err(|e| PersistenceError::Http(e.to_string()))?;
+
+    let plugin_id = serde_json::from_str::<serde_json::Value>(&manifest_raw)
+        .ok()
+        .and_then(|v| {
+            v.get("id")
+                .and_then(|s| s.as_str())
+                .map(|s| s.trim().to_string())
+        })
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| PersistenceError::Validation("Manifest must contain non-empty id".into()))?;
+
+    let metric_defs =
+        parse_metric_defs(&manifest_raw).map_err(|e| PersistenceError::Validation(e))?;
+    let manifest =
+        parse_manifest_relaxed(&manifest_raw).map_err(|e| PersistenceError::Validation(e))?;
+
+    // Derive base URL: everything up to and including the last '/'
+    let base_url = manifest_url
+        .rfind('/')
+        .map(|i| &manifest_url[..=i])
+        .unwrap_or(manifest_url);
+    let main_url = format!("{}{}", base_url, &*manifest.main);
+
+    let code = reqwest::get(&main_url)
+        .await
+        .map_err(|e| PersistenceError::Http(e.to_string()))?
+        .error_for_status()
+        .map_err(|e| PersistenceError::Http(format!("Failed to fetch plugin main file: {}", e)))?
+        .text()
+        .await
+        .map_err(|e| PersistenceError::Http(e.to_string()))?;
+
+    Ok(LocalPluginBundle {
+        id: plugin_id,
+        manifest,
+        metric_defs,
+        code,
+    })
+}
+
 /// Compute the full path to a sidecar file (WAL, SHM, or backup) next to `db_path`.
 pub fn sidecar_path(db_path: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(format!("{}{}", db_path.to_string_lossy(), suffix))
