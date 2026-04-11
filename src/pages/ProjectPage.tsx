@@ -109,6 +109,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     const [renamingScanId, setRenamingScanId] = useState<string | null>(null);
     const [renamingValue, setRenamingValue] = useState("");
 
+    const [selectedPluginId, setSelectedPluginId] = useState<string | null>(null);
     const [enabledPlugins, setEnabledPlugins] = useState<Record<string, boolean>>({});
     const [pluginInputs, setPluginInputs] = useState<Record<string, Record<string, unknown>>>({});
     const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -335,6 +336,12 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                     enabledMap[`${sel.pluginId}::${sel.entrypointId}`] = true;
                 }
                 setEnabledPlugins(enabledMap);
+                setSelectedPluginId((prev) =>
+                    detail.selectedPlugins[0]?.pluginId ??
+                    prev ??
+                    settingsData?.plugins.find((plugin) => plugin.enabled)?.id ??
+                    null,
+                );
 
                 const incomingInputs: Record<string, Record<string, unknown>> = {};
                 for (const input of detail.inputs) {
@@ -356,7 +363,20 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
         return () => {
             cancelled = true;
         };
-    }, [projectDir, projectSessionReady, selectedScanId, backendClient]);
+    }, [projectDir, projectSessionReady, selectedScanId, backendClient, settingsData?.plugins]);
+
+    useEffect(() => {
+        const enabledPluginIds = (settingsData?.plugins ?? [])
+            .filter((plugin) => plugin.enabled)
+            .map((plugin) => plugin.id);
+        if (!enabledPluginIds.length) {
+            setSelectedPluginId(null);
+            return;
+        }
+        if (!selectedPluginId || !enabledPluginIds.includes(selectedPluginId)) {
+            setSelectedPluginId(enabledPluginIds[0]);
+        }
+    }, [settingsData?.plugins, selectedPluginId]);
 
     const createScan = async () => {
         if (!projectDir || !projectSessionReady) {
@@ -429,8 +449,13 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
             return;
         }
 
+        if (!selectedPluginId) {
+            setDetailError("Select one plugin before run.");
+            return;
+        }
+
         const selectedPlugins: PluginEntrypointSelection[] = Object.entries(enabledPlugins)
-            .filter(([, enabled]) => enabled)
+            .filter(([key, enabled]) => enabled && key.startsWith(`${selectedPluginId}::`))
             .map(([key]) => {
                 const [pluginId, entrypointId] = key.split("::");
                 return { pluginId, entrypointId: entrypointId ?? "" };
@@ -615,9 +640,11 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                             settingsError={settingsError}
                             detailError={detailError}
                             pluginNameById={pluginNameById}
+                            selectedPluginId={selectedPluginId}
                             enabledPlugins={enabledPlugins}
                             pluginInputs={pluginInputs}
                             running={running}
+                            onSelectPlugin={setSelectedPluginId}
                             onSetPluginEnabled={setPluginEnabled}
                             onSetPluginField={setPluginField}
                             onRunScan={() => void runScan()}

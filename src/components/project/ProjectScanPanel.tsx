@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { PluginResultView } from "@/components/data-model/PluginResultView";
+import { ProjectPluginSelector } from "@/components/project/ProjectPluginSelector";
 import { PluginRunCard } from "@/components/project/PluginRunCard";
 import { ScanRunInputsView } from "@/components/project/ScanRunInputsView";
 import {
@@ -21,9 +22,11 @@ interface ProjectScanPanelProps {
     settingsError?: string | null;
     detailError?: string | null;
     pluginNameById: Record<string, string>;
+    selectedPluginId: string | null;
     enabledPlugins: Record<string, boolean>;
     pluginInputs: Record<string, Record<string, unknown>>;
     running: boolean;
+    onSelectPlugin: (pluginId: string) => void;
     onSetPluginEnabled: (key: string, enabled: boolean) => void;
     onSetPluginField: (key: string, fieldName: string, value: unknown) => void;
     onRunScan: () => void;
@@ -36,13 +39,21 @@ export function ProjectScanPanel({
     settingsError,
     detailError,
     pluginNameById,
+    selectedPluginId,
     enabledPlugins,
     pluginInputs,
     running,
+    onSelectPlugin,
     onSetPluginEnabled,
     onSetPluginField,
     onRunScan,
 }: ProjectScanPanelProps) {
+    const enabledPluginsList = (settingsData?.plugins ?? []).filter((plugin: PluginRecord) => plugin.enabled);
+    const selectedPlugin =
+        enabledPluginsList.find((plugin) => plugin.id === selectedPluginId) ??
+        enabledPluginsList[0] ??
+        null;
+
     return (
         <section className="bg-card p-2 overflow-y-auto flex-1 min-w-0">
             {settingsError ? <p className="text-sm text-red-600">{settingsError}</p> : null}
@@ -55,24 +66,35 @@ export function ProjectScanPanel({
                     {scanDetail.status === "Draft" ? (
                         <>
                             <div className="space-y-2">
-                                {(settingsData?.plugins ?? []).filter((plugin: PluginRecord) => plugin.enabled).map((plugin: PluginRecord) => {
-                                    const enabledMap: Record<string, boolean> = {};
-                                    for (const ep of plugin.entrypoints) {
-                                        enabledMap[ep.id] = Boolean(enabledPlugins[`${plugin.id}::${ep.id}`]);
-                                    }
-                                    return (
-                                        <PluginRunCard
-                                            key={plugin.id}
-                                            plugin={plugin}
-                                            enabledEntrypoints={enabledMap}
-                                            onEntrypointChange={(epId, enabled) => onSetPluginEnabled(`${plugin.id}::${epId}`, enabled)}
-                                            entrypointInputs={Object.fromEntries(
-                                                plugin.entrypoints.map((ep) => [ep.id, pluginInputs[`${plugin.id}::${ep.id}`] ?? {}]),
-                                            )}
-                                            onFieldChange={(epId, fieldKey, value) => onSetPluginField(`${plugin.id}::${epId}`, fieldKey, value)}
-                                        />
-                                    );
-                                })}
+                                <ProjectPluginSelector
+                                    plugins={enabledPluginsList}
+                                    selectedPluginId={selectedPlugin?.id ?? null}
+                                    onSelect={onSelectPlugin}
+                                />
+                                {selectedPlugin ? (
+                                    <PluginRunCard
+                                        key={selectedPlugin.id}
+                                        plugin={selectedPlugin}
+                                        enabledEntrypoints={Object.fromEntries(
+                                            selectedPlugin.entrypoints.map((ep) => [
+                                                ep.id,
+                                                Boolean(enabledPlugins[`${selectedPlugin.id}::${ep.id}`]),
+                                            ]),
+                                        )}
+                                        onEntrypointChange={(epId, enabled) =>
+                                            onSetPluginEnabled(`${selectedPlugin.id}::${epId}`, enabled)
+                                        }
+                                        entrypointInputs={Object.fromEntries(
+                                            selectedPlugin.entrypoints.map((ep) => [
+                                                ep.id,
+                                                pluginInputs[`${selectedPlugin.id}::${ep.id}`] ?? {},
+                                            ]),
+                                        )}
+                                        onFieldChange={(epId, fieldKey, value) =>
+                                            onSetPluginField(`${selectedPlugin.id}::${epId}`, fieldKey, value)
+                                        }
+                                    />
+                                ) : null}
                             </div>
 
                             <div className="pt-2 flex justify-center">
