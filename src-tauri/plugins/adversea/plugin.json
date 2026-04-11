@@ -1,7 +1,7 @@
 {
     "$schema": "../../schemas/plugin-manifest.schema.json",
     "id": "adversea",
-    "version": "0.1.4",
+    "version": "0.2.0",
     "name": "Adversea",
     "description": "Full Adversea integration covering all documented screening, entity recognition, and account endpoints.",
     "authors": [
@@ -54,10 +54,7 @@
                     "name": "output_language",
                     "type": {
                         "name": "enum",
-                        "values": [
-                            "English",
-                            "Slovak"
-                        ]
+                        "values": ["English", "Slovak"]
                     },
                     "optional": true,
                     "title": "Output Language",
@@ -66,10 +63,13 @@
                 },
                 {
                     "name": "country",
-                    "type": "string",
+                    "type": {
+                        "name": "enum",
+                        "values": ["usa","australia","new_zealand","great_britain","germany","czechia","slovakia","italy","austria","belgium","bulgaria","croatia","cyprus","denmark","estonia","finland","france","greece","hungary","ireland","latvia","lithuania","luxembourg","malta","netherlands","poland","portugal","romania","slovenia","spain","sweden"]
+                    },
                     "optional": true,
                     "title": "Country",
-                    "description": "Adversea country code (for example slovakia, germany, usa)."
+                    "description": "Country of origin of websites used for screening. Increases accuracy."
                 },
                 {
                     "name": "force_recreate",
@@ -105,10 +105,10 @@
             ]
         },
         {
-            "id": "unit-analysis-text",
-            "name": "Unit Analysis (Text)",
-            "description": "Analyzes search engine results and returns concise textual findings for each URL.",
-            "function": "unitAnalysisText",
+            "id": "unit-analysis",
+            "name": "Unit Analysis",
+            "description": "Analyzes search engine results for each URL. Mode text returns concise text; mode claims returns atomic facts.",
+            "function": "unitAnalysis",
             "inputs": [
                 {
                     "name": "target",
@@ -118,13 +118,21 @@
                     "description": "Name of the screened person or company."
                 },
                 {
+                    "name": "mode",
+                    "type": {
+                        "name": "enum",
+                        "values": ["text", "claims"]
+                    },
+                    "optional": true,
+                    "title": "Mode",
+                    "description": "text = concise analysis per URL; claims = atomic facts per URL.",
+                    "default": "text"
+                },
+                {
                     "name": "output_language",
                     "type": {
                         "name": "enum",
-                        "values": [
-                            "English",
-                            "Slovak"
-                        ]
+                        "values": ["English", "Slovak"]
                     },
                     "optional": true,
                     "title": "Output Language",
@@ -133,62 +141,13 @@
                 },
                 {
                     "name": "country",
-                    "type": "string",
-                    "optional": true,
-                    "title": "Country",
-                    "description": "Optional Adversea country code for regional tuning."
-                },
-                {
-                    "name": "media_only",
-                    "type": "boolean",
-                    "optional": true,
-                    "title": "Media Only",
-                    "description": "Restrict analysis to internet media.",
-                    "default": false
-                },
-                {
-                    "name": "force_recreate",
-                    "type": "boolean",
-                    "optional": true,
-                    "title": "Force Recreate",
-                    "description": "Bypass cache and refresh all response parts.",
-                    "default": false
-                }
-            ]
-        },
-        {
-            "id": "unit-analysis-claims",
-            "name": "Unit Analysis (Claims)",
-            "description": "Analyzes search engine results and returns atomic claims for each URL.",
-            "function": "unitAnalysisClaims",
-            "inputs": [
-                {
-                    "name": "target",
-                    "type": "string",
-                    "optional": false,
-                    "title": "Target Name",
-                    "description": "Name of the screened person or company."
-                },
-                {
-                    "name": "output_language",
                     "type": {
                         "name": "enum",
-                        "values": [
-                            "English",
-                            "Slovak"
-                        ]
+                        "values": ["usa","australia","new_zealand","great_britain","germany","czechia","slovakia","italy","austria","belgium","bulgaria","croatia","cyprus","denmark","estonia","finland","france","greece","hungary","ireland","latvia","lithuania","luxembourg","malta","netherlands","poland","portugal","romania","slovenia","spain","sweden"]
                     },
                     "optional": true,
-                    "title": "Output Language",
-                    "description": "Language for generated claims.",
-                    "default": "English"
-                },
-                {
-                    "name": "country",
-                    "type": "string",
-                    "optional": true,
                     "title": "Country",
-                    "description": "Optional Adversea country code for regional tuning."
+                    "description": "Country of origin of websites used for screening. Increases accuracy."
                 },
                 {
                     "name": "media_only",
@@ -210,8 +169,8 @@
         },
         {
             "id": "rpo",
-            "name": "RPO Organization Search",
-            "description": "Finds Slovak organizations and related registry context in RPO/ORSR.",
+            "name": "RPO Organization Search (Slovakia only)",
+            "description": "Finds Slovak organizations in RPO/ORSR registry. Automatically fetches business subjects for each found organization. Slovakia only.",
             "function": "rpoSearch",
             "inputs": [
                 {
@@ -232,24 +191,9 @@
             ]
         },
         {
-            "id": "rpo-business-subjects",
-            "name": "RPO Business Subjects",
-            "description": "Retrieves business subjects for a Slovak organization ICO.",
-            "function": "rpoBusinessSubjects",
-            "inputs": [
-                {
-                    "name": "ico",
-                    "type": "string",
-                    "optional": false,
-                    "title": "ICO",
-                    "description": "Organization ICO (numeric)."
-                }
-            ]
-        },
-        {
             "id": "debtors",
-            "name": "Debtors Check",
-            "description": "Checks publicly available debtor registries for the target.",
+            "name": "Debtors Check (Slovakia only)",
+            "description": "Checks publicly available debtor registries (health insurance, tax authority, etc.) for the target. Slovakia only.",
             "function": "debtorCheck",
             "inputs": [
                 {
@@ -270,39 +214,9 @@
             ]
         },
         {
-            "id": "court-case",
-            "name": "Court Case Detail",
-            "description": "Loads one court case detail by court case link and organization ICO.",
-            "function": "courtCaseDetail",
-            "inputs": [
-                {
-                    "name": "court_case_link",
-                    "type": "string",
-                    "optional": false,
-                    "title": "Court Case Link",
-                    "description": "Unique URL/link to the court case document."
-                },
-                {
-                    "name": "org_ico",
-                    "type": "string",
-                    "optional": false,
-                    "title": "Organization ICO",
-                    "description": "8-digit organization ICO tied to this case."
-                },
-                {
-                    "name": "force_recreate",
-                    "type": "boolean",
-                    "optional": true,
-                    "title": "Force Recreate",
-                    "description": "Bypass cache and refresh all response parts.",
-                    "default": false
-                }
-            ]
-        },
-        {
             "id": "default-entity-recognition",
             "name": "Default Entity Recognition",
-            "description": "Extracts entities from search results for the target name.",
+            "description": "Extracts related entities (people, companies) from search results for the target name. Useful for discovering connections.",
             "function": "defaultEntityRecognition",
             "inputs": [
                 {
@@ -316,10 +230,7 @@
                     "name": "output_language",
                     "type": {
                         "name": "enum",
-                        "values": [
-                            "English",
-                            "Slovak"
-                        ]
+                        "values": ["English", "Slovak"]
                     },
                     "optional": true,
                     "title": "Output Language",
@@ -328,10 +239,13 @@
                 },
                 {
                     "name": "country",
-                    "type": "string",
+                    "type": {
+                        "name": "enum",
+                        "values": ["usa","australia","new_zealand","great_britain","germany","czechia","slovakia","italy","austria","belgium","bulgaria","croatia","cyprus","denmark","estonia","finland","france","greece","hungary","ireland","latvia","lithuania","luxembourg","malta","netherlands","poland","portugal","romania","slovenia","spain","sweden"]
+                    },
                     "optional": true,
                     "title": "Country",
-                    "description": "Optional Adversea country code for regional tuning."
+                    "description": "Country of origin of websites used for screening. Increases accuracy."
                 },
                 {
                     "name": "force_recreate",
@@ -342,13 +256,6 @@
                     "default": false
                 }
             ]
-        },
-        {
-            "id": "remaining-credit",
-            "name": "Remaining Credit",
-            "description": "Retrieves remaining Adversea credit for the current API key.",
-            "function": "remainingCredit",
-            "inputs": []
         }
     ],
     "settings": [

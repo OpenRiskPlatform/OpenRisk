@@ -12,9 +12,7 @@ interface PluginInputs {
     country?: string;
     media_only?: boolean;
     force_recreate?: boolean;
-    ico?: string;
-    court_case_link?: string;
-    org_ico?: string;
+    mode?: "text" | "claims";
 }
 
 interface TypedValue<T = unknown> {
@@ -139,21 +137,6 @@ interface DebtorServiceDataEntry {
     location?: string;
 }
 
-interface CourtCasesServiceResponse {
-    download_link?: string;
-    unique_valid_icos?: string[];
-    court_topic?: string;
-    court_decision?: string;
-    court_topic_and_decision?: string;
-    court?: string;
-    court_mark?: string;
-    court_id?: string;
-    court_judge_name?: string;
-    court_ecli?: string;
-    court_decision_date?: string;
-    ai_response?: string;
-}
-
 interface DefaultEntity {
     name?: string;
     short_description?: string;
@@ -219,30 +202,6 @@ function requireTarget(inputs: PluginInputs): string {
         throw new Error("Input 'target' is required (name of person or organization).");
     }
     return target;
-}
-
-function requireIco(inputs: PluginInputs): string {
-    const ico = inputs.ico?.trim();
-    if (!ico) {
-        throw new Error("Input 'ico' is required.");
-    }
-    return ico;
-}
-
-function requireCourtCaseLink(inputs: PluginInputs): string {
-    const link = inputs.court_case_link?.trim();
-    if (!link) {
-        throw new Error("Input 'court_case_link' is required.");
-    }
-    return link;
-}
-
-function requireOrgIco(inputs: PluginInputs): string {
-    const orgIco = inputs.org_ico?.trim();
-    if (!orgIco) {
-        throw new Error("Input 'org_ico' is required.");
-    }
-    return orgIco;
 }
 
 function slug(value: string): string {
@@ -542,10 +501,54 @@ export async function socialMediaCheck(inputs: PluginInputs): Promise<DataModelE
     return finalizeRun(apiKey, entities);
 }
 
-export async function unitAnalysisText(inputs: PluginInputs): Promise<DataModelEntity[]> {
+export async function unitAnalysis(inputs: PluginInputs): Promise<DataModelEntity[]> {
     const target = requireTarget(inputs);
     const apiKey = requireApiKey(inputs);
+    const mode = inputs.mode ?? "text";
 
+    if (mode === "claims") {
+        const rows = await adverseaGetJson<UnitAnalysisClaim[]>(
+            "/screening/unit-analysis/claims",
+            {
+                targetName: target,
+                country: inputs.country,
+                outputLanguage: inputs.output_language ?? "English",
+                mediaOnly: inputs.media_only,
+                forceRecreate: inputs.force_recreate,
+            },
+            apiKey,
+        );
+
+        const entities = rows.map((row, idx): DataModelEntity => {
+            const props: Record<string, TypedValue[]> = {};
+            const extra: KeyValueEntry[] = [];
+
+            pushProp(props, "name", tv.string(target));
+            pushProp(props, "title", row.title ? tv.string(row.title) : undefined);
+            pushProp(props, "url", row.url ? tv.url(row.url) : undefined);
+            pushProp(props, "adverseActivityDetected", tv.bool(Boolean(row.adverseActivityDetected)));
+
+            for (const claim of row.claims ?? []) {
+                pushExtra(extra, "claim", tv.string(claim));
+            }
+
+            pushExtra(extra, "output_language", tv.string(inputs.output_language ?? "English"));
+            pushExtra(extra, "country", inputs.country ? tv.string(inputs.country) : undefined);
+            pushExtra(extra, "media_only", tv.bool(Boolean(inputs.media_only)));
+
+            return {
+                $entity: "entity.mediaMention",
+                $id: buildEntityId("unit-analysis-claims", target, row.url ?? String(idx)),
+                $props: props,
+                $extra: extra,
+                $sources: row.url ? [{ name: row.title || "claims-source", source: row.url }] : undefined,
+            };
+        });
+
+        return finalizeRun(apiKey, entities);
+    }
+
+    // mode === "text" (default)
     const rows = await adverseaGetJson<UnitAnalysisText[]>(
         "/screening/unit-analysis/text",
         {
@@ -584,51 +587,6 @@ export async function unitAnalysisText(inputs: PluginInputs): Promise<DataModelE
     return finalizeRun(apiKey, entities);
 }
 
-export async function unitAnalysisClaims(inputs: PluginInputs): Promise<DataModelEntity[]> {
-    const target = requireTarget(inputs);
-    const apiKey = requireApiKey(inputs);
-
-    const rows = await adverseaGetJson<UnitAnalysisClaim[]>(
-        "/screening/unit-analysis/claims",
-        {
-            targetName: target,
-            country: inputs.country,
-            outputLanguage: inputs.output_language ?? "English",
-            mediaOnly: inputs.media_only,
-            forceRecreate: inputs.force_recreate,
-        },
-        apiKey,
-    );
-
-    const entities = rows.map((row, idx): DataModelEntity => {
-        const props: Record<string, TypedValue[]> = {};
-        const extra: KeyValueEntry[] = [];
-
-        pushProp(props, "name", tv.string(target));
-        pushProp(props, "title", row.title ? tv.string(row.title) : undefined);
-        pushProp(props, "url", row.url ? tv.url(row.url) : undefined);
-        pushProp(props, "adverseActivityDetected", tv.bool(Boolean(row.adverseActivityDetected)));
-
-        for (const claim of row.claims ?? []) {
-            pushExtra(extra, "claim", tv.string(claim));
-        }
-
-        pushExtra(extra, "output_language", tv.string(inputs.output_language ?? "English"));
-        pushExtra(extra, "country", inputs.country ? tv.string(inputs.country) : undefined);
-        pushExtra(extra, "media_only", tv.bool(Boolean(inputs.media_only)));
-
-        return {
-            $entity: "entity.mediaMention",
-            $id: buildEntityId("unit-analysis-claims", target, row.url ?? String(idx)),
-            $props: props,
-            $extra: extra,
-            $sources: row.url ? [{ name: row.title || "claims-source", source: row.url }] : undefined,
-        };
-    });
-
-    return finalizeRun(apiKey, entities);
-}
-
 export async function rpoSearch(inputs: PluginInputs): Promise<DataModelEntity[]> {
     const target = requireTarget(inputs);
     const apiKey = requireApiKey(inputs);
@@ -642,7 +600,7 @@ export async function rpoSearch(inputs: PluginInputs): Promise<DataModelEntity[]
         apiKey,
     );
 
-    const entities = rows.map((row, idx): DataModelEntity => {
+    const entities = await Promise.all(rows.map(async (row, idx): Promise<DataModelEntity> => {
         const props: Record<string, TypedValue[]> = {};
         const extra: KeyValueEntry[] = [];
 
@@ -668,6 +626,23 @@ export async function rpoSearch(inputs: PluginInputs): Promise<DataModelEntity[]
         pushExtra(extra, "source_register", row.source_register ? tv.string(row.source_register) : undefined);
         pushExtra(extra, "effective_to", row.effective_to ? tv.dateLike(row.effective_to) : undefined);
 
+        if (row.ico) {
+            try {
+                const bizPayload = await adverseaGetJson<RpoBusinessSubjectsResponse>(
+                    "/screening/rpo/business-data/business-subjects",
+                    { ico: String(row.ico) },
+                    apiKey,
+                );
+                for (const [bIdx, subject] of (bizPayload.business_subjects ?? []).entries()) {
+                    pushExtra(extra, `business_subject_${bIdx}_description`, subject.description ? tv.string(subject.description) : undefined);
+                    pushExtra(extra, `business_subject_${bIdx}_effective_from`, subject.effective_from ? tv.dateLike(subject.effective_from) : undefined);
+                    pushExtra(extra, `business_subject_${bIdx}_effective_to`, subject.effective_to ? tv.dateLike(subject.effective_to) : undefined);
+                }
+            } catch {
+                // Business subjects are supplemental; skip silently if unavailable.
+            }
+        }
+
         return {
             $entity: "entity.organization",
             $id: buildEntityId("rpo", row.ico ?? target, idx),
@@ -678,40 +653,7 @@ export async function rpoSearch(inputs: PluginInputs): Promise<DataModelEntity[]
                 source: link,
             })),
         };
-    });
-
-    return finalizeRun(apiKey, entities);
-}
-
-export async function rpoBusinessSubjects(inputs: PluginInputs): Promise<DataModelEntity[]> {
-    const ico = requireIco(inputs);
-    const apiKey = requireApiKey(inputs);
-
-    const payload = await adverseaGetJson<RpoBusinessSubjectsResponse>(
-        "/screening/rpo/business-data/business-subjects",
-        { ico },
-        apiKey,
-    );
-
-    const entities = (payload.business_subjects ?? []).map((row, idx): DataModelEntity => {
-        const props: Record<string, TypedValue[]> = {};
-
-        pushProp(props, "organizationId", tv.string(ico));
-        pushProp(props, "description", row.description ? tv.string(row.description) : undefined);
-        pushProp(props, "effectiveFrom", row.effective_from ? tv.dateLike(row.effective_from) : undefined);
-        pushProp(props, "effectiveTo", row.effective_to ? tv.dateLike(row.effective_to) : undefined);
-
-        return {
-            $entity: "entity.businessActivity",
-            $id: buildEntityId("business-subject", ico, idx),
-            $props: props,
-            $extra: [],
-            $sources: [{
-                name: "Adversea RPO Business Subjects",
-                source: `${BASE_URL}/screening/rpo/business-data/business-subjects`,
-            }],
-        };
-    });
+    }));
 
     return finalizeRun(apiKey, entities);
 }
@@ -750,51 +692,6 @@ export async function debtorCheck(inputs: PluginInputs): Promise<DataModelEntity
     });
 
     return finalizeRun(apiKey, entities);
-}
-
-export async function courtCaseDetail(inputs: PluginInputs): Promise<DataModelEntity[]> {
-    const courtCaseLink = requireCourtCaseLink(inputs);
-    const orgIco = requireOrgIco(inputs);
-    const apiKey = requireApiKey(inputs);
-
-    const row = await adverseaGetJson<CourtCasesServiceResponse>(
-        "/screening/court-cases/case",
-        {
-            courtCaseLink,
-            orgICO: orgIco,
-            forceRecreate: inputs.force_recreate,
-        },
-        apiKey,
-    );
-
-    const props: Record<string, TypedValue[]> = {};
-    const extra: KeyValueEntry[] = [];
-
-    pushProp(props, "courtTopic", row.court_topic ? tv.string(row.court_topic) : undefined);
-    pushProp(props, "courtDecision", row.court_decision ? tv.string(row.court_decision) : undefined);
-    pushProp(props, "court", row.court ? tv.string(row.court) : undefined);
-    pushProp(props, "courtMark", row.court_mark ? tv.string(row.court_mark) : undefined);
-    pushProp(props, "courtId", row.court_id ? tv.string(row.court_id) : undefined);
-    pushProp(props, "courtJudge", row.court_judge_name ? tv.string(row.court_judge_name) : undefined);
-    pushProp(props, "courtEcli", row.court_ecli ? tv.string(row.court_ecli) : undefined);
-    pushProp(props, "courtDecisionDate", row.court_decision_date ? tv.dateLike(row.court_decision_date) : undefined);
-
-    pushExtra(extra, "organization_ico", tv.string(orgIco));
-    pushExtra(extra, "court_topic_and_decision", row.court_topic_and_decision ? tv.string(row.court_topic_and_decision) : undefined);
-    pushExtra(extra, "ai_response", row.ai_response ? tv.string(row.ai_response) : undefined);
-    for (const linkedIco of row.unique_valid_icos ?? []) {
-        pushExtra(extra, "related_ico", tv.string(linkedIco));
-    }
-
-    return finalizeRun(apiKey, [{
-        $entity: "entity.legalCase",
-        $id: buildEntityId("court-case", row.court_id ?? courtCaseLink),
-        $props: props,
-        $extra: extra,
-        $sources: row.download_link
-            ? [{ name: "court-document", source: row.download_link }]
-            : [{ name: "Adversea Court Case", source: `${BASE_URL}/screening/court-cases/case` }],
-    }]);
 }
 
 export async function defaultEntityRecognition(inputs: PluginInputs): Promise<DataModelEntity[]> {
@@ -836,25 +733,4 @@ export async function defaultEntityRecognition(inputs: PluginInputs): Promise<Da
     return finalizeRun(apiKey, entities);
 }
 
-export async function remainingCredit(inputs: PluginInputs): Promise<DataModelEntity[]> {
-    const apiKey = requireApiKey(inputs);
-    const credit = await adverseaGetNumber(
-        "/admin/client/remainingCredit",
-        {},
-        apiKey,
-    );
-    return finalizeRun(apiKey, [{
-        $entity: "entity.serviceAccount",
-        $id: "adversea:service-account:current",
-        $props: {
-            provider: [tv.string("Adversea")],
-            remainingCredit: [tv.number(credit)],
-        },
-        $extra: [],
-        $sources: [{
-            name: "Adversea Remaining Credit",
-            source: `${BASE_URL}/admin/client/remainingCredit`,
-        }],
-    }], credit);
-}
 

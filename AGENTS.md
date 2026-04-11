@@ -35,6 +35,21 @@
 - Avoid SELECT with ambiguous names when tables share columns.
 - Prefer explicit column lists over wildcard selections.
 
+## Adversea Plugin Design Decisions (confirmed by user)
+
+- **Entrypoints kept**: pep-sanctions, topic-report, social-media, unit-analysis (merged), rpo, debtors, default-entity-recognition
+- **Entrypoints removed**:
+  - `remaining-credit` — credit is already shown as a metric in plugin settings
+  - `court-case` — requires knowing the exact court URL in advance (drill-down, not primary search)
+  - `rpo-business-subjects` — auto-called inside `rpo` entrypoint for each found ICO
+  - `unit-analysis-text` + `unit-analysis-claims` merged into single `unit-analysis` with `mode: enum(text, claims)`
+- **country field**: must be `enum` type (dropdown) in plugin.json, not free-text; valid values from API: usa, australia, new_zealand, great_britain, germany, czechia, slovakia, italy, austria, belgium, bulgaria, croatia, cyprus, denmark, estonia, finland, france, greece, hungary, ireland, latvia, lithuania, luxembourg, malta, netherlands, poland, portugal, romania, slovenia, spain, sweden
+- **RPO + Debtors**: regional (Slovakia only) — description in plugin.json must say so
+- **PEP/Sanctions display**: pepStatus and sanctioned fields must be shown as prominent badges in PersonEntityCard header, not buried in Extra
+- **Topic Report display**: all 7 topic entities (entity.riskTopic) from one scan must be grouped into ONE summary card; use RiskTopicGroupCard component in PluginResultView
+- **Full Person Screening entrypoint**: deferred — implement after current cleanup
+- **Default Entity Recognition**: keep — useful for discovering related entities
+
 ## Plugin Metrics Feature Notes
 
 - Metrics are runtime metadata, not plugin endpoint outputs.

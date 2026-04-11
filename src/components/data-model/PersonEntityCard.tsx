@@ -49,6 +49,12 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
     const personId = firstProp(entity, "personId");
     const residenceAddress = firstProp(entity, "residenceAddress");
 
+    const pepStatus = firstProp(entity, "pepStatus");
+    const sanctioned = firstProp(entity, "sanctioned");
+
+    const isPep = pepStatus?.value === true;
+    const isSanctioned = sanctioned?.value === true;
+
     return (
         <Card>
             <CardHeader>
@@ -59,6 +65,23 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
                             {surname ? <span>{String(surname.value)}</span> : null}
                         </CardTitle>
                         <CardDescription>ID: {entity.$id}</CardDescription>
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                            {isSanctioned && (
+                                <Badge variant="destructive" className="text-xs font-semibold">
+                                    🚫 Sanctioned
+                                </Badge>
+                            )}
+                            {isPep && (
+                                <Badge variant="destructive" className="text-xs font-semibold bg-orange-600 hover:bg-orange-700">
+                                    ⚠️ PEP
+                                </Badge>
+                            )}
+                            {!isSanctioned && !isPep && (pepStatus !== undefined || sanctioned !== undefined) && (
+                                <Badge variant="secondary" className="text-xs font-semibold text-green-700 dark:text-green-400">
+                                    ✓ No PEP / No Sanctions
+                                </Badge>
+                            )}
+                        </div>
                     </div>
                     {photo ? <TypedValueView item={photo} /> : null}
                 </div>
