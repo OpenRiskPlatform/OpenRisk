@@ -12,6 +12,7 @@ struct ScanSummaryRow {
     id: String,
     status: String,
     preview: Option<String>,
+    created_at: String,
     is_archived: i64,
     sort_order: i64,
 }
@@ -21,6 +22,7 @@ fn map_scan_summary(row: ScanSummaryRow) -> ScanSummaryRecord {
         id: row.id,
         status: row.status,
         preview: row.preview,
+        created_at: row.created_at,
         is_archived: row.is_archived != 0,
         sort_order: row.sort_order,
     }
@@ -66,8 +68,8 @@ pub(super) async fn create_scan(
     .await?;
 
     sqlx::query!(
-        r#"INSERT INTO Scan (id, project_id, status, preview, is_archived, sort_order)
-           VALUES (?1, ?2, ?3, ?4, 0, 0)"#,
+        r#"INSERT INTO Scan (id, project_id, status, preview, created_at, is_archived, sort_order)
+              VALUES (?1, ?2, ?3, ?4, CURRENT_TIMESTAMP, 0, 0)"#,
         id,
         project_id,
         "Draft",
@@ -76,10 +78,18 @@ pub(super) async fn create_scan(
     .execute(&mut *conn)
     .await?;
 
+    let created_at = sqlx::query_scalar!(
+        r#"SELECT COALESCE(created_at, CURRENT_TIMESTAMP) as "created_at!: String" FROM Scan WHERE id = ?1 LIMIT 1"#,
+        id,
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+
     Ok(ScanSummaryRecord {
         id,
         status: "Draft".to_string(),
         preview: Some(final_preview),
+        created_at,
         is_archived: false,
         sort_order: 0,
     })
@@ -95,6 +105,7 @@ pub(super) async fn list_scans(
 
     let rows = sqlx::query!(
         r#"SELECT id as "id!", status as "status!", preview,
+                COALESCE(created_at, CURRENT_TIMESTAMP) as "created_at!: String",
                   is_archived as "is_archived!", sort_order as "sort_order!"
            FROM Scan WHERE project_id = ?1
            ORDER BY is_archived ASC, sort_order ASC, rowid DESC"#,
@@ -110,6 +121,7 @@ pub(super) async fn list_scans(
                 id: row.id,
                 status: row.status,
                 preview: row.preview,
+                created_at: row.created_at,
                 is_archived: row.is_archived,
                 sort_order: row.sort_order,
             })
@@ -129,10 +141,12 @@ pub(super) async fn get_scan(
         id: String,
         status: String,
         preview: Option<String>,
+        created_at: String,
     }
 
     let scan_row = sqlx::query!(
-        r#"SELECT id as "id!", status as "status!", preview
+        r#"SELECT id as "id!", status as "status!", preview,
+                  COALESCE(created_at, CURRENT_TIMESTAMP) as "created_at!: String"
            FROM Scan WHERE id = ?1 LIMIT 1"#,
         scan_id,
     )
@@ -142,6 +156,7 @@ pub(super) async fn get_scan(
         id: scan_row.id,
         status: scan_row.status,
         preview: scan_row.preview,
+        created_at: scan_row.created_at,
     };
 
     let sel_rows = sqlx::query!(
@@ -234,6 +249,7 @@ pub(super) async fn get_scan(
         id: scan.id,
         status: scan.status,
         preview: scan.preview,
+        created_at: scan.created_at,
         selected_plugins,
         inputs,
         results,
@@ -558,6 +574,7 @@ pub(super) async fn end_scan_run(
 
     let row = sqlx::query!(
         r#"SELECT id as "id!", status as "status!", preview,
+                        COALESCE(created_at, CURRENT_TIMESTAMP) as "created_at!: String",
                 is_archived as "is_archived!", sort_order as "sort_order!"
             FROM Scan WHERE id = ?1 LIMIT 1"#,
         scan_id,
@@ -569,6 +586,7 @@ pub(super) async fn end_scan_run(
         id: row.id,
         status: row.status,
         preview: row.preview,
+        created_at: row.created_at,
         is_archived: row.is_archived,
         sort_order: row.sort_order,
     }))
@@ -595,6 +613,7 @@ pub(super) async fn update_scan_preview(
 
     let row = sqlx::query!(
         r#"SELECT id as "id!", status as "status!", preview,
+                        COALESCE(created_at, CURRENT_TIMESTAMP) as "created_at!: String",
                 is_archived as "is_archived!", sort_order as "sort_order!"
             FROM Scan WHERE id = ?1 LIMIT 1"#,
         scan_id,
@@ -606,6 +625,7 @@ pub(super) async fn update_scan_preview(
         id: row.id,
         status: row.status,
         preview: row.preview,
+        created_at: row.created_at,
         is_archived: row.is_archived,
         sort_order: row.sort_order,
     }))
@@ -630,6 +650,7 @@ pub(super) async fn set_scan_archived(
 
     let row = sqlx::query!(
         r#"SELECT id as "id!", status as "status!", preview,
+                        COALESCE(created_at, CURRENT_TIMESTAMP) as "created_at!: String",
                 is_archived as "is_archived!", sort_order as "sort_order!"
             FROM Scan WHERE id = ?1 LIMIT 1"#,
         scan_id,
@@ -641,6 +662,7 @@ pub(super) async fn set_scan_archived(
         id: row.id,
         status: row.status,
         preview: row.preview,
+        created_at: row.created_at,
         is_archived: row.is_archived,
         sort_order: row.sort_order,
     }))
@@ -692,6 +714,7 @@ pub(super) async fn reorder_scans(
 
     let rows = sqlx::query!(
         r#"SELECT id as "id!", status as "status!", preview,
+                COALESCE(created_at, CURRENT_TIMESTAMP) as "created_at!: String",
                   is_archived as "is_archived!", sort_order as "sort_order!"
            FROM Scan WHERE project_id = ?1
            ORDER BY is_archived ASC, sort_order ASC, rowid DESC"#,
@@ -707,6 +730,7 @@ pub(super) async fn reorder_scans(
                 id: row.id,
                 status: row.status,
                 preview: row.preview,
+                created_at: row.created_at,
                 is_archived: row.is_archived,
                 sort_order: row.sort_order,
             })

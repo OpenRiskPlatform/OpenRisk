@@ -310,6 +310,7 @@ export type ScanDetailRecord = {
 	id: string,
 	status: string,
 	preview: string | null,
+	createdAt: string,
 	selectedPlugins: PluginEntrypointSelection[],
 	inputs: ScanEntrypointInput[],
 	results: ScanPluginResultRecord[],
@@ -336,6 +337,7 @@ export type ScanSummaryRecord = {
 	id: string,
 	status: string,
 	preview: string | null,
+	createdAt: string,
 	isArchived: boolean,
 	sortOrder: number,
 };

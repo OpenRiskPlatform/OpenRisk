@@ -231,6 +231,7 @@ pub struct ScanSummaryRecord {
     pub id: String,
     pub status: String,
     pub preview: Option<String>,
+    pub created_at: String,
     pub is_archived: bool,
     pub sort_order: i64,
 }
@@ -315,6 +316,7 @@ pub struct ScanDetailRecord {
     pub id: String,
     pub status: String,
     pub preview: Option<String>,
+    pub created_at: String,
     pub selected_plugins: Vec<PluginEntrypointSelection>,
     pub inputs: Vec<ScanEntrypointInput>,
     pub results: Vec<ScanPluginResultRecord>,

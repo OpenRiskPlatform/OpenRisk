@@ -5,7 +5,10 @@ mod plugin_manifest;
 use std::sync::Arc;
 
 use specta_typescript::Typescript;
+use sqlx::migrate::Migrator;
 use tauri_specta::{collect_commands, Builder};
+
+pub(crate) static EMBEDDED_MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 
 /// Tauri-managed state holding the currently-open project, if any.
 ///
