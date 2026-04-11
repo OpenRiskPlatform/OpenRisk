@@ -42,6 +42,12 @@ pub trait ProjectPersistence: Send + Sync {
     ) -> Result<(), PersistenceError>;
     /// Fetch the full plugin record (defs + current settings) by plugin_id.
     async fn get_plugin_record(&self, plugin_id: &str) -> Result<PluginRecord, PersistenceError>;
+    /// Enable or disable a plugin within this project.
+    async fn set_plugin_enabled(
+        &self,
+        plugin_id: &str,
+        enabled: bool,
+    ) -> Result<PluginRecord, PersistenceError>;
     /// Create a new scan in Draft status.
     async fn create_scan(
         &self,

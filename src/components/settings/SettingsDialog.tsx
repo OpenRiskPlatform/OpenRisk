@@ -7,13 +7,14 @@ import { useEffect, useState } from "react";
 import { SettingsSidebar } from "./SettingsSidebar";
 import { GeneralSettings } from "./GeneralSettings";
 import { PluginSettings } from "./PluginSettings";
+import { ManagePlugins } from "./ManagePlugins";
 import { InfoSettings } from "./InfoSettings";
 import { useBackendClient } from "@/hooks/useBackendClient";
 import { unwrap } from "@/lib/utils";
 import type { ProjectSettingsPayload } from "@/core/backend/bindings";
 import { useSettings } from "@/core/settings/SettingsContext";
 
-export type SettingsCategory = "info" | "general" | "plugins";
+export type SettingsCategory = "info" | "general" | "plugins" | "manage-plugins";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -167,6 +168,19 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
                   projectDir
                     ? settingsError
                     : "Open or create a project to view plugin settings."
+                }
+                onPluginUpdated={handlePluginUpdated}
+              />
+            )}
+            {activeCategory === "manage-plugins" && (
+              <ManagePlugins
+                projectDir={projectDir}
+                plugins={settingsData?.plugins ?? []}
+                loading={settingsLoading}
+                error={
+                  projectDir
+                    ? settingsError
+                    : "Open or create a project to manage plugins."
                 }
                 onPluginUpdated={handlePluginUpdated}
               />

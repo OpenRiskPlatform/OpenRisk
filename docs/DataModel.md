@@ -151,11 +151,105 @@ Typical examples:
 - timestamps such as `first_seen`, `last_seen`, `last_change`
 - any other raw properties that are not mapped to a defined prop
 
+## Additional Universal Entities
+
+To keep integrations lossless, plugins may use additional entity types when
+`entity.person` alone is not enough.
+
+### entity.organization
+
+Generic legal entity representation.
+
+Typical props:
+- `name` (`string`)
+- `country` (`string`)
+- `address` (`address`)
+- `organizationId` (`string`)
+
+### entity.mediaMention
+
+One analyzed media/search hit linked to a target.
+
+Typical props:
+- `name` (`string`)
+- `title` (`string`)
+- `url` (`url`)
+- `analysis` (`string`)
+- `adverseActivityDetected` (`boolean`)
+
+### entity.riskTopic
+
+One topic-level screening result.
+
+Typical props:
+- `name` (`string`)
+- `topicId` (`string`)
+- `summary` (`string`)
+- `adverseActivityDetected` (`boolean`)
+
+### entity.socialProfile
+
+One discovered social profile.
+
+Typical props:
+- `name` (`string`)
+- `platform` (`string`)
+- `profileTitle` (`string`)
+- `profileUrl` (`url`)
+- `userId` (`string`)
+
+### entity.businessActivity
+
+One business-subject/activity record.
+
+Typical props:
+- `organizationId` (`string`)
+- `description` (`string`)
+- `effectiveFrom` (`date-iso8601` or `date-partial-iso8601`)
+- `effectiveTo` (`date-iso8601` or `date-partial-iso8601`)
+
+### entity.financialRecord
+
+One financial obligation/debtor record.
+
+Typical props:
+- `name` (`string`)
+- `amountOwed` (`string`)
+- `location` (`address`)
+- `debtSource` (`string`)
+
+### entity.legalCase
+
+One court-case level record.
+
+Typical props:
+- `courtTopic` (`string`)
+- `courtDecision` (`string`)
+- `court` (`string`)
+- `courtMark` (`string`)
+- `courtId` (`string`)
+- `courtDecisionDate` (`date-iso8601` or `date-partial-iso8601`)
+
+### entity.detectedEntity
+
+Entity recognized by extraction endpoints when person/organization type is not guaranteed.
+
+Typical props:
+- `name` (`string`)
+- `description` (`string`)
+
+### entity.serviceAccount
+
+Operational account/service metadata.
+
+Typical props:
+- `provider` (`string`)
+- `remainingCredit` (`number`)
+
 ## Current Scope
 
 This draft defines:
 - typed values
 - shared entity contract
 - `entity.person`
-
-Other entity types can be added later without changing the core syntax above.
+- additional universal entities listed above

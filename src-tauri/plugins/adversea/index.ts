@@ -1,23 +1,38 @@
 /**
  * Adversea Plugin
  *
- * Screens individuals and legal entities against PEP lists, sanctions datasets,
- * topic-based adverse media, and social media — using the Adversea REST API.
- *
- * Entrypoints:
- *   pepSanctionsCheck  — PEP & sanctions screening (/screening/pepSanctions)
- *   topicReport        — Topic-based adverse media (/screening/topic-report)
- *   socialMediaCheck   — Social media profile search (/screening/socialMedia)
+ * Covers all endpoints documented in `adversea-api.json` and maps responses
+ * into OpenRisk data model entities without dropping source information.
  */
-
-// ---------------------------------------------------------------------------
-// Types mirroring the Adversea OpenAPI spec
-// ---------------------------------------------------------------------------
 
 interface PluginInputs {
     target?: string;
     api_key?: string;
-    output_language?: string;
+    output_language?: "English" | "Slovak";
+    country?: string;
+    media_only?: boolean;
+    force_recreate?: boolean;
+    ico?: string;
+    court_case_link?: string;
+    org_ico?: string;
+}
+
+interface TypedValue<T = unknown> {
+    $type: string;
+    value: T;
+}
+
+interface KeyValueEntry {
+    $type: "key-value";
+    value: { key: TypedValue<string>; value: TypedValue };
+}
+
+interface DataModelEntity {
+    $entity: string;
+    $id: string;
+    $sources?: Array<{ name: string; source: string }>;
+    $props?: Record<string, TypedValue[]>;
+    $extra?: KeyValueEntry[];
 }
 
 interface EntityInfo {
@@ -26,14 +41,14 @@ interface EntityInfo {
     addresses?: string;
     birth_date?: string;
     countries_full?: string[];
-    schema?: string; // "Person" | "LegalEntity"
+    schema?: string;
     emails?: string;
     phones?: string;
 }
 
 interface StateCompany {
     company_name?: string;
-    company_ico?: string;
+    company_ico?: number | string;
     position?: string;
     address?: string;
     effective_from?: string;
@@ -48,7 +63,7 @@ interface Pep {
 }
 
 interface Sanctions {
-    description?: string;
+    description?: string | Record<string, string>;
     dataset?: string[];
 }
 
@@ -79,293 +94,767 @@ interface SocialMediaProfile {
     social_media_platform?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Validation — called by the host to check if the plugin can run
-// ---------------------------------------------------------------------------
+interface UnitAnalysisText {
+    url?: string;
+    title?: string;
+    analysis?: string;
+    adverseActivityDetected?: boolean;
+}
+
+interface UnitAnalysisClaim {
+    url?: string;
+    title?: string;
+    claims?: string[];
+    adverseActivityDetected?: boolean;
+}
+
+interface RpoServiceDataEntry {
+    positions?: string[];
+    given_name?: string;
+    family_name?: string;
+    entry_types?: string[];
+    ico?: string;
+    prev_org_names?: string[];
+    source_register?: string;
+    latest_org_name?: string;
+    effective_to?: string;
+    courts_links?: string[];
+    involved_persons?: string[];
+}
+
+interface RpoBusinessSubjectsDataEntry {
+    description?: string;
+    effective_from?: string;
+    effective_to?: string;
+}
+
+interface RpoBusinessSubjectsResponse {
+    business_subjects?: RpoBusinessSubjectsDataEntry[];
+}
+
+interface DebtorServiceDataEntry {
+    name?: string;
+    source?: string;
+    amountOwed?: string;
+    location?: string;
+}
+
+interface CourtCasesServiceResponse {
+    download_link?: string;
+    unique_valid_icos?: string[];
+    court_topic?: string;
+    court_decision?: string;
+    court_topic_and_decision?: string;
+    court?: string;
+    court_mark?: string;
+    court_id?: string;
+    court_judge_name?: string;
+    court_ecli?: string;
+    court_decision_date?: string;
+    ai_response?: string;
+}
+
+interface DefaultEntity {
+    name?: string;
+    short_description?: string;
+    links?: string[];
+}
+
+interface DefaultEntityRecognitionResponse {
+    entities?: DefaultEntity[];
+}
+
+const BASE_URL = "https://adversea.com/api/gateway-service";
+
+const tv = {
+    string: (value: string): TypedValue<string> => ({ $type: "string", value }),
+    number: (value: number): TypedValue<number> => ({ $type: "number", value }),
+    bool: (value: boolean): TypedValue<boolean> => ({ $type: "boolean", value }),
+    url: (value: string): TypedValue<string> => ({ $type: "url", value }),
+    address: (value: string): TypedValue<string> => ({ $type: "address", value }),
+    dateLike: (value: string): TypedValue<string> => ({
+        $type: /^\d{4}-\d{2}-\d{2}T/.test(value)
+            ? "date-time-iso8601"
+            : /^\d{4}-\d{2}-\d{2}$/.test(value)
+                ? "date-iso8601"
+                : /^\d{4}(-\d{2})?$/.test(value)
+                    ? "date-partial-iso8601"
+                    : "string",
+        value,
+    }),
+    kv: (key: string, value: TypedValue): KeyValueEntry => ({
+        $type: "key-value",
+        value: {
+            key: { $type: "string", value: key },
+            value,
+        },
+    }),
+};
+
+function metricSet(name: string, value: unknown): void {
+    (globalThis as { openrisk?: { metrics?: { set?: (n: string, v: unknown) => void } } }).openrisk?.metrics?.set?.(name, value);
+}
 
 export function validate(settings: Record<string, unknown>): { ok: boolean; error?: string } {
     if (!settings.api_key || String(settings.api_key).trim() === "") {
-        return { ok: false, error: "Adversea API key is required. Please set it in plugin settings." };
+        return {
+            ok: false,
+            error: "Adversea API key is required. Please set it in plugin settings.",
+        };
     }
     return { ok: true };
 }
 
-// ---------------------------------------------------------------------------
-// Shared helpers
-// ---------------------------------------------------------------------------
-
-const BASE_URL = "https://adversea.com/api/gateway-service";
-
-function requireTarget(inputs: PluginInputs): string {
-    const name = inputs.target?.trim();
-    if (!name) throw new Error("Input 'target' is required (name of the person or organization).");
-    return name;
-}
-
 function requireApiKey(inputs: PluginInputs): string {
     const key = inputs.api_key?.trim();
-    if (!key) throw new Error("Adversea API key is missing. Set it in plugin settings.");
+    if (!key) {
+        throw new Error("Adversea API key is missing. Set it in plugin settings.");
+    }
     return key;
 }
 
-async function adverseaGet<T>(
-    path: string,
-    params: Record<string, string>,
-    apiKey: string
-): Promise<T> {
-    const url = new URL(`${BASE_URL}${path}`);
-    for (const [k, v] of Object.entries(params)) {
-        url.searchParams.set(k, v);
+function requireTarget(inputs: PluginInputs): string {
+    const target = inputs.target?.trim();
+    if (!target) {
+        throw new Error("Input 'target' is required (name of person or organization).");
     }
-    const response = await fetch(url.toString(), {
-        headers: { "X-Adversea-Api-Key": apiKey },
-    });
-    if (!response.ok) {
-        const text = await response.text().catch(() => response.statusText);
-        throw new Error(`Adversea API error ${response.status}: ${text}`);
+    return target;
+}
+
+function requireIco(inputs: PluginInputs): string {
+    const ico = inputs.ico?.trim();
+    if (!ico) {
+        throw new Error("Input 'ico' is required.");
     }
-    return response.json() as Promise<T>;
+    return ico;
 }
 
-// ---------------------------------------------------------------------------
-// Data-model conversion helpers
-// ---------------------------------------------------------------------------
-
-interface TypedValue<T = unknown> {
-    $type: string;
-    value: T;
+function requireCourtCaseLink(inputs: PluginInputs): string {
+    const link = inputs.court_case_link?.trim();
+    if (!link) {
+        throw new Error("Input 'court_case_link' is required.");
+    }
+    return link;
 }
 
-interface KeyValueEntry {
-    $type: "key-value";
-    value: { key: TypedValue<string>; value: TypedValue };
+function requireOrgIco(inputs: PluginInputs): string {
+    const orgIco = inputs.org_ico?.trim();
+    if (!orgIco) {
+        throw new Error("Input 'org_ico' is required.");
+    }
+    return orgIco;
 }
 
-interface DataModelEntity {
-    $entity: string;
-    $id: string;
-    $sources?: Array<{ name: string; source: string }>;
-    $props?: Record<string, TypedValue[]>;
-    $extra?: KeyValueEntry[];
+function slug(value: string): string {
+    const normalized = value.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^a-z0-9-_:.]+/g, "-");
+    return normalized || "unknown";
 }
 
-const tv = {
-    string: (v: string): TypedValue<string> => ({ $type: "string", value: v }),
-    date: (v: string): TypedValue<string> => ({ $type: "date-iso8601", value: v }),
-    url: (v: string): TypedValue<string> => ({ $type: "url", value: v }),
-    bool: (v: boolean): TypedValue<boolean> => ({ $type: "boolean", value: v }),
-    kv: (key: string, value: TypedValue): KeyValueEntry => ({
-        $type: "key-value",
-        value: { key: tv.string(key), value },
-    }),
-};
+function buildEntityId(kind: string, ...parts: Array<string | number | undefined>): string {
+    const compact = parts.filter((part): part is string | number => part !== undefined && String(part).trim().length > 0);
+    return `adversea:${kind}:${compact.map((part) => slug(String(part))).join(":")}`;
+}
 
-function pushProp(
-    props: Record<string, TypedValue[]>,
-    key: string,
-    value: TypedValue | undefined
-): void {
-    if (value === undefined) return;
-    if (!props[key]) props[key] = [];
+function csvToArray(value?: string): string[] {
+    if (!value) {
+        return [];
+    }
+    return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function pushProp(props: Record<string, TypedValue[]>, key: string, value: TypedValue | undefined): void {
+    if (!value) {
+        return;
+    }
+    if (!props[key]) {
+        props[key] = [];
+    }
     props[key].push(value);
 }
 
-function csvToArray(csv: string | undefined): string[] {
-    if (!csv) return [];
-    return csv
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
+function pushMany(props: Record<string, TypedValue[]>, key: string, values: TypedValue[]): void {
+    if (!values.length) {
+        return;
+    }
+    if (!props[key]) {
+        props[key] = [];
+    }
+    props[key].push(...values);
 }
 
-/**
- * Convert a PepServiceResponse into a DataModel entity.
- * Uses entity.person for schema="Person" and entity.organization otherwise.
- */
-function pepResponseToEntity(data: PepServiceResponse): DataModelEntity {
+function pushExtra(extra: KeyValueEntry[], key: string, value: TypedValue | undefined): void {
+    if (!value) {
+        return;
+    }
+    const label = key
+        .replace(/[_-]+/g, " ")
+        .replace(/([a-z])([A-Z])/g, "$1 $2")
+        .trim()
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+    extra.push(tv.kv(label, value));
+}
+
+async function adverseaGetJson<T>(
+    path: string,
+    params: Record<string, string | number | boolean | undefined>,
+    apiKey: string,
+): Promise<T> {
+    const url = new URL(`${BASE_URL}${path}`);
+    for (const [key, value] of Object.entries(params)) {
+        if (value === undefined || value === null || String(value).trim() === "") {
+            continue;
+        }
+        url.searchParams.set(key, String(value));
+    }
+
+    const response = await fetch(url.toString(), {
+        headers: {
+            "X-Adversea-Api-Key": apiKey,
+            Accept: "application/json",
+        },
+    });
+    if (!response.ok) {
+        const message = await response.text().catch(() => response.statusText);
+        throw new Error(`Adversea API error ${response.status}: ${message}`);
+    }
+
+    return response.json() as Promise<T>;
+}
+
+async function adverseaGetNumber(
+    path: string,
+    params: Record<string, string | number | boolean | undefined>,
+    apiKey: string,
+): Promise<number> {
+    const url = new URL(`${BASE_URL}${path}`);
+    for (const [key, value] of Object.entries(params)) {
+        if (value === undefined || value === null || String(value).trim() === "") {
+            continue;
+        }
+        url.searchParams.set(key, String(value));
+    }
+
+    const response = await fetch(url.toString(), {
+        headers: {
+            "X-Adversea-Api-Key": apiKey,
+            Accept: "application/json",
+        },
+    });
+    if (!response.ok) {
+        const message = await response.text().catch(() => response.statusText);
+        throw new Error(`Adversea API error ${response.status}: ${message}`);
+    }
+
+    const payload = await response.text();
+    const parsed = Number(payload);
+    if (!Number.isNaN(parsed)) {
+        return parsed;
+    }
+    throw new Error(`Adversea API returned non-numeric credit value: ${payload}`);
+}
+
+async function finalizeRun(
+    apiKey: string,
+    entities: DataModelEntity[],
+    knownRemainingCredit?: number,
+): Promise<DataModelEntity[]> {
+    if (typeof knownRemainingCredit === "number") {
+        metricSet("remaining_credit", knownRemainingCredit.toFixed(2) + " EUR");
+        return entities;
+    }
+
+    try {
+        const credit = await adverseaGetNumber("/admin/client/remainingCredit", {}, apiKey);
+        metricSet("remaining_credit", credit.toFixed(2) + " EUR");
+    } catch {
+        // Keep business result even if account stat endpoint is temporarily unavailable.
+    }
+
+    return entities;
+}
+
+function pepResponseToEntity(target: string, data: PepServiceResponse): DataModelEntity {
     const info = data.entity_info ?? {};
     const isPerson = info.schema !== "LegalEntity";
-    const entityType = isPerson ? "entity.person" : "entity.organization";
-
-    const id = `adversea:${(info.name ?? data.query ?? "unknown").toLowerCase().replace(/\s+/g, "-")}`;
-
     const props: Record<string, TypedValue[]> = {};
     const extra: KeyValueEntry[] = [];
 
-    // --- Common fields ---
-    if (info.name) pushProp(props, "name", tv.string(info.name));
+    pushProp(props, "name", info.name ? tv.string(info.name) : tv.string(target));
+    pushMany(props, "country", (info.countries_full ?? []).map(tv.string));
 
-    for (const alias of info.aliases ?? []) {
-        pushProp(props, "alias", tv.string(alias));
+    for (const addr of csvToArray(info.addresses)) {
+        pushProp(props, isPerson ? "residenceAddress" : "address", tv.address(addr));
     }
 
-    if (info.addresses) {
-        for (const addr of csvToArray(info.addresses)) {
-            pushProp(props, isPerson ? "residenceAddress" : "address", { $type: "address", value: addr });
-        }
-    }
-
-    for (const country of info.countries_full ?? []) {
-        pushProp(props, "country", tv.string(country));
-    }
-
-    for (const email of csvToArray(info.emails)) {
-        pushProp(props, "email", tv.string(email));
-    }
-
-    for (const phone of csvToArray(info.phones)) {
-        pushProp(props, "phone", tv.string(phone));
-    }
-
-    // --- Person-specific ---
     if (isPerson && info.birth_date) {
-        pushProp(props, "birthDate", tv.date(info.birth_date));
+        pushProp(props, "birthDate", tv.dateLike(info.birth_date));
     }
 
-    // --- PEP status ---
-    const isPep = !!(data.pep?.dataset ?? []).length;
+    const isPep = Boolean(data.pep?.dataset?.length);
+    const isSanctioned = Boolean(data.sanctions?.dataset?.length);
     pushProp(props, "pepStatus", tv.bool(isPep));
-
-    if (isPep) {
-        for (const ds of data.pep!.dataset ?? []) {
-            extra.push(tv.kv("pep_dataset", tv.string(ds)));
-        }
-        if (data.pep!.municipality) {
-            extra.push(tv.kv("pep_municipality", tv.string(data.pep!.municipality)));
-        }
-        for (const sc of data.pep!.state_companies ?? []) {
-            if (sc.company_name) {
-                extra.push(
-                    tv.kv(
-                        "state_company",
-                        tv.string(
-                            [sc.company_name, sc.position, sc.effective_from]
-                                .filter(Boolean)
-                                .join(" | ")
-                        )
-                    )
-                );
-            }
-        }
-    }
-
-    // --- Sanctions ---
-    const isSanctioned = !!(data.sanctions?.dataset ?? []).length;
     pushProp(props, "sanctioned", tv.bool(isSanctioned));
 
-    if (isSanctioned) {
-        for (const ds of data.sanctions!.dataset ?? []) {
-            extra.push(tv.kv("sanctions_dataset", tv.string(ds)));
-        }
-        if (data.sanctions!.description) {
-            extra.push(tv.kv("sanctions_description", tv.string(data.sanctions!.description)));
+    for (const alias of info.aliases ?? []) {
+        pushExtra(extra, "alias", tv.string(alias));
+    }
+    for (const email of csvToArray(info.emails)) {
+        pushExtra(extra, "email", tv.string(email));
+    }
+    for (const phone of csvToArray(info.phones)) {
+        pushExtra(extra, "phone", tv.string(phone));
+    }
+
+    for (const ds of data.pep?.dataset ?? []) {
+        pushExtra(extra, "pep_dataset", tv.string(ds));
+    }
+    pushExtra(extra, "pep_municipality", data.pep?.municipality ? tv.string(data.pep.municipality) : undefined);
+    pushExtra(extra, "pep_state", data.pep?.state ? tv.string(data.pep.state) : undefined);
+
+    for (const [idx, company] of (data.pep?.state_companies ?? []).entries()) {
+        pushExtra(extra, `state_company_${idx}_name`, company.company_name ? tv.string(company.company_name) : undefined);
+        pushExtra(extra, `state_company_${idx}_ico`, company.company_ico ? tv.string(String(company.company_ico)) : undefined);
+        pushExtra(extra, `state_company_${idx}_position`, company.position ? tv.string(company.position) : undefined);
+        pushExtra(extra, `state_company_${idx}_address`, company.address ? tv.address(company.address) : undefined);
+        pushExtra(extra, `state_company_${idx}_effective_from`, company.effective_from ? tv.dateLike(company.effective_from) : undefined);
+        pushExtra(extra, `state_company_${idx}_effective_to`, company.effective_to ? tv.dateLike(company.effective_to) : undefined);
+    }
+
+    for (const ds of data.sanctions?.dataset ?? []) {
+        pushExtra(extra, "sanctions_dataset", tv.string(ds));
+    }
+    if (typeof data.sanctions?.description === "string") {
+        pushExtra(extra, "sanctions_description", tv.string(data.sanctions.description));
+    } else {
+        for (const [lang, text] of Object.entries(data.sanctions?.description ?? {})) {
+            pushExtra(extra, `sanctions_description_${lang}`, tv.string(text));
         }
     }
 
     return {
-        $entity: entityType,
-        $id: id,
+        $entity: isPerson ? "entity.person" : "entity.organization",
+        $id: buildEntityId("pep-sanctions", info.name ?? data.query ?? target),
         $props: props,
         $extra: extra,
+        $sources: [{
+            name: "Adversea PEP/Sanctions",
+            source: `${BASE_URL}/screening/pepSanctions`,
+        }],
     };
 }
-
-// ---------------------------------------------------------------------------
-// Entrypoint 1: PEP & Sanctions Check
-// ---------------------------------------------------------------------------
 
 export async function pepSanctionsCheck(inputs: PluginInputs): Promise<DataModelEntity[]> {
     const target = requireTarget(inputs);
     const apiKey = requireApiKey(inputs);
 
-    const data = await adverseaGet<PepServiceResponse>(
+    const data = await adverseaGetJson<PepServiceResponse>(
         "/screening/pepSanctions",
-        { targetName: target },
-        apiKey
+        {
+            targetName: target,
+            forceRecreate: inputs.force_recreate,
+        },
+        apiKey,
     );
 
-    return [pepResponseToEntity(data)];
+    return finalizeRun(apiKey, [pepResponseToEntity(target, data)]);
 }
-
-// ---------------------------------------------------------------------------
-// Entrypoint 2: Topic Report
-// ---------------------------------------------------------------------------
 
 export async function topicReport(inputs: PluginInputs): Promise<DataModelEntity[]> {
     const target = requireTarget(inputs);
     const apiKey = requireApiKey(inputs);
 
-    const topics = await adverseaGet<SingleTopicResponse[]>(
+    const topics = await adverseaGetJson<SingleTopicResponse[]>(
         "/screening/topic-report",
-        { targetName: target, outputLanguage: inputs.output_language ?? "English" },
-        apiKey
+        {
+            targetName: target,
+            country: inputs.country,
+            outputLanguage: inputs.output_language ?? "English",
+            forceRecreate: inputs.force_recreate,
+        },
+        apiKey,
     );
 
-    const id = `adversea:topic:${target.toLowerCase().replace(/\s+/g, "-")}`;
-    const props: Record<string, TypedValue[]> = {};
-    const extra: KeyValueEntry[] = [];
+    const entities = topics.map((topic, idx): DataModelEntity => {
+        const props: Record<string, TypedValue[]> = {};
+        const extra: KeyValueEntry[] = [];
 
-    pushProp(props, "name", tv.string(target));
+        pushProp(props, "name", tv.string(topic.targetName || target));
+        pushProp(props, "topicId", topic.topicId ? tv.string(topic.topicId) : undefined);
+        pushProp(props, "adverseActivityDetected", tv.bool(Boolean(topic.adverseActivityDetected)));
+        pushProp(props, "summary", topic.result ? tv.string(topic.result) : undefined);
 
-    for (const topic of topics) {
-        if (!topic.topicId) continue;
-        const detected = topic.adverseActivityDetected ?? false;
-        extra.push(tv.kv(`topic_${topic.topicId}`, tv.bool(detected)));
-        for (const src of topic.sources ?? []) {
-            if (src.url) {
-                extra.push(tv.kv(`topic_${topic.topicId}_source`, tv.url(src.url)));
-            }
-        }
-    }
+        pushExtra(extra, "output_language", tv.string(inputs.output_language ?? "English"));
+        pushExtra(extra, "country", inputs.country ? tv.string(inputs.country) : undefined);
 
-    const entity: DataModelEntity = {
-        $entity: "entity.person",
-        $id: id,
-        $props: props,
-        $extra: extra,
-    };
+        return {
+            $entity: "entity.riskTopic",
+            $id: buildEntityId("topic", topic.topicId ?? String(idx), target),
+            $props: props,
+            $extra: extra,
+            $sources: (topic.sources ?? [])
+                .filter((source) => !!source.url)
+                .map((source) => ({
+                    name: source.title || topic.topicId || "source",
+                    source: String(source.url),
+                })),
+        };
+    });
 
-    return [entity];
+    return finalizeRun(apiKey, entities);
 }
-
-// ---------------------------------------------------------------------------
-// Entrypoint 3: Social Media Check
-// ---------------------------------------------------------------------------
 
 export async function socialMediaCheck(inputs: PluginInputs): Promise<DataModelEntity[]> {
     const target = requireTarget(inputs);
     const apiKey = requireApiKey(inputs);
 
-    const profiles = await adverseaGet<SocialMediaProfile[]>(
+    const profiles = await adverseaGetJson<SocialMediaProfile[]>(
         "/screening/socialMedia",
-        { targetName: target },
-        apiKey
+        {
+            targetName: target,
+            forceRecreate: inputs.force_recreate,
+        },
+        apiKey,
     );
 
-    if (!profiles.length) return [];
+    const entities = profiles.map((profile, idx): DataModelEntity => {
+        const props: Record<string, TypedValue[]> = {};
+        const extra: KeyValueEntry[] = [];
 
-    const id = `adversea:social:${target.toLowerCase().replace(/\s+/g, "-")}`;
+        pushProp(props, "name", tv.string(target));
+        pushProp(props, "platform", profile.social_media_platform ? tv.string(profile.social_media_platform) : undefined);
+        pushProp(props, "profileTitle", profile.title ? tv.string(profile.title) : undefined);
+        pushProp(props, "profileUrl", profile.profile_url ? tv.url(profile.profile_url) : undefined);
+        pushProp(props, "userId", profile.user_id ? tv.string(profile.user_id) : undefined);
+
+        pushExtra(extra, "raw_social_platform", profile.social_media_platform ? tv.string(profile.social_media_platform) : undefined);
+
+        return {
+            $entity: "entity.socialProfile",
+            $id: buildEntityId("social", target, profile.social_media_platform ?? String(idx), profile.user_id ?? ""),
+            $props: props,
+            $extra: extra,
+            $sources: profile.profile_url
+                ? [{ name: profile.title || profile.social_media_platform || "social-profile", source: profile.profile_url }]
+                : undefined,
+        };
+    });
+
+    return finalizeRun(apiKey, entities);
+}
+
+export async function unitAnalysisText(inputs: PluginInputs): Promise<DataModelEntity[]> {
+    const target = requireTarget(inputs);
+    const apiKey = requireApiKey(inputs);
+
+    const rows = await adverseaGetJson<UnitAnalysisText[]>(
+        "/screening/unit-analysis/text",
+        {
+            targetName: target,
+            country: inputs.country,
+            outputLanguage: inputs.output_language ?? "English",
+            mediaOnly: inputs.media_only,
+            forceRecreate: inputs.force_recreate,
+        },
+        apiKey,
+    );
+
+    const entities = rows.map((row, idx): DataModelEntity => {
+        const props: Record<string, TypedValue[]> = {};
+        const extra: KeyValueEntry[] = [];
+
+        pushProp(props, "name", tv.string(target));
+        pushProp(props, "title", row.title ? tv.string(row.title) : undefined);
+        pushProp(props, "url", row.url ? tv.url(row.url) : undefined);
+        pushProp(props, "analysis", row.analysis ? tv.string(row.analysis) : undefined);
+        pushProp(props, "adverseActivityDetected", tv.bool(Boolean(row.adverseActivityDetected)));
+
+        pushExtra(extra, "output_language", tv.string(inputs.output_language ?? "English"));
+        pushExtra(extra, "country", inputs.country ? tv.string(inputs.country) : undefined);
+        pushExtra(extra, "media_only", tv.bool(Boolean(inputs.media_only)));
+
+        return {
+            $entity: "entity.mediaMention",
+            $id: buildEntityId("unit-analysis-text", target, row.url ?? String(idx)),
+            $props: props,
+            $extra: extra,
+            $sources: row.url ? [{ name: row.title || "analysis-source", source: row.url }] : undefined,
+        };
+    });
+
+    return finalizeRun(apiKey, entities);
+}
+
+export async function unitAnalysisClaims(inputs: PluginInputs): Promise<DataModelEntity[]> {
+    const target = requireTarget(inputs);
+    const apiKey = requireApiKey(inputs);
+
+    const rows = await adverseaGetJson<UnitAnalysisClaim[]>(
+        "/screening/unit-analysis/claims",
+        {
+            targetName: target,
+            country: inputs.country,
+            outputLanguage: inputs.output_language ?? "English",
+            mediaOnly: inputs.media_only,
+            forceRecreate: inputs.force_recreate,
+        },
+        apiKey,
+    );
+
+    const entities = rows.map((row, idx): DataModelEntity => {
+        const props: Record<string, TypedValue[]> = {};
+        const extra: KeyValueEntry[] = [];
+
+        pushProp(props, "name", tv.string(target));
+        pushProp(props, "title", row.title ? tv.string(row.title) : undefined);
+        pushProp(props, "url", row.url ? tv.url(row.url) : undefined);
+        pushProp(props, "adverseActivityDetected", tv.bool(Boolean(row.adverseActivityDetected)));
+
+        for (const claim of row.claims ?? []) {
+            pushExtra(extra, "claim", tv.string(claim));
+        }
+
+        pushExtra(extra, "output_language", tv.string(inputs.output_language ?? "English"));
+        pushExtra(extra, "country", inputs.country ? tv.string(inputs.country) : undefined);
+        pushExtra(extra, "media_only", tv.bool(Boolean(inputs.media_only)));
+
+        return {
+            $entity: "entity.mediaMention",
+            $id: buildEntityId("unit-analysis-claims", target, row.url ?? String(idx)),
+            $props: props,
+            $extra: extra,
+            $sources: row.url ? [{ name: row.title || "claims-source", source: row.url }] : undefined,
+        };
+    });
+
+    return finalizeRun(apiKey, entities);
+}
+
+export async function rpoSearch(inputs: PluginInputs): Promise<DataModelEntity[]> {
+    const target = requireTarget(inputs);
+    const apiKey = requireApiKey(inputs);
+
+    const rows = await adverseaGetJson<RpoServiceDataEntry[]>(
+        "/screening/rpo",
+        {
+            targetName: target,
+            forceRecreate: inputs.force_recreate,
+        },
+        apiKey,
+    );
+
+    const entities = rows.map((row, idx): DataModelEntity => {
+        const props: Record<string, TypedValue[]> = {};
+        const extra: KeyValueEntry[] = [];
+
+        pushProp(props, "name", row.latest_org_name ? tv.string(row.latest_org_name) : tv.string(target));
+        pushProp(props, "organizationId", row.ico ? tv.string(row.ico) : undefined);
+        pushProp(props, "country", tv.string("Slovakia"));
+
+        for (const prevName of row.prev_org_names ?? []) {
+            pushExtra(extra, "previous_name", tv.string(prevName));
+        }
+        for (const position of row.positions ?? []) {
+            pushExtra(extra, "position", tv.string(position));
+        }
+        for (const entryType of row.entry_types ?? []) {
+            pushExtra(extra, "entry_type", tv.string(entryType));
+        }
+        for (const person of row.involved_persons ?? []) {
+            pushExtra(extra, "involved_person", tv.string(person));
+        }
+
+        pushExtra(extra, "given_name", row.given_name ? tv.string(row.given_name) : undefined);
+        pushExtra(extra, "family_name", row.family_name ? tv.string(row.family_name) : undefined);
+        pushExtra(extra, "source_register", row.source_register ? tv.string(row.source_register) : undefined);
+        pushExtra(extra, "effective_to", row.effective_to ? tv.dateLike(row.effective_to) : undefined);
+
+        return {
+            $entity: "entity.organization",
+            $id: buildEntityId("rpo", row.ico ?? target, idx),
+            $props: props,
+            $extra: extra,
+            $sources: (row.courts_links ?? []).map((link, sourceIdx) => ({
+                name: `court-link-${sourceIdx + 1}`,
+                source: link,
+            })),
+        };
+    });
+
+    return finalizeRun(apiKey, entities);
+}
+
+export async function rpoBusinessSubjects(inputs: PluginInputs): Promise<DataModelEntity[]> {
+    const ico = requireIco(inputs);
+    const apiKey = requireApiKey(inputs);
+
+    const payload = await adverseaGetJson<RpoBusinessSubjectsResponse>(
+        "/screening/rpo/business-data/business-subjects",
+        { ico },
+        apiKey,
+    );
+
+    const entities = (payload.business_subjects ?? []).map((row, idx): DataModelEntity => {
+        const props: Record<string, TypedValue[]> = {};
+
+        pushProp(props, "organizationId", tv.string(ico));
+        pushProp(props, "description", row.description ? tv.string(row.description) : undefined);
+        pushProp(props, "effectiveFrom", row.effective_from ? tv.dateLike(row.effective_from) : undefined);
+        pushProp(props, "effectiveTo", row.effective_to ? tv.dateLike(row.effective_to) : undefined);
+
+        return {
+            $entity: "entity.businessActivity",
+            $id: buildEntityId("business-subject", ico, idx),
+            $props: props,
+            $extra: [],
+            $sources: [{
+                name: "Adversea RPO Business Subjects",
+                source: `${BASE_URL}/screening/rpo/business-data/business-subjects`,
+            }],
+        };
+    });
+
+    return finalizeRun(apiKey, entities);
+}
+
+export async function debtorCheck(inputs: PluginInputs): Promise<DataModelEntity[]> {
+    const target = requireTarget(inputs);
+    const apiKey = requireApiKey(inputs);
+
+    const rows = await adverseaGetJson<DebtorServiceDataEntry[]>(
+        "/screening/debtors",
+        {
+            targetName: target,
+            forceRecreate: inputs.force_recreate,
+        },
+        apiKey,
+    );
+
+    const entities = rows.map((row, idx): DataModelEntity => {
+        const props: Record<string, TypedValue[]> = {};
+
+        pushProp(props, "name", row.name ? tv.string(row.name) : tv.string(target));
+        pushProp(props, "amountOwed", row.amountOwed ? tv.string(row.amountOwed) : undefined);
+        pushProp(props, "location", row.location ? tv.address(row.location) : undefined);
+        pushProp(props, "debtSource", row.source ? tv.string(row.source) : undefined);
+
+        return {
+            $entity: "entity.financialRecord",
+            $id: buildEntityId("debtor", row.name ?? target, row.source ?? String(idx)),
+            $props: props,
+            $extra: [],
+            $sources: [{
+                name: "Adversea Debtors",
+                source: `${BASE_URL}/screening/debtors`,
+            }],
+        };
+    });
+
+    return finalizeRun(apiKey, entities);
+}
+
+export async function courtCaseDetail(inputs: PluginInputs): Promise<DataModelEntity[]> {
+    const courtCaseLink = requireCourtCaseLink(inputs);
+    const orgIco = requireOrgIco(inputs);
+    const apiKey = requireApiKey(inputs);
+
+    const row = await adverseaGetJson<CourtCasesServiceResponse>(
+        "/screening/court-cases/case",
+        {
+            courtCaseLink,
+            orgICO: orgIco,
+            forceRecreate: inputs.force_recreate,
+        },
+        apiKey,
+    );
+
     const props: Record<string, TypedValue[]> = {};
     const extra: KeyValueEntry[] = [];
 
-    pushProp(props, "name", tv.string(target));
+    pushProp(props, "courtTopic", row.court_topic ? tv.string(row.court_topic) : undefined);
+    pushProp(props, "courtDecision", row.court_decision ? tv.string(row.court_decision) : undefined);
+    pushProp(props, "court", row.court ? tv.string(row.court) : undefined);
+    pushProp(props, "courtMark", row.court_mark ? tv.string(row.court_mark) : undefined);
+    pushProp(props, "courtId", row.court_id ? tv.string(row.court_id) : undefined);
+    pushProp(props, "courtJudge", row.court_judge_name ? tv.string(row.court_judge_name) : undefined);
+    pushProp(props, "courtEcli", row.court_ecli ? tv.string(row.court_ecli) : undefined);
+    pushProp(props, "courtDecisionDate", row.court_decision_date ? tv.dateLike(row.court_decision_date) : undefined);
 
-    for (const profile of profiles) {
-        const platform = profile.social_media_platform ?? "unknown";
-        if (profile.profile_url) {
-            extra.push(tv.kv(`social_${platform}`, tv.url(profile.profile_url)));
-        } else if (profile.title) {
-            extra.push(tv.kv(`social_${platform}`, tv.string(profile.title)));
-        }
+    pushExtra(extra, "organization_ico", tv.string(orgIco));
+    pushExtra(extra, "court_topic_and_decision", row.court_topic_and_decision ? tv.string(row.court_topic_and_decision) : undefined);
+    pushExtra(extra, "ai_response", row.ai_response ? tv.string(row.ai_response) : undefined);
+    for (const linkedIco of row.unique_valid_icos ?? []) {
+        pushExtra(extra, "related_ico", tv.string(linkedIco));
     }
 
-    const entity: DataModelEntity = {
-        $entity: "entity.person",
-        $id: id,
+    return finalizeRun(apiKey, [{
+        $entity: "entity.legalCase",
+        $id: buildEntityId("court-case", row.court_id ?? courtCaseLink),
         $props: props,
         $extra: extra,
-    };
+        $sources: row.download_link
+            ? [{ name: "court-document", source: row.download_link }]
+            : [{ name: "Adversea Court Case", source: `${BASE_URL}/screening/court-cases/case` }],
+    }]);
+}
 
-    return [entity];
+export async function defaultEntityRecognition(inputs: PluginInputs): Promise<DataModelEntity[]> {
+    const target = requireTarget(inputs);
+    const apiKey = requireApiKey(inputs);
+
+    const payload = await adverseaGetJson<DefaultEntityRecognitionResponse>(
+        "/entity/default-entity-recognition",
+        {
+            targetName: target,
+            country: inputs.country,
+            outputLanguage: inputs.output_language ?? "English",
+            forceRecreate: inputs.force_recreate,
+        },
+        apiKey,
+    );
+
+    const entities = (payload.entities ?? []).map((entity, idx): DataModelEntity => {
+        const props: Record<string, TypedValue[]> = {};
+
+        pushProp(props, "name", entity.name ? tv.string(entity.name) : tv.string(target));
+        pushProp(props, "description", entity.short_description ? tv.string(entity.short_description) : undefined);
+
+        return {
+            $entity: "entity.detectedEntity",
+            $id: buildEntityId("default-entity", entity.name ?? target, idx),
+            $props: props,
+            $extra: [
+                tv.kv("Output Language", tv.string(inputs.output_language ?? "English")),
+                ...(inputs.country ? [tv.kv("Country", tv.string(inputs.country))] : []),
+            ],
+            $sources: (entity.links ?? []).map((link, sourceIdx) => ({
+                name: `entity-link-${sourceIdx + 1}`,
+                source: link,
+            })),
+        };
+    });
+
+    return finalizeRun(apiKey, entities);
+}
+
+export async function remainingCredit(inputs: PluginInputs): Promise<DataModelEntity[]> {
+    const apiKey = requireApiKey(inputs);
+    const credit = await adverseaGetNumber(
+        "/admin/client/remainingCredit",
+        {},
+        apiKey,
+    );
+    return finalizeRun(apiKey, [{
+        $entity: "entity.serviceAccount",
+        $id: "adversea:service-account:current",
+        $props: {
+            provider: [tv.string("Adversea")],
+            remainingCredit: [tv.number(credit)],
+        },
+        $extra: [],
+        $sources: [{
+            name: "Adversea Remaining Credit",
+            source: `${BASE_URL}/admin/client/remainingCredit`,
+        }],
+    }], credit);
 }
 

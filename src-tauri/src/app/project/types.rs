@@ -194,10 +194,13 @@ pub struct PluginRecord {
     pub id: String,
     pub name: String,
     pub version: String,
+    pub enabled: bool,
     pub manifest: PluginManifestRecord,
     pub entrypoints: Vec<PluginEntrypointRecord>,
     pub input_defs: Vec<PluginInputDef>,
     pub setting_defs: Vec<PluginSettingDef>,
+    pub metric_defs: Vec<PluginMetricDef>,
+    pub metric_values: Vec<PluginMetricValue>,
     pub setting_values: Vec<PluginSettingValue>,
 }
 

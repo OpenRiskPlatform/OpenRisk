@@ -147,22 +147,28 @@ export function ProjectQueriesSidebar({
                                         <Input
                                             value={renamingValue}
                                             autoFocus
+                                            className="w-full"
                                             onClick={(event) => event.stopPropagation()}
                                             onChange={(event) => onRenamingValueChange(event.target.value)}
                                             onBlur={() => {
                                                 void onCommitRename();
                                             }}
                                             onKeyDown={(event) => {
+                                                event.stopPropagation();
                                                 if (event.key === "Enter") {
+                                                    event.preventDefault();
                                                     void onCommitRename();
                                                 }
                                                 if (event.key === "Escape") {
+                                                    event.preventDefault();
                                                     onCancelRename();
                                                 }
                                             }}
                                         />
                                     ) : (
-                                        <p className="text-sm font-medium truncate">
+                                        <p
+                                            className="block w-full text-sm font-medium truncate"
+                                        >
                                             {scan.preview?.trim() || `New Scan ${scan.id.slice(0, 8)}`}
                                         </p>
                                     )}

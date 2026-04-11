@@ -95,6 +95,7 @@ pub(super) async fn load_plugin_record(
         id: String,
         name: String,
         version: String,
+        enabled: i64,
         description: Option<String>,
         license: Option<String>,
         authors_json: Option<String>,
@@ -103,7 +104,8 @@ pub(super) async fn load_plugin_record(
     }
 
     let row = sqlx::query_as::<_, PluginRow>(
-        "SELECT p.id, pr.name, pr.version, pr.description, pr.license, pr.authors_json, pr.icon, pr.homepage \
+        "SELECT p.id, pr.name, pr.version, COALESCE(pp.enabled, 1) as enabled, \
+         pr.description, pr.license, pr.authors_json, pr.icon, pr.homepage \
          FROM Plugin p \
          LEFT JOIN ProjectPlugin pp ON pp.plugin_id = p.id AND pp.project_id = ?2 \
          INNER JOIN PluginRevision pr ON pr.id = COALESCE(pp.pinned_revision_id, p.current_revision_id) \
@@ -287,6 +289,93 @@ pub(super) async fn load_plugin_record(
         )
         .collect();
 
+    let mdef_rows: Vec<(String, String, String, Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT prm.name, prm.title, prm.type_json, prm.enum_values_json, prm.description \
+         FROM Plugin p \
+         LEFT JOIN ProjectPlugin pp ON pp.plugin_id = p.id AND pp.project_id = ?2 \
+         INNER JOIN PluginRevisionMetricDef prm ON prm.revision_id = COALESCE(pp.pinned_revision_id, p.current_revision_id) \
+         WHERE p.id = ?1 \
+           ORDER BY prm.rowid",
+    )
+    .bind(plugin_id)
+    .bind(project_id)
+    .fetch_all(&mut *conn)
+    .await?;
+
+    let metric_defs = mdef_rows
+        .into_iter()
+        .map(|(name, title, type_json, enum_values_json, description)| {
+            let mut field_type = serde_json::from_str::<PluginFieldTypeDef>(&type_json).unwrap_or(
+                PluginFieldTypeDef {
+                    name: "string".to_string(),
+                    values: None,
+                },
+            );
+            if field_type.values.is_none() {
+                field_type.values = enum_values_json.as_deref().and_then(|s| {
+                    serde_json::from_str::<Vec<String>>(s)
+                        .ok()
+                        .filter(|v| !v.is_empty())
+                });
+            }
+
+            PluginMetricDef {
+                name,
+                title,
+                type_: field_type,
+                description,
+            }
+        })
+        .collect();
+
+    let mval_rows: Vec<(String, String, String, Option<String>, String)> = sqlx::query_as(
+        "SELECT m.metric_name, m.type_json, m.value_json, d.description, d.title \
+         FROM ScanPluginMetric m \
+         INNER JOIN ScanPluginResult r ON r.id = m.scan_result_id \
+         INNER JOIN PluginRevisionMetricDef d \
+            ON d.name = m.metric_name \
+            AND d.revision_id = ( \
+               SELECT COALESCE(pp2.pinned_revision_id, p2.current_revision_id) \
+               FROM Plugin p2 \
+               LEFT JOIN ProjectPlugin pp2 ON pp2.plugin_id = p2.id AND pp2.project_id = ?2 \
+               WHERE p2.id = ?1 \
+            ) \
+         WHERE r.plugin_id = ?1 \
+           AND r.rowid = ( \
+              SELECT MAX(r2.rowid) \
+              FROM ScanPluginResult r2 \
+              INNER JOIN ScanPluginMetric m2 ON m2.scan_result_id = r2.id \
+              WHERE r2.plugin_id = ?1 AND m2.metric_name = m.metric_name \
+           ) \
+         ORDER BY m.metric_name",
+    )
+    .bind(plugin_id)
+    .bind(project_id)
+    .fetch_all(&mut *conn)
+    .await?;
+
+    let metric_values = mval_rows
+        .into_iter()
+        .map(|(name, type_json, value_json, description, title)| {
+            let type_ = serde_json::from_str::<PluginFieldTypeDef>(&type_json).unwrap_or(
+                PluginFieldTypeDef {
+                    name: "string".to_string(),
+                    values: None,
+                },
+            );
+            let value = serde_json::from_str::<serde_json::Value>(&value_json)
+                .map(|v| SettingValue::from_json(&v))
+                .unwrap_or(SettingValue::Null);
+            PluginMetricValue {
+                name,
+                title,
+                type_,
+                description,
+                value,
+            }
+        })
+        .collect();
+
     let sv_rows: Vec<(String, String)> = sqlx::query_as(
         "SELECT setting_name, value_json FROM ProjectPluginSettingValue \
          WHERE plugin_id = ?1 AND project_settings_id = ?2",
@@ -310,10 +399,13 @@ pub(super) async fn load_plugin_record(
         id: row.id,
         name: row.name,
         version: row.version,
+        enabled: row.enabled != 0,
         manifest,
         entrypoints,
         input_defs,
         setting_defs,
+        metric_defs,
+        metric_values,
         setting_values,
     })
 }

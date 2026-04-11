@@ -34,12 +34,11 @@ pub(super) async fn load_settings(
 
     let psid = proj.project_settings_id.clone();
 
-    let plugin_ids: Vec<(String,)> = sqlx::query_as(
-        "SELECT plugin_id FROM ProjectPlugin WHERE project_id = ?1 AND enabled = 1",
-    )
-    .bind(&proj.id)
-    .fetch_all(&mut *conn)
-    .await?;
+    let plugin_ids: Vec<(String,)> =
+        sqlx::query_as("SELECT plugin_id FROM ProjectPlugin WHERE project_id = ?1")
+            .bind(&proj.id)
+            .fetch_all(&mut *conn)
+            .await?;
 
     let mut plugins = Vec::new();
     for (pid,) in &plugin_ids {
@@ -259,6 +258,40 @@ pub(super) async fn get_plugin_record(
     let project_id: String = sqlx::query_scalar("SELECT id FROM Project LIMIT 1")
         .fetch_one(&mut *conn)
         .await?;
+
+    load_plugin_record(conn, plugin_id, &project_id, &psid).await
+}
+
+pub(super) async fn set_plugin_enabled(
+    this: &SqliteProjectPersistence,
+    plugin_id: &str,
+    enabled: bool,
+) -> Result<PluginRecord, PersistenceError> {
+    let mut guard = this.conn.lock().await;
+    let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
+
+    let psid: String = sqlx::query_scalar("SELECT project_settings_id FROM Project LIMIT 1")
+        .fetch_one(&mut *conn)
+        .await?;
+    let project_id: String = sqlx::query_scalar("SELECT id FROM Project LIMIT 1")
+        .fetch_one(&mut *conn)
+        .await?;
+
+    let updated = sqlx::query(
+        "UPDATE ProjectPlugin SET enabled = ?1 WHERE project_id = ?2 AND plugin_id = ?3",
+    )
+    .bind(if enabled { 1i64 } else { 0i64 })
+    .bind(&project_id)
+    .bind(plugin_id)
+    .execute(&mut *conn)
+    .await?;
+
+    if updated.rows_affected() == 0 {
+        return Err(PersistenceError::Validation(format!(
+            "Plugin '{}' is not registered in this project",
+            plugin_id
+        )));
+    }
 
     load_plugin_record(conn, plugin_id, &project_id, &psid).await
 }

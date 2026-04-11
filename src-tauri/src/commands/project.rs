@@ -138,6 +138,22 @@ pub async fn upsert_project_plugin_from_zip(
         .map_err(AppError::from)
 }
 
+/// Enable or disable a plugin within the active project.
+/// #
+#[tauri::command]
+#[specta::specta]
+pub async fn set_plugin_enabled(
+    plugin_id: String,
+    enabled: bool,
+    state: tauri::State<'_, ProjectState>,
+) -> Result<PluginRecord, AppError> {
+    let project = get_open_project(&state).await?;
+    project
+        .set_plugin_enabled(&plugin_id, enabled)
+        .await
+        .map_err(AppError::from)
+}
+
 /// Create a new scan in Draft status.
 /// #
 #[tauri::command]

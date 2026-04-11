@@ -13,6 +13,20 @@ interface PersonEntityCardProps {
     entity: DataModelEntity;
 }
 
+function isKeyValue(item: TypedValue): item is {
+    $type: "key-value";
+    value: { key: TypedValue<string>; value: TypedValue };
+} {
+    if (item.$type !== "key-value") {
+        return false;
+    }
+    if (!item.value || typeof item.value !== "object") {
+        return false;
+    }
+    const candidate = item.value as { key?: TypedValue<string>; value?: TypedValue };
+    return Boolean(candidate.key && candidate.value);
+}
+
 function propList(entity: DataModelEntity, key: string): TypedValue[] {
     const values = entity.$props?.[key];
     return Array.isArray(values) ? values : [];
@@ -78,6 +92,30 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
                                     {source.name}
                                 </a>
                             ))}
+                        </div>
+                    </div>
+                ) : null}
+
+                {entity.$extra && entity.$extra.length > 0 ? (
+                    <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">Extra</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {entity.$extra.map((item, idx) =>
+                                isKeyValue(item) ? (
+                                    <div key={`${entity.$id}-extra-${idx}`} className="rounded border bg-muted/20 p-2 space-y-1">
+                                        <p className="text-xs text-muted-foreground">
+                                            {String(item.value.key.value)}
+                                        </p>
+                                        <div className="text-sm">
+                                            <TypedValueView item={item.value.value} />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div key={`${entity.$id}-extra-${idx}`} className="rounded border bg-muted/20 p-2 text-sm">
+                                        <TypedValueView item={item} />
+                                    </div>
+                                )
+                            )}
                         </div>
                     </div>
                 ) : null}

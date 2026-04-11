@@ -123,6 +123,48 @@ export function PluginSettingsCard({
                     {saveError ? <p className="text-sm text-red-600">{saveError}</p> : null}
                 </div>
             )}
+
+            <div className="space-y-2">
+                <p className="text-sm font-medium">Declared Stats</p>
+                {plugin.metricDefs.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                        This plugin does not declare runtime stats.
+                    </p>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {plugin.metricDefs.map((metric) => (
+                            <div key={`${plugin.id}-metric-${metric.name}`} className="rounded border bg-muted/20 p-2">
+                                <p className="text-sm font-medium">{metric.title}</p>
+                                <p className="text-xs text-muted-foreground">{metric.name} • {metric.type.name}</p>
+                                {metric.description ? (
+                                    <p className="text-xs text-muted-foreground mt-1">{metric.description}</p>
+                                ) : null}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            <div className="space-y-2">
+                <p className="text-sm font-medium">Current Stats Values</p>
+                {plugin.metricValues.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                        No values yet. Run plugin entrypoints to populate stats.
+                    </p>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {plugin.metricValues.map((metric) => (
+                            <div key={`${plugin.id}-metric-value-${metric.name}`} className="rounded border bg-muted/20 p-2">
+                                <p className="text-sm font-medium">{metric.title}</p>
+                                <p className="text-xs text-muted-foreground">{metric.name}</p>
+                                <p className="text-lg font-semibold mt-1">
+                                    {metric.value.type === "null" ? "-" : String(metric.value.value)}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

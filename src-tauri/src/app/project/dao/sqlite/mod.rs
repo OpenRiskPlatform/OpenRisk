@@ -50,6 +50,13 @@ impl ProjectPersistence for SqliteProjectPersistence {
     async fn get_plugin_record(&self, plugin_id: &str) -> Result<PluginRecord, PersistenceError> {
         settings_dao::get_plugin_record(self, plugin_id).await
     }
+    async fn set_plugin_enabled(
+        &self,
+        plugin_id: &str,
+        enabled: bool,
+    ) -> Result<PluginRecord, PersistenceError> {
+        settings_dao::set_plugin_enabled(self, plugin_id, enabled).await
+    }
     async fn create_scan(
         &self,
         preview: Option<String>,

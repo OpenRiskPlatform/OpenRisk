@@ -46,6 +46,13 @@
 - Metric declarations are read from plugin.json field metrics[].
 - Metric value must match declared type; invalid values are dropped with warn log.
 
+## Plugin Output Integrity (Required)
+
+- Never transform plugin-provided output keys or values in the frontend.
+- Do not prettify/rename/sanitize `$props` or `$extra` keys in UI components.
+- If human-readable labels are needed, they must be produced by the plugin itself.
+- UI must display plugin output as-is; changes belong in plugin code, not in render adapters.
+
 ## Workflow Guardrail
 
 - If a generated file was changed manually by mistake:

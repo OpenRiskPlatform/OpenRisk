@@ -47,6 +47,11 @@ export const commands = {
 	 */
 	upsertProjectPluginFromZip: (zipPath: string) => typedError<PluginRecord, AppError>(__TAURI_INVOKE("upsert_project_plugin_from_zip", { zipPath })),
 	/**
+	 *  Enable or disable a plugin within the active project.
+	 *  #
+	 */
+	setPluginEnabled: (pluginId: string, enabled: boolean) => typedError<PluginRecord, AppError>(__TAURI_INVOKE("set_plugin_enabled", { pluginId, enabled })),
+	/**
 	 *  Create a new scan in Draft status.
 	 *  #
 	 */
@@ -167,6 +172,14 @@ export type PluginManifestRecord = {
 	homepage: string | null,
 };
 
+// Definition of one runtime metric declared by a plugin.
+export type PluginMetricDef = {
+	name: string,
+	title: string,
+	type: PluginFieldTypeDef,
+	description: string | null,
+};
+
 // One metric value produced by plugin runtime and stored with scan results.
 export type PluginMetricValue = {
 	name: string,
@@ -195,10 +208,13 @@ export type PluginRecord = {
 	id: string,
 	name: string,
 	version: string,
+	enabled: boolean,
 	manifest: PluginManifestRecord,
 	entrypoints: PluginEntrypointRecord[],
 	inputDefs: PluginInputDef[],
 	settingDefs: PluginSettingDef[],
+	metricDefs: PluginMetricDef[],
+	metricValues: PluginMetricValue[],
 	settingValues: PluginSettingValue[],
 };
 

@@ -7,6 +7,7 @@ import { useBackendClient } from "@/hooks/useBackendClient";
 import { unwrap } from "@/lib/utils";
 import type {
     PluginEntrypointSelection,
+    PluginRecord,
     ProjectSettingsPayload,
     ScanDetailRecord,
     ScanEntrypointInput,
@@ -30,6 +31,60 @@ function sortScans(items: ScanSummaryRecord[]) {
         }
         return right.id.localeCompare(left.id);
     });
+}
+
+function findPluginById(plugins: PluginRecord[] | undefined, pluginId: string): PluginRecord | undefined {
+    return (plugins ?? []).find((plugin) => plugin.id === pluginId);
+}
+
+function scanNameCandidate(
+    plugins: PluginRecord[] | undefined,
+    selection: PluginEntrypointSelection[],
+    inputs: ScanEntrypointInput[],
+): string {
+    const first = selection[0];
+    if (!first) {
+        return "Scan";
+    }
+
+    const plugin = findPluginById(plugins, first.pluginId);
+    const entrypoint = plugin?.entrypoints.find((item) => item.id === first.entrypointId);
+
+    const preferredFields = [
+        "target",
+        "search_input",
+        "targetName",
+        "name",
+        "ico",
+        "org_ico",
+    ];
+
+    let targetPart = "";
+    for (const field of preferredFields) {
+        const matched = inputs.find(
+            (item) =>
+                item.pluginId === first.pluginId &&
+                item.entrypointId === first.entrypointId &&
+                item.fieldName === field,
+        );
+        if (!matched || matched.value.type === "null") {
+            continue;
+        }
+        const next = String(matched.value.value ?? "").trim();
+        if (next) {
+            targetPart = next;
+            break;
+        }
+    }
+
+    const pluginPart = plugin?.name ?? first.pluginId;
+    const entrypointPart = entrypoint?.name ?? first.entrypointId;
+
+    const base = `${pluginPart}: ${entrypointPart}`;
+    if (!targetPart) {
+        return base;
+    }
+    return `${base} - ${targetPart}`;
 }
 
 export function ProjectPage({ projectDir }: ProjectPageProps) {
@@ -60,7 +115,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     const [projectName, setProjectName] = useState("");
     const [leftPanelWidth, setLeftPanelWidth] = useState<number>(() => {
         const stored = Number(localStorage.getItem("openrisk:left-panel-width") ?? "");
-        return Number.isFinite(stored) && stored >= 180 && stored <= 420 ? stored : 240;
+        return Number.isFinite(stored) && stored >= 180 && stored <= 720 ? stored : 280;
     });
     const resizingRef = useRef(false);
 
@@ -175,7 +230,8 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                 return;
             }
             window.getSelection()?.removeAllRanges();
-            const next = Math.max(180, Math.min(420, event.clientX - 16));
+            const maxPanelWidth = Math.max(320, Math.min(720, window.innerWidth - 280));
+            const next = Math.max(180, Math.min(maxPanelWidth, event.clientX - 16));
             setLeftPanelWidth(next);
         };
 
@@ -403,6 +459,23 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                     });
                 }
             }
+
+            const smartPreview = scanNameCandidate(settingsData?.plugins, selectedPlugins, inputs)
+                .slice(0, 120)
+                .trim();
+            if (smartPreview) {
+                try {
+                    const renamed = await unwrap(backendClient.updateScanPreview(selectedScanId, smartPreview));
+                    setScans((prev) =>
+                        prev.map((scan) =>
+                            scan.id === renamed.id ? { ...scan, preview: renamed.preview } : scan,
+                        ),
+                    );
+                } catch {
+                    // Keep run flow robust even if auto-rename fails.
+                }
+            }
+
             const updatedScan = await unwrap(backendClient.runScan(
                 selectedScanId,
                 selectedPlugins,

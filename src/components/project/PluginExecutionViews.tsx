@@ -90,7 +90,7 @@ function metricValueToText(value: SettingValue): string {
 
 export function PluginMetricsView({ metrics }: { metrics: PluginMetricValue[] }) {
     const [expanded, setExpanded] = useState(true);
-    if (!metrics.length) return null;
+    const count = metrics.length;
 
     return (
         <div className="mt-2">
@@ -98,27 +98,31 @@ export function PluginMetricsView({ metrics }: { metrics: PluginMetricValue[] })
                 className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                 onClick={() => setExpanded((v) => !v)}
             >
-                <span>Stats ({metrics.length})</span>
+                <span>Stats ({count})</span>
                 {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             </button>
             {expanded ? (
                 <div className="mt-1.5 rounded border bg-muted/20 p-2 space-y-1">
-                    {metrics.map((metric) => (
-                        <div key={metric.name} className="grid grid-cols-[1fr_auto] gap-2 text-xs items-start">
-                            <div>
-                                <div className="font-medium">{metric.title}</div>
-                                <div className="text-muted-foreground">
-                                    {metric.name} • {metric.type.name}
+                    {metrics.length > 0 ? (
+                        metrics.map((metric) => (
+                            <div key={metric.name} className="grid grid-cols-[1fr_auto] gap-2 text-xs items-start">
+                                <div>
+                                    <div className="font-medium">{metric.title}</div>
+                                    <div className="text-muted-foreground">
+                                        {metric.name} • {metric.type.name}
+                                    </div>
+                                    {metric.description ? (
+                                        <div className="text-muted-foreground">{metric.description}</div>
+                                    ) : null}
                                 </div>
-                                {metric.description ? (
-                                    <div className="text-muted-foreground">{metric.description}</div>
-                                ) : null}
+                                <div className="font-mono text-foreground rounded bg-muted px-2 py-0.5">
+                                    {metricValueToText(metric.value)}
+                                </div>
                             </div>
-                            <div className="font-mono text-foreground rounded bg-muted px-2 py-0.5">
-                                {metricValueToText(metric.value)}
-                            </div>
-                        </div>
-                    ))}
+                        ))
+                    ) : (
+                        <p className="text-xs text-muted-foreground">No stats emitted by plugin for this run.</p>
+                    )}
                 </div>
             ) : null}
         </div>

@@ -5,7 +5,6 @@ import { ScanRunInputsView } from "@/components/project/ScanRunInputsView";
 import {
     PluginErrorView,
     PluginLogsView,
-    PluginMetricsView,
 } from "@/components/project/PluginExecutionViews";
 import { isDataModelResult } from "@/core/data-model/types";
 import type {
@@ -56,7 +55,7 @@ export function ProjectScanPanel({
                     {scanDetail.status === "Draft" ? (
                         <>
                             <div className="space-y-2">
-                                {(settingsData?.plugins ?? []).map((plugin: PluginRecord) => {
+                                {(settingsData?.plugins ?? []).filter((plugin: PluginRecord) => plugin.enabled).map((plugin: PluginRecord) => {
                                     const enabledMap: Record<string, boolean> = {};
                                     for (const ep of plugin.entrypoints) {
                                         enabledMap[ep.id] = Boolean(enabledPlugins[`${plugin.id}::${ep.id}`]);
@@ -121,13 +120,11 @@ export function ProjectScanPanel({
                                             {!envelope.ok ? (
                                                 <>
                                                     <PluginErrorView message={envelope.error ?? "Unknown error"} />
-                                                    <PluginMetricsView metrics={envelope.metrics ?? []} />
                                                     <PluginLogsView logs={envelope.logs ?? []} />
                                                 </>
                                             ) : entities ? (
                                                 <>
                                                     <PluginResultView entities={entities} />
-                                                    <PluginMetricsView metrics={envelope.metrics ?? []} />
                                                     <PluginLogsView logs={envelope.logs ?? []} />
                                                 </>
                                             ) : (
@@ -135,7 +132,6 @@ export function ProjectScanPanel({
                                                     <pre className="rounded bg-muted p-3 text-xs overflow-auto">
                                                         {envelope.dataJson ?? "null"}
                                                     </pre>
-                                                    <PluginMetricsView metrics={envelope.metrics ?? []} />
                                                     <PluginLogsView logs={envelope.logs ?? []} />
                                                 </>
                                             )}

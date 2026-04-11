@@ -1,9 +1,9 @@
 {
     "$schema": "../../schemas/plugin-manifest.schema.json",
     "id": "adversea",
-    "version": "0.1.0",
+    "version": "0.1.4",
     "name": "Adversea",
-    "description": "Screens individuals and organizations against PEP lists, sanctions, social media, and topic-based adverse media via the Adversea API.",
+    "description": "Full Adversea integration covering all documented screening, entity recognition, and account endpoints.",
     "authors": [
         {
             "name": "OpenRiskPlatform",
@@ -26,13 +26,21 @@
                     "optional": false,
                     "title": "Target Name",
                     "description": "Full name of the person or organization to screen."
+                },
+                {
+                    "name": "force_recreate",
+                    "type": "boolean",
+                    "optional": true,
+                    "title": "Force Recreate",
+                    "description": "Bypass cache and refresh all response parts.",
+                    "default": false
                 }
             ]
         },
         {
             "id": "topic-report",
             "name": "Topic Report",
-            "description": "Adverse media analysis grouped by risk topics (corruption, financial crime, etc.).",
+            "description": "Adverse media analysis grouped by risk topics.",
             "function": "topicReport",
             "inputs": [
                 {
@@ -53,8 +61,23 @@
                     },
                     "optional": true,
                     "title": "Output Language",
-                    "description": "Language for the generated text output.",
+                    "description": "Language for generated text output.",
                     "default": "English"
+                },
+                {
+                    "name": "country",
+                    "type": "string",
+                    "optional": true,
+                    "title": "Country",
+                    "description": "Adversea country code (for example slovakia, germany, usa)."
+                },
+                {
+                    "name": "force_recreate",
+                    "type": "boolean",
+                    "optional": true,
+                    "title": "Force Recreate",
+                    "description": "Bypass cache and refresh all response parts.",
+                    "default": false
                 }
             ]
         },
@@ -70,8 +93,262 @@
                     "optional": false,
                     "title": "Target Name",
                     "description": "Full name of the person or organization to screen."
+                },
+                {
+                    "name": "force_recreate",
+                    "type": "boolean",
+                    "optional": true,
+                    "title": "Force Recreate",
+                    "description": "Bypass cache and refresh all response parts.",
+                    "default": false
                 }
             ]
+        },
+        {
+            "id": "unit-analysis-text",
+            "name": "Unit Analysis (Text)",
+            "description": "Analyzes search engine results and returns concise textual findings for each URL.",
+            "function": "unitAnalysisText",
+            "inputs": [
+                {
+                    "name": "target",
+                    "type": "string",
+                    "optional": false,
+                    "title": "Target Name",
+                    "description": "Name of the screened person or company."
+                },
+                {
+                    "name": "output_language",
+                    "type": {
+                        "name": "enum",
+                        "values": [
+                            "English",
+                            "Slovak"
+                        ]
+                    },
+                    "optional": true,
+                    "title": "Output Language",
+                    "description": "Language for generated text.",
+                    "default": "English"
+                },
+                {
+                    "name": "country",
+                    "type": "string",
+                    "optional": true,
+                    "title": "Country",
+                    "description": "Optional Adversea country code for regional tuning."
+                },
+                {
+                    "name": "media_only",
+                    "type": "boolean",
+                    "optional": true,
+                    "title": "Media Only",
+                    "description": "Restrict analysis to internet media.",
+                    "default": false
+                },
+                {
+                    "name": "force_recreate",
+                    "type": "boolean",
+                    "optional": true,
+                    "title": "Force Recreate",
+                    "description": "Bypass cache and refresh all response parts.",
+                    "default": false
+                }
+            ]
+        },
+        {
+            "id": "unit-analysis-claims",
+            "name": "Unit Analysis (Claims)",
+            "description": "Analyzes search engine results and returns atomic claims for each URL.",
+            "function": "unitAnalysisClaims",
+            "inputs": [
+                {
+                    "name": "target",
+                    "type": "string",
+                    "optional": false,
+                    "title": "Target Name",
+                    "description": "Name of the screened person or company."
+                },
+                {
+                    "name": "output_language",
+                    "type": {
+                        "name": "enum",
+                        "values": [
+                            "English",
+                            "Slovak"
+                        ]
+                    },
+                    "optional": true,
+                    "title": "Output Language",
+                    "description": "Language for generated claims.",
+                    "default": "English"
+                },
+                {
+                    "name": "country",
+                    "type": "string",
+                    "optional": true,
+                    "title": "Country",
+                    "description": "Optional Adversea country code for regional tuning."
+                },
+                {
+                    "name": "media_only",
+                    "type": "boolean",
+                    "optional": true,
+                    "title": "Media Only",
+                    "description": "Restrict analysis to internet media.",
+                    "default": false
+                },
+                {
+                    "name": "force_recreate",
+                    "type": "boolean",
+                    "optional": true,
+                    "title": "Force Recreate",
+                    "description": "Bypass cache and refresh all response parts.",
+                    "default": false
+                }
+            ]
+        },
+        {
+            "id": "rpo",
+            "name": "RPO Organization Search",
+            "description": "Finds Slovak organizations and related registry context in RPO/ORSR.",
+            "function": "rpoSearch",
+            "inputs": [
+                {
+                    "name": "target",
+                    "type": "string",
+                    "optional": false,
+                    "title": "Target Name",
+                    "description": "Name of person or company to search in RPO."
+                },
+                {
+                    "name": "force_recreate",
+                    "type": "boolean",
+                    "optional": true,
+                    "title": "Force Recreate",
+                    "description": "Bypass cache and refresh all response parts.",
+                    "default": false
+                }
+            ]
+        },
+        {
+            "id": "rpo-business-subjects",
+            "name": "RPO Business Subjects",
+            "description": "Retrieves business subjects for a Slovak organization ICO.",
+            "function": "rpoBusinessSubjects",
+            "inputs": [
+                {
+                    "name": "ico",
+                    "type": "string",
+                    "optional": false,
+                    "title": "ICO",
+                    "description": "Organization ICO (numeric)."
+                }
+            ]
+        },
+        {
+            "id": "debtors",
+            "name": "Debtors Check",
+            "description": "Checks publicly available debtor registries for the target.",
+            "function": "debtorCheck",
+            "inputs": [
+                {
+                    "name": "target",
+                    "type": "string",
+                    "optional": false,
+                    "title": "Target Name",
+                    "description": "Name of person or company to screen in debtor lists."
+                },
+                {
+                    "name": "force_recreate",
+                    "type": "boolean",
+                    "optional": true,
+                    "title": "Force Recreate",
+                    "description": "Bypass cache and refresh all response parts.",
+                    "default": false
+                }
+            ]
+        },
+        {
+            "id": "court-case",
+            "name": "Court Case Detail",
+            "description": "Loads one court case detail by court case link and organization ICO.",
+            "function": "courtCaseDetail",
+            "inputs": [
+                {
+                    "name": "court_case_link",
+                    "type": "string",
+                    "optional": false,
+                    "title": "Court Case Link",
+                    "description": "Unique URL/link to the court case document."
+                },
+                {
+                    "name": "org_ico",
+                    "type": "string",
+                    "optional": false,
+                    "title": "Organization ICO",
+                    "description": "8-digit organization ICO tied to this case."
+                },
+                {
+                    "name": "force_recreate",
+                    "type": "boolean",
+                    "optional": true,
+                    "title": "Force Recreate",
+                    "description": "Bypass cache and refresh all response parts.",
+                    "default": false
+                }
+            ]
+        },
+        {
+            "id": "default-entity-recognition",
+            "name": "Default Entity Recognition",
+            "description": "Extracts entities from search results for the target name.",
+            "function": "defaultEntityRecognition",
+            "inputs": [
+                {
+                    "name": "target",
+                    "type": "string",
+                    "optional": false,
+                    "title": "Target Name",
+                    "description": "Name of person or company for entity extraction."
+                },
+                {
+                    "name": "output_language",
+                    "type": {
+                        "name": "enum",
+                        "values": [
+                            "English",
+                            "Slovak"
+                        ]
+                    },
+                    "optional": true,
+                    "title": "Output Language",
+                    "description": "Language for generated output.",
+                    "default": "English"
+                },
+                {
+                    "name": "country",
+                    "type": "string",
+                    "optional": true,
+                    "title": "Country",
+                    "description": "Optional Adversea country code for regional tuning."
+                },
+                {
+                    "name": "force_recreate",
+                    "type": "boolean",
+                    "optional": true,
+                    "title": "Force Recreate",
+                    "description": "Bypass cache and refresh all response parts.",
+                    "default": false
+                }
+            ]
+        },
+        {
+            "id": "remaining-credit",
+            "name": "Remaining Credit",
+            "description": "Retrieves remaining Adversea credit for the current API key.",
+            "function": "remainingCredit",
+            "inputs": []
         }
     ],
     "settings": [
@@ -82,6 +359,14 @@
             "description": "Your Adversea API key (X-Adversea-Api-Key header).",
             "required": true,
             "default": null
+        }
+    ],
+    "metrics": [
+        {
+            "name": "remaining_credit",
+            "type": "string",
+            "title": "Remaining Credit",
+            "description": "Current Adversea account credit in EUR, refreshed on each plugin run."
         }
     ]
 }
