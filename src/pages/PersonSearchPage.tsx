@@ -5,11 +5,12 @@
  */
 
 import { UserSearch } from "lucide-react";
+import { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { usePlugins } from "@/hooks/usePlugins";
-import { usePersonSearch } from "@/hooks/usePersonSearch";
+import { usePersonSearchContext } from "@/core/personSearch/PersonSearchContext";
 import { PluginSelector } from "@/components/personSearch/PluginSelector";
-import { SearchTypeToggle } from "@/components/personSearch/SearchTypeToggle";
+import { AdverseaEndpointSelector } from "@/components/personSearch/AdverseaEndpointSelector";
 import { PersonSearchForm } from "@/components/personSearch/PersonSearchForm";
 import { SearchResultsPanel } from "@/components/personSearch/SearchResultsPanel";
 import { ScanHistorySidebar } from "@/components/personSearch/ScanHistorySidebar";
@@ -22,8 +23,8 @@ export function PersonSearchPage() {
     setFields,
     selectedPlugin,
     setSelectedPlugin,
-    searchType,
-    setSearchType,
+    adverseaEndpoints,
+    setAdverseaEndpoints,
     countrySearch,
     setCountrySearch,
     filteredCountries,
@@ -44,6 +45,7 @@ export function PersonSearchPage() {
     handleFieldChange,
     handleClear,
     handleSubmit,
+    runNewSearch,
     handlePageChange,
     handleCopyJson,
     handleSelectHistory,
@@ -52,9 +54,16 @@ export function PersonSearchPage() {
     handleUpdateHistoryOrder,
     handleToggleFavoriteEntity,
     handleRemoveFavoriteEntity,
-  } = usePersonSearch();
+  } = usePersonSearchContext();
 
-  const favoriteEntityIds = new Set(favoriteEntities.map((f) => f.entity.id));
+  const favoriteEntityIds = new Set(favoriteEntities.map((f: any) => f.entity.id));
+  const isFormDisabled = selectedPlugin === "adversea" && adverseaEndpoints.length === 0;
+  const [formHovered, setFormHovered] = useState(false);
+
+  const handleSubmitForm = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    runNewSearch();
+  };
 
   return (
     <MainLayout>
@@ -74,36 +83,39 @@ export function PersonSearchPage() {
               </p>
             </header>
 
-        <PluginSelector
-          installedPlugins={installedPlugins}
-          selectedPlugin={selectedPlugin}
-          pluginTokens={pluginTokens}
-          onSelect={setSelectedPlugin}
-        />
-
-            <SearchTypeToggle
-              searchType={searchType}
-              onChange={setSearchType}
+            <PluginSelector
+              installedPlugins={installedPlugins}
+              selectedPlugin={selectedPlugin}
+              pluginTokens={pluginTokens}
+              onSelect={setSelectedPlugin}
             />
+
+            {selectedPlugin === "adversea" && (
+              <AdverseaEndpointSelector
+                selected={adverseaEndpoints}
+                onChange={(next) => {
+                  if (next.length < adverseaEndpoints.length) handleClear();
+                  setAdverseaEndpoints(next);
+                }}
+                highlighted={formHovered && isFormDisabled}
+              />
+            )}
 
             <PersonSearchForm
               fields={fields}
-              searchType={searchType}
+              searchType="person"
               loading={loading}
               error={error}
               hasAnyField={hasAnyField}
+              disabled={isFormDisabled}
+              onHoverChange={isFormDisabled ? setFormHovered : undefined}
               countrySearch={countrySearch}
               filteredCountries={filteredCountries}
               onFieldChange={handleFieldChange}
-              onNationalityChange={(val) =>
-                setFields((prev) => ({ ...prev, nationality: val }))
-              }
+              onNationalityChange={(val) => setFields((prev) => ({ ...prev, nationality: val }))}
               onCountrySearchChange={setCountrySearch}
-              onClearNationality={() => {
-                setFields((prev) => ({ ...prev, nationality: "" }));
-                setCountrySearch("");
-              }}
-              onSubmit={handleSubmit}
+              onClearNationality={() => { setFields((prev) => ({ ...prev, nationality: "" })); setCountrySearch(""); }}
+              onSubmit={handleSubmitForm}
               onClear={handleClear}
             />
 
@@ -140,4 +152,3 @@ export function PersonSearchPage() {
     </MainLayout>
   );
 }
-

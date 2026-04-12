@@ -21,9 +21,10 @@ import {
 interface MainLayoutProps {
   children: ReactNode;
   projectDir?: string;
+  onNavigate?: (action: () => void) => void;
 }
 
-export function MainLayout({ children, projectDir }: MainLayoutProps) {
+export function MainLayout({ children, projectDir, onNavigate }: MainLayoutProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exitOpen, setExitOpen] = useState(false);
   const navigate = useNavigate();
@@ -68,7 +69,7 @@ export function MainLayout({ children, projectDir }: MainLayoutProps) {
 
       {/* Sidebar + Main Content */}
       <div className="flex flex-1 min-h-0">
-        <Sidebar />
+        <Sidebar onNavigate={onNavigate} />
         <main className="flex-1 overflow-auto min-h-0 overscroll-none">
           {children}
         </main>

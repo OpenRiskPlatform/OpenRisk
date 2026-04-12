@@ -5,7 +5,7 @@
  */
 
 import { useState } from "react";
-import { Clock, Trash2, User, Building2, Box, ChevronDown, ChevronUp, ChevronRight, ChevronLeft, Star, FileDown } from "lucide-react";
+import { Clock, Trash2, User, Building2, Box, ChevronDown, ChevronUp, ChevronRight, ChevronLeft, Star, FileDown, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -245,8 +245,8 @@ export function ScanHistorySidebar({
                           >
                             <div className="flex items-start gap-2">
                               {entry.searchType === "company"
-                                ? <Building2 className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
-                                : <User className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />}
+                                ? <Building2 className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${entry.result.success === false ? "text-destructive" : "text-muted-foreground"}`} />
+                                : <User className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${entry.result.success === false ? "text-destructive" : "text-muted-foreground"}`} />}
                               <div className="min-w-0 flex-1 space-y-1">
                                 <p className={`text-sm font-medium truncate leading-tight ${isActive ? "text-primary" : ""}`}>
                                   {entry.query || "(no name)"}
@@ -257,9 +257,16 @@ export function ScanHistorySidebar({
                                     <span className="text-[10px] text-muted-foreground truncate">{entry.pluginId}</span>
                                   </div>
                                 )}
-                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                                  {count}{total !== undefined && total !== count ? ` / ${total}` : ""} result{count !== 1 ? "s" : ""}
-                                </Badge>
+                                {entry.result.success === false ? (
+                                  <div className="flex items-center gap-1">
+                                    <AlertCircle className="h-3 w-3 text-destructive shrink-0" />
+                                    <span className="text-[10px] text-destructive font-medium">Search failed</span>
+                                  </div>
+                                ) : (
+                                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                    {count}{total !== undefined && total !== count ? ` / ${total}` : ""} result{count !== 1 ? "s" : ""}
+                                  </Badge>
+                                )}
                                 <p className="text-[10px] text-muted-foreground/70">{formatDateTime(entry.timestamp)}</p>
                               </div>
                             </div>
@@ -289,17 +296,17 @@ export function ScanHistorySidebar({
       <Dialog open={deleteTargetId !== null} onOpenChange={(open) => { if (!open) setDeleteTargetId(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Remove scan?</DialogTitle>
+            <DialogTitle>Remove scan from view?</DialogTitle>
             <DialogDescription>
-              This will remove the scan for{" "}
+              The scan for{" "}
               <span className="font-medium text-foreground">&ldquo;{deleteTarget?.query || "(no name)"}&rdquo;</span>{" "}
-              from the history.
+              is already saved to the project database. This will only remove it from the history list in the UI.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTargetId(null)}>Cancel</Button>
             <Button variant="destructive" onClick={() => { if (deleteTargetId) onDelete(deleteTargetId); setDeleteTargetId(null); }}>
-              Remove
+              Remove from view
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -331,17 +338,17 @@ export function ScanHistorySidebar({
       <Dialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Clear all history?</DialogTitle>
+            <DialogTitle>Clear all history from view?</DialogTitle>
             <DialogDescription>
-              This will permanently remove all{" "}
+              All{" "}
               <span className="font-medium text-foreground">{entries.length}</span>{" "}
-              scan{entries.length !== 1 ? "s" : ""} from the history.
+              scan{entries.length !== 1 ? "s are" : " is"} already saved to the project database. This will only remove them from the history list in the UI.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setClearDialogOpen(false)}>Cancel</Button>
             <Button variant="destructive" onClick={() => { onClear(); setClearDialogOpen(false); }}>
-              Clear all
+              Clear from view
             </Button>
           </DialogFooter>
         </DialogContent>

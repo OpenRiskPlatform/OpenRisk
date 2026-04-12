@@ -1,9 +1,11 @@
 import { FileText, Search, Printer, Calendar, BarChart2 } from 'lucide-react';
 import { useNavigate, useRouterState } from '@tanstack/react-router';
+import { usePersonSearchContext } from '@/core/personSearch/PersonSearchContext';
 
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: (action: () => void) => void }) {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { activeProjectDir } = usePersonSearchContext();
 
   const navItems = [
     { icon: FileText, label: 'Project', route: '/project' },
@@ -11,6 +13,21 @@ export function Sidebar() {
     { icon: BarChart2, label: 'Risk Report', route: '/report' },
     { icon: Printer, label: 'Print', route: '/print' },
   ];
+
+  const handleNav = (route: string) => {
+    const go = () => {
+      if (route === '/project' && activeProjectDir) {
+        navigate({ to: '/project', search: { dir: activeProjectDir } });
+      } else {
+        navigate({ to: route });
+      }
+    };
+    if (onNavigate) {
+      onNavigate(go);
+    } else {
+      go();
+    }
+  };
 
   return (
     <div className="w-16 shrink-0 bg-background flex flex-col items-center py-4 border-r border-border">
@@ -23,7 +40,7 @@ export function Sidebar() {
           return (
             <button
               key={item.route}
-              onClick={() => navigate({ to: item.route })}
+              onClick={() => handleNav(item.route)}
               className={`
                 w-full h-12 rounded-lg flex items-center justify-center
                 transition-colors duration-150

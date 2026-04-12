@@ -113,7 +113,7 @@ export function PluginSelector({
               })}
             </div>
             <p className="text-xs text-muted-foreground mt-3">
-              Each trigger for search spends one token for selected plugin.
+              Each trigger for search spends one token for selected plugin. If search results in error, no token will be deducted.
             </p>
           </>
         )}
