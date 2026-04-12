@@ -36,6 +36,7 @@ export function usePersonSearch() {
   const [activeHistoryId, setActiveHistoryId] = useState<string | null>(null);
   const [favoriteEntities, setFavoriteEntities] = useState<FavoriteEntity[]>([]);
   const [pluginTokens, setPluginTokens] = useState<Record<string, number>>({});
+  const [pluginStats, setPluginStats] = useState<Record<string, { success: number; error: number }>>({});
   const [committedFields, setCommittedFields] = useState<PersonSearchFields | null>(null);
 
   const filteredCountries = countrySearch.trim()
@@ -114,6 +115,15 @@ export function usePersonSearch() {
         }
 
         if (pageNumber === 1) {
+          // Track search stats
+          const statKey = data.success !== false ? "success" : "error";
+          setPluginStats((prev) => ({
+            ...prev,
+            [selectedPlugin]: {
+              success: (prev[selectedPlugin]?.success ?? 0) + (statKey === "success" ? 1 : 0),
+              error: (prev[selectedPlugin]?.error ?? 0) + (statKey === "error" ? 1 : 0),
+            },
+          }));
           const nameParts2 = [fields.firstName, fields.lastName]
             .map((s) => s.trim())
             .filter(Boolean);
@@ -142,8 +152,7 @@ export function usePersonSearch() {
     }
   };
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const runNewSearch = async () => {
     if (!hasAnyField) {
       setError("Please fill in at least one search field.");
       return;
@@ -152,6 +161,11 @@ export function usePersonSearch() {
     setPage(1);
     setCommittedFields({ ...fields });
     await runSearch(1);
+  };
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    await runNewSearch();
   };
 
   const handlePageChange = async (newPage: number) => {
@@ -221,6 +235,7 @@ export function usePersonSearch() {
     setFavoriteEntities((prev) => prev.filter((f) => f.id !== favoriteId));
   };
 
+
   const isFavoriteEntity = (entityId: string) =>
     favoriteEntities.some((f) => f.entity.id === entityId);
 
@@ -247,10 +262,12 @@ export function usePersonSearch() {
     setActiveHistoryId(null);
     setFavoriteEntities([]);
     setPluginTokens({});
+    setPluginStats({});
     setAdverseaEndpoints([]);
     setCountrySearch("");
     setViewMode("table");
-    setActiveProjectDir(null);
+    // NOTE: activeProjectDir is intentionally NOT reset here —
+    // switchProject manages it so we don't re-trigger on same-project navigation
   };
 
   const switchProject = (projectDir: string | undefined) => {
@@ -285,10 +302,13 @@ export function usePersonSearch() {
     favoriteEntities,
     isFavoriteEntity,
     pluginTokens,
+    pluginStats,
     committedFields,
+    activeProjectDir,
     handleFieldChange,
     handleClear,
     handleSubmit,
+    runNewSearch,
     handlePageChange,
     handleCopyJson,
     handleSelectHistory,

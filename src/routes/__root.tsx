@@ -5,6 +5,7 @@ import { BackendClientProvider } from "@/hooks/useBackendClient";
 import { PluginProvider } from "@/hooks/usePlugins";
 import { useTheme } from "@/hooks/useTheme";
 import { Toaster } from "sonner";
+import { PersonSearchProvider } from "@/core/personSearch/PersonSearchContext";
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -21,9 +22,11 @@ function RootComponent() {
       <ThemeWrapper />
       <BackendClientProvider>
         <PluginProvider>
-          <Outlet />
-          <Toaster richColors closeButton position="bottom-right" />
-          {import.meta.env.DEV && <TanStackRouterDevtools />}
+          <PersonSearchProvider>
+            <Outlet />
+            <Toaster richColors closeButton position="bottom-right" />
+            {import.meta.env.DEV && <TanStackRouterDevtools />}
+          </PersonSearchProvider>
         </PluginProvider>
       </BackendClientProvider>
     </SettingsProvider>

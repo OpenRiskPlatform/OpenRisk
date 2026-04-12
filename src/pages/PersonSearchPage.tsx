@@ -45,6 +45,7 @@ export function PersonSearchPage() {
     handleFieldChange,
     handleClear,
     handleSubmit,
+    runNewSearch,
     handlePageChange,
     handleCopyJson,
     handleSelectHistory,
@@ -55,9 +56,14 @@ export function PersonSearchPage() {
     handleRemoveFavoriteEntity,
   } = usePersonSearchContext();
 
-  const favoriteEntityIds = new Set(favoriteEntities.map((f) => f.entity.id));
+  const favoriteEntityIds = new Set(favoriteEntities.map((f: any) => f.entity.id));
   const isFormDisabled = selectedPlugin === "adversea" && adverseaEndpoints.length === 0;
   const [formHovered, setFormHovered] = useState(false);
+
+  const handleSubmitForm = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    runNewSearch();
+  };
 
   return (
     <MainLayout>
@@ -88,9 +94,7 @@ export function PersonSearchPage() {
               <AdverseaEndpointSelector
                 selected={adverseaEndpoints}
                 onChange={(next) => {
-                  if (next.length < adverseaEndpoints.length) {
-                    handleClear();
-                  }
+                  if (next.length < adverseaEndpoints.length) handleClear();
                   setAdverseaEndpoints(next);
                 }}
                 highlighted={formHovered && isFormDisabled}
@@ -99,6 +103,7 @@ export function PersonSearchPage() {
 
             <PersonSearchForm
               fields={fields}
+              searchType="person"
               loading={loading}
               error={error}
               hasAnyField={hasAnyField}
@@ -107,15 +112,10 @@ export function PersonSearchPage() {
               countrySearch={countrySearch}
               filteredCountries={filteredCountries}
               onFieldChange={handleFieldChange}
-              onNationalityChange={(val) =>
-                setFields((prev) => ({ ...prev, nationality: val }))
-              }
+              onNationalityChange={(val) => setFields((prev) => ({ ...prev, nationality: val }))}
               onCountrySearchChange={setCountrySearch}
-              onClearNationality={() => {
-                setFields((prev) => ({ ...prev, nationality: "" }));
-                setCountrySearch("");
-              }}
-              onSubmit={handleSubmit}
+              onClearNationality={() => { setFields((prev) => ({ ...prev, nationality: "" })); setCountrySearch(""); }}
+              onSubmit={handleSubmitForm}
               onClear={handleClear}
             />
 
