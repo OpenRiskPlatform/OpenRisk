@@ -8,6 +8,7 @@
     "core:default",
     "dialog:default",
     "fs:default",
+    "fs:write-files",
     {
       "identifier": "fs:scope",
       "allow": [
