@@ -26,3 +26,7 @@ dist-ssr
 # Snyk Security Extension - AI Rules (auto-generated)
 .github/instructions/snyk_rules.instructions.md
 target/
+
+# Plugin settings (contain sensitive info like API keys)
+src-tauri/plugins/**/settings.json
+

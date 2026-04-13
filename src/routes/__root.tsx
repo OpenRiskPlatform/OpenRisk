@@ -1,13 +1,14 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 import { SettingsProvider } from "@/core/settings/SettingsContext";
 import { useTheme } from "@/hooks/useTheme";
+import { Toaster } from "sonner";
 
 export const Route = createRootRoute({
   component: RootComponent,
 });
 
 function ThemeWrapper() {
-  useTheme(); // Apply theme based on settings
+  useTheme();
   return null;
 }
 

@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ScansRouteImport } from './routes/scans'
 import { Route as ReportRouteImport } from './routes/report'
+import { Route as ScansRouteImport } from './routes/scans'
 import { Route as ProjectRouteImport } from './routes/project'
 import { Route as PrintRouteImport } from './routes/print'
 import { Route as IndexRouteImport } from './routes/index'
@@ -23,6 +24,16 @@ const ScansRoute = ScansRouteImport.update({
 const ReportRoute = ReportRouteImport.update({
   id: '/report',
   path: '/report',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScansRoute = ScansRouteImport.update({
+  id: '/scans',
+  path: '/scans',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrintRoute = PrintRouteImport.update({
+  id: '/print',
+  path: '/print',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectRoute = ProjectRouteImport.update({
@@ -45,6 +56,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/print': typeof PrintRoute
   '/project': typeof ProjectRoute
+  '/scans': typeof ScansRoute
   '/report': typeof ReportRoute
   '/scans': typeof ScansRoute
 }
@@ -52,6 +64,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/print': typeof PrintRoute
   '/project': typeof ProjectRoute
+  '/scans': typeof ScansRoute
   '/report': typeof ReportRoute
   '/scans': typeof ScansRoute
 }
@@ -60,6 +73,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/print': typeof PrintRoute
   '/project': typeof ProjectRoute
+  '/scans': typeof ScansRoute
   '/report': typeof ReportRoute
   '/scans': typeof ScansRoute
 }
@@ -75,6 +89,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   PrintRoute: typeof PrintRoute
   ProjectRoute: typeof ProjectRoute
+  ScansRoute: typeof ScansRoute
   ReportRoute: typeof ReportRoute
   ScansRoute: typeof ScansRoute
 }
@@ -93,6 +108,13 @@ declare module '@tanstack/react-router' {
       path: '/report'
       fullPath: '/report'
       preLoaderRoute: typeof ReportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scans': {
+      id: '/scans'
+      path: '/scans'
+      fullPath: '/scans'
+      preLoaderRoute: typeof ScansRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/project': {
@@ -123,9 +145,12 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   PrintRoute: PrintRoute,
   ProjectRoute: ProjectRoute,
+  ScansRoute: ScansRoute,
   ReportRoute: ReportRoute,
   ScansRoute: ScansRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+

@@ -41,6 +41,7 @@ async-trait = "0.1"
 # and build aarch64-unknown-linux-gnu target on the matched machine (don't cross-compile)
 openssl = { version = "0.10", features = ["vendored"] }
 tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
 sqlx = { version = "0.8.6", default-features = false, features = [
   "runtime-tokio-rustls",
   "sqlite",
