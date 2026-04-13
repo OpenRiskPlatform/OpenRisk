@@ -18,7 +18,7 @@
         "id": {
             "type": "string",
             "description": "Stable plugin identifier used in project database",
-            "pattern": "^[a-z][a-z0-9_-]{1,63}$"
+            "pattern": "^[a-z][a-z0-9_-]{0,63}$"
         },
         "$schema": {
             "type": "string",
