@@ -10,12 +10,12 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "openrisk",
         "width": 800,
-        "height": 600,
-        "maximized": true
+        "height": 600
       }
     ],
     "security": {

@@ -3,14 +3,18 @@
  */
 
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { SettingsSidebar } from "./SettingsSidebar";
 import { GeneralSettings } from "./GeneralSettings";
 import { PluginSettings } from "./PluginSettings";
+import { ManagePlugins } from "./ManagePlugins";
+import { InfoSettings } from "./InfoSettings";
 import { useBackendClient } from "@/hooks/useBackendClient";
-import type { ProjectSettingsPayload } from "@/core/backend/types";
+import { unwrap } from "@/lib/utils";
+import type { ProjectSettingsPayload } from "@/core/backend/bindings";
+import { useSettings } from "@/core/settings/SettingsContext";
 
-export type SettingsCategory = "general" | "plugins" | "appearance";
+export type SettingsCategory = "info" | "general" | "plugins" | "manage-plugins";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -20,13 +24,21 @@ interface SettingsDialogProps {
 
 export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialogProps) {
   const [activeCategory, setActiveCategory] =
-    useState<SettingsCategory>("general");
+    useState<SettingsCategory>("info");
+  const [metricsRefreshToken, setMetricsRefreshToken] = useState(0);
   const backendClient = useBackendClient();
+  const { updateGlobalSettings } = useSettings();
   const [settingsData, setSettingsData] = useState<ProjectSettingsPayload | null>(
     null
   );
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setMetricsRefreshToken((prev) => prev + 1);
+    }
+  }, [open]);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,11 +56,11 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
     setSettingsLoading(true);
     setSettingsError(null);
 
-    backendClient
-      .loadSettings(projectDir)
+    unwrap(backendClient.loadSettings())
       .then((payload) => {
         if (!cancelled) {
           setSettingsData(payload);
+          updateGlobalSettings({ theme: (payload.projectSettings?.theme ?? "system") as "light" | "dark" | "system", advancedMode: payload.projectSettings?.advancedMode ?? false });
         }
       })
       .catch((err) => {
@@ -66,11 +78,63 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
     return () => {
       cancelled = true;
     };
-  }, [open, projectDir, backendClient]);
+  }, [open, projectDir, backendClient, updateGlobalSettings]);
+
+  const handleProjectSettingsUpdated = useCallback((
+    settings: ProjectSettingsPayload["projectSettings"]
+  ) => {
+    setSettingsData((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return {
+        ...prev,
+        projectSettings: settings,
+      };
+    });
+  }, []);
+
+  const handleProjectNameUpdated = useCallback((name: string) => {
+    setSettingsData((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return {
+        ...prev,
+        project: {
+          ...prev.project,
+          name,
+        },
+      };
+    });
+  }, []);
+
+  const handlePluginUpdated = useCallback((plugin: ProjectSettingsPayload["plugins"][number]) => {
+    setSettingsData((prev) => {
+      if (!prev) {
+        return prev;
+      }
+
+      const exists = prev.plugins.some((item) => item.id === plugin.id);
+
+      return {
+        ...prev,
+        plugins: exists
+          ? prev.plugins.map((item) => (item.id === plugin.id ? plugin : item))
+          : [plugin, ...prev.plugins],
+      };
+    });
+
+    window.dispatchEvent(
+      new CustomEvent("openrisk:plugins-updated", {
+        detail: { pluginId: plugin.id },
+      })
+    );
+  }, []);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl h-[80vh] p-0">
+      <DialogContent className="max-w-4xl h-[80vh] p-0 select-text">
         <div className="flex h-full min-h-0">
           {/* Sidebar */}
           <SettingsSidebar
@@ -80,27 +144,54 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
 
           {/* Content Area */}
           <div className="flex-1 flex flex-col min-h-0 p-6">
-            {activeCategory === "general" && <GeneralSettings />}
+            {activeCategory === "info" && (
+              <InfoSettings
+                projectDir={projectDir}
+                project={settingsData?.project ?? null}
+              />
+            )}
+            {activeCategory === "general" && (
+              <GeneralSettings
+                projectDir={projectDir}
+                projectName={settingsData?.project?.name ?? ""}
+                projectSettings={settingsData?.projectSettings ?? null}
+                loading={settingsLoading}
+                error={
+                  projectDir
+                    ? settingsError
+                    : "Open or create a project to edit settings."
+                }
+                onProjectSettingsUpdated={handleProjectSettingsUpdated}
+                onProjectNameUpdated={handleProjectNameUpdated}
+              />
+            )}
             {activeCategory === "plugins" && (
               <PluginSettings
                 projectDir={projectDir}
-                projectSettings={settingsData?.project_settings ?? null}
+                projectSettings={settingsData?.projectSettings ?? null}
                 plugins={settingsData?.plugins ?? []}
+                metricsRefreshToken={metricsRefreshToken}
                 loading={settingsLoading}
                 error={
                   projectDir
                     ? settingsError
                     : "Open or create a project to view plugin settings."
                 }
+                onPluginUpdated={handlePluginUpdated}
               />
             )}
-            {activeCategory === "appearance" && (
-              <div>
-                <h2 className="text-2xl font-semibold mb-4">Appearance</h2>
-                <p className="text-muted-foreground">
-                  Appearance settings coming soon...
-                </p>
-              </div>
+            {activeCategory === "manage-plugins" && (
+              <ManagePlugins
+                projectDir={projectDir}
+                plugins={settingsData?.plugins ?? []}
+                loading={settingsLoading}
+                error={
+                  projectDir
+                    ? settingsError
+                    : "Open or create a project to manage plugins."
+                }
+                onPluginUpdated={handlePluginUpdated}
+              />
             )}
           </div>
         </div>

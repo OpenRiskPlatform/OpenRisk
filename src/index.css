@@ -64,13 +64,31 @@
     @apply border-border;
   }
 
-  html, body, #root {
-    height: 100%;
-    overflow: hidden;
-  }
-
   body {
     @apply bg-background text-foreground;
     font-family: system-ui, -apple-system, sans-serif;
+  }
+}
+
+@media print {
+  [data-app-chrome] {
+    display: none !important;
+  }
+
+  html,
+  body,
+  #root {
+    background: white !important;
+  }
+
+  main {
+    overflow: visible !important;
+  }
+
+  #print-preview {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    background: white !important;
   }
 }

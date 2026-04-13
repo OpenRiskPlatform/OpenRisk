@@ -1,10 +1,79 @@
 use jsonschema::JSONSchema;
+use serde_json::Value;
 use std::sync::OnceLock;
 
-// Generated types from the schema (relative to src-tauri/src/)
 #[path = "../schemas/plugin-manifest.schema.rs"]
 mod manifest_types;
+
+pub use manifest_types::FieldType as PluginFieldType;
 pub use manifest_types::OpenRiskPluginManifest;
+use manifest_types::{FieldTypeObjectName, FieldTypeString};
+
+impl PluginFieldType {
+    pub fn name(&self) -> &'static str {
+        match self {
+            PluginFieldType::String(FieldTypeString::String) => "string",
+            PluginFieldType::String(FieldTypeString::Number) => "number",
+            PluginFieldType::String(FieldTypeString::Boolean) => "boolean",
+            PluginFieldType::String(FieldTypeString::Integer) => "integer",
+            PluginFieldType::String(FieldTypeString::Date) => "date",
+            PluginFieldType::String(FieldTypeString::Url) => "url",
+            PluginFieldType::Object {
+                name: FieldTypeObjectName::String,
+                ..
+            } => "string",
+            PluginFieldType::Object {
+                name: FieldTypeObjectName::Number,
+                ..
+            } => "number",
+            PluginFieldType::Object {
+                name: FieldTypeObjectName::Boolean,
+                ..
+            } => "boolean",
+            PluginFieldType::Object {
+                name: FieldTypeObjectName::Integer,
+                ..
+            } => "integer",
+            PluginFieldType::Object {
+                name: FieldTypeObjectName::Date,
+                ..
+            } => "date",
+            PluginFieldType::Object {
+                name: FieldTypeObjectName::Url,
+                ..
+            } => "url",
+            PluginFieldType::Object {
+                name: FieldTypeObjectName::Enum,
+                ..
+            } => "enum",
+        }
+    }
+
+    pub fn enum_values(&self) -> Option<&[String]> {
+        match self {
+            PluginFieldType::Object {
+                name: FieldTypeObjectName::Enum,
+                values,
+            } => Some(values.as_slice()),
+            _ => None,
+        }
+    }
+
+    pub fn to_json_value(&self) -> Value {
+        match self {
+            PluginFieldType::String(kind) => {
+                serde_json::json!({ "name": kind.to_string() })
+            }
+            PluginFieldType::Object { name, values } => {
+                if values.is_empty() {
+                    serde_json::json!({ "name": name.to_string() })
+                } else {
+                    serde_json::json!({ "name": name.to_string(), "values": values })
+                }
+            }
+        }
+    }
+}
 
 static COMPILED_SCHEMA: OnceLock<JSONSchema> = OnceLock::new();
 
@@ -39,7 +108,7 @@ impl std::error::Error for ManifestError {}
 /// Single entry-point API for callers.
 pub fn parse_manifest(json_str: &str) -> Result<OpenRiskPluginManifest, ManifestError> {
     // Parse JSON for validation
-    let raw: serde_json::Value =
+    let raw: Value =
         serde_json::from_str(json_str).map_err(|e| ManifestError::ParseError(e.to_string()))?;
 
     // Validate against schema
