@@ -1,10 +1,14 @@
 import os
 import sqlite3
+import sys
 
-DB_PATH = "/home/ronis/tmp/openrisk-test-project/jaramngjma/project.db"
+DEFAULT_DB_PATH = "project.db"
+DB_PATH = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("DB_PATH", DEFAULT_DB_PATH)
 
 print(f"DB exists: {os.path.exists(DB_PATH)} {DB_PATH}")
 if not os.path.exists(DB_PATH):
+    print(f"Usage: python {os.path.basename(sys.argv[0])} [db_path]")
+    print("You can also set the DB_PATH environment variable.")
     raise SystemExit(0)
 
 con = sqlite3.connect(DB_PATH)
