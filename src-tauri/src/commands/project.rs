@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 const PLUGIN_REGISTRY_URL: &str =
-    "https://raw.githubusercontent.com/OpenRiskPlatform/plugins/refs/heads/main/plugins.json";
+    "https://raw.githubusercontent.com/OpenRiskPlatform/plugins/main/plugins.json";
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize, specta::Type)]
 pub struct RegistryAuthorRecord {
