@@ -90,12 +90,14 @@ pub(super) async fn update_project_settings(
         .fetch_one(&mut *conn)
         .await?;
 
-    let normalized = normalize_theme(theme);
-    sqlx::query("UPDATE ProjectSettings SET theme = ?1 WHERE id = ?2")
-        .bind(&normalized)
-        .bind(&psid)
-        .execute(&mut *conn)
-        .await?;
+    if let Some(theme) = theme {
+        let normalized = normalize_theme(Some(theme));
+        sqlx::query("UPDATE ProjectSettings SET theme = ?1 WHERE id = ?2")
+            .bind(&normalized)
+            .bind(&psid)
+            .execute(&mut *conn)
+            .await?;
+    }
 
     if let Some(am) = advanced_mode {
         sqlx::query("UPDATE ProjectSettings SET advanced_mode = ?1 WHERE id = ?2")
