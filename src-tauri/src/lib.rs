@@ -5,7 +5,10 @@ mod plugin_manifest;
 use std::sync::Arc;
 
 use specta_typescript::Typescript;
+use sqlx::migrate::Migrator;
 use tauri_specta::{collect_commands, Builder};
+
+pub(crate) static EMBEDDED_MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 
 /// Tauri-managed state holding the currently-open project, if any.
 ///
@@ -57,7 +60,6 @@ pub fn run() {
             None::<Arc<app::project::SqliteProjectPersistence>>,
         ))
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .invoke_handler(builder.invoke_handler());

@@ -2,27 +2,13 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "shell:allow-open",
     "core:default",
     "dialog:default",
-    "fs:default",
-    "fs:write-files",
-    {
-      "identifier": "fs:scope",
-      "allow": [
-        { "path": "$HOME/**" },
-        { "path": "$DESKTOP/**" },
-        { "path": "$DOCUMENT/**" },
-        { "path": "$DOWNLOAD/**" },
-        { "path": "$PUBLIC/**" },
-        { "path": "$TEMP/**" }
-      ]
-    },
-    "mcp-bridge:default",
-    "store:allow-load",
-    "store:allow-set",
-    "store:default"
+    "mcp-bridge:default"
   ]
 }
