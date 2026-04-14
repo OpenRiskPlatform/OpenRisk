@@ -9,30 +9,30 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as ReportRouteImport } from './routes/report'
 import { Route as ScansRouteImport } from './routes/scans'
+import { Route as ReportRouteImport } from './routes/report'
 import { Route as ProjectRouteImport } from './routes/project'
 import { Route as PrintRouteImport } from './routes/print'
 import { Route as IndexRouteImport } from './routes/index'
 
-const ReportRoute = ReportRouteImport.update({
-  id: '/report',
-  path: '/report',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ScansRoute = ScansRouteImport.update({
   id: '/scans',
   path: '/scans',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PrintRoute = PrintRouteImport.update({
-  id: '/print',
-  path: '/print',
+const ReportRoute = ReportRouteImport.update({
+  id: '/report',
+  path: '/report',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectRoute = ProjectRouteImport.update({
   id: '/project',
   path: '/project',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrintRoute = PrintRouteImport.update({
+  id: '/print',
+  path: '/print',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -43,56 +43,56 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/project': typeof ProjectRoute
-  '/scans': typeof ScansRoute
-  '/report': typeof ReportRoute
   '/print': typeof PrintRoute
+  '/project': typeof ProjectRoute
+  '/report': typeof ReportRoute
+  '/scans': typeof ScansRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/project': typeof ProjectRoute
-  '/scans': typeof ScansRoute
-  '/report': typeof ReportRoute
   '/print': typeof PrintRoute
+  '/project': typeof ProjectRoute
+  '/report': typeof ReportRoute
+  '/scans': typeof ScansRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/project': typeof ProjectRoute
-  '/scans': typeof ScansRoute
-  '/report': typeof ReportRoute
   '/print': typeof PrintRoute
+  '/project': typeof ProjectRoute
+  '/report': typeof ReportRoute
+  '/scans': typeof ScansRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/project' | '/scans' | '/report' | '/print'
+  fullPaths: '/' | '/print' | '/project' | '/report' | '/scans'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/project' | '/scans' | '/report' | '/print'
-  id: '__root__' | '/' | '/project' | '/scans' | '/report' | '/print'
+  to: '/' | '/print' | '/project' | '/report' | '/scans'
+  id: '__root__' | '/' | '/print' | '/project' | '/report' | '/scans'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ProjectRoute: typeof ProjectRoute
-  ScansRoute: typeof ScansRoute
-  ReportRoute: typeof ReportRoute
   PrintRoute: typeof PrintRoute
+  ProjectRoute: typeof ProjectRoute
+  ReportRoute: typeof ReportRoute
+  ScansRoute: typeof ScansRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/report': {
-      id: '/report'
-      path: '/report'
-      fullPath: '/report'
-      preLoaderRoute: typeof ReportRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/scans': {
       id: '/scans'
       path: '/scans'
       fullPath: '/scans'
       preLoaderRoute: typeof ScansRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/report': {
+      id: '/report'
+      path: '/report'
+      fullPath: '/report'
+      preLoaderRoute: typeof ReportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/project': {
@@ -121,13 +121,11 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ProjectRoute: ProjectRoute,
-  ScansRoute: ScansRoute,
-  ReportRoute: ReportRoute,
   PrintRoute: PrintRoute,
+  ProjectRoute: ProjectRoute,
+  ReportRoute: ReportRoute,
+  ScansRoute: ScansRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-

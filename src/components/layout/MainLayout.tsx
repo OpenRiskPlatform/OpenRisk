@@ -1,37 +1,73 @@
-/**
- * Main Layout - Page wrapper with header
- */
-
 import { type ReactNode, useState } from "react";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Settings } from "lucide-react";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
-import { useNavigate } from "@tanstack/react-router";
+import { useBackendClient } from "@/hooks/useBackendClient";
+import { unwrap } from "@/lib/utils";
+import { useSettings } from "@/core/settings/SettingsContext";
 import { Sidebar } from "@/components/ui/Sidebar";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogFooter,
-  DialogTitle,
   DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
-
 
 interface MainLayoutProps {
   children: ReactNode;
   projectDir?: string;
+  selectedScanId?: string | null;
+  onGoBack?: () => void;
 }
 
-export function MainLayout({ children, projectDir }: MainLayoutProps) {
+export function MainLayout({
+  children,
+  projectDir,
+  selectedScanId,
+  onGoBack,
+}: MainLayoutProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exitOpen, setExitOpen] = useState(false);
-  const navigate = useNavigate();
+  const backendClient = useBackendClient();
+  const { updateGlobalSettings } = useSettings();
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!projectDir) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    unwrap(backendClient.loadSettings())
+      .then((payload) => {
+        if (!cancelled) {
+          updateGlobalSettings({ theme: (payload.projectSettings?.theme ?? "system") as "light" | "dark" | "system" });
+        }
+      })
+      .catch(() => {
+        // Ignore theme sync failures to avoid blocking page rendering.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectDir, backendClient, updateGlobalSettings]);
+
+  useEffect(() => {
+    const handler = () => setSettingsOpen(true);
+    window.addEventListener("openrisk:open-settings", handler);
+    return () => {
+      window.removeEventListener("openrisk:open-settings", handler);
+    };
+  }, []);
 
   return (
     <div className="h-screen flex flex-col bg-background">
-      {/* Header */}
-      <header className="shrink-0 border-b bg-background text-foreground">
+      <header data-app-chrome className="shrink-0 border-b bg-background text-foreground">
         <div className="px-6 h-16 flex items-center justify-between">
           <button
             onClick={() => setExitOpen(true)}
@@ -66,22 +102,17 @@ export function MainLayout({ children, projectDir }: MainLayoutProps) {
         </div>
       </header>
 
-      {/* Sidebar + Main Content */}
       <div className="flex flex-1 min-h-0">
-        <Sidebar />
-        <main className="flex-1 overflow-auto min-h-0 overscroll-none">
-          {children}
-        </main>
+        <Sidebar projectDir={projectDir} selectedScanId={selectedScanId} />
+        <main className="flex-1 min-h-0 overflow-auto overscroll-none">{children}</main>
       </div>
 
-      {/* Settings Dialog */}
       <SettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         projectDir={projectDir}
       />
 
-      {/* Exit project confirmation */}
       <Dialog open={exitOpen} onOpenChange={setExitOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader className="gap-4">
@@ -96,7 +127,10 @@ export function MainLayout({ children, projectDir }: MainLayoutProps) {
             </Button>
             <Button
               variant="destructive"
-              onClick={() => { setExitOpen(false); navigate({ to: "/" }); }}
+              onClick={() => {
+                setExitOpen(false);
+                onGoBack?.();
+              }}
             >
               Close project
             </Button>

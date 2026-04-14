@@ -4,9 +4,8 @@
 
 export interface GlobalSettings {
   theme: "light" | "dark" | "system";
-  language: string;
-  autoSave: boolean;
-  compactMode: boolean;
+  /** Show technical details (entity IDs, raw keys) in the UI. */
+  advancedMode?: boolean;
 }
 
 export type PluginSettings = Record<string, string | number | boolean | null>;
@@ -40,14 +39,4 @@ export interface SettingsStore {
    * Reset all settings to defaults
    */
   resetToDefaults(): void;
-
-  /**
-   * Export all settings as JSON
-   */
-  exportSettings(): string;
-
-  /**
-   * Import settings from JSON
-   */
-  importSettings(json: string): void;
 }
