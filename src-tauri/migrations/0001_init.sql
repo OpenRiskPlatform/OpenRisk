@@ -69,7 +69,6 @@ CREATE TABLE IF NOT EXISTS Scan (
     project_id TEXT NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('Draft','Running','Completed','Failed')),
     preview TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     is_archived INTEGER NOT NULL DEFAULT 0,
     sort_order INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (project_id) REFERENCES Project(id) ON DELETE CASCADE
@@ -181,4 +180,3 @@ CREATE TABLE IF NOT EXISTS PluginMetric (
 );
 
 INSERT OR IGNORE INTO SchemaVersion (id, version) VALUES (1, 19);
-DROP TABLE IF EXISTS SchemaVersion;
