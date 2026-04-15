@@ -91,6 +91,11 @@ pub enum FieldType {
         values: ::std::vec::Vec<::std::string::String>,
     },
 }
+impl ::std::convert::From<&Self> for FieldType {
+    fn from(value: &FieldType) -> Self {
+        value.clone()
+    }
+}
 impl ::std::convert::From<FieldTypeString> for FieldType {
     fn from(value: FieldTypeString) -> Self {
         Self::String(value)
@@ -142,6 +147,11 @@ pub enum FieldTypeObjectName {
     Url,
     #[serde(rename = "enum")]
     Enum,
+}
+impl ::std::convert::From<&Self> for FieldTypeObjectName {
+    fn from(value: &FieldTypeObjectName) -> Self {
+        value.clone()
+    }
 }
 impl ::std::fmt::Display for FieldTypeObjectName {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -236,6 +246,11 @@ pub enum FieldTypeString {
     Date,
     #[serde(rename = "url")]
     Url,
+}
+impl ::std::convert::From<&Self> for FieldTypeString {
+    fn from(value: &FieldTypeString) -> Self {
+        value.clone()
+    }
 }
 impl ::std::fmt::Display for FieldTypeString {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -351,6 +366,11 @@ pub struct InputDefinition {
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub validation: ::std::option::Option<ValidationRules>,
 }
+impl ::std::convert::From<&InputDefinition> for InputDefinition {
+    fn from(value: &InputDefinition) -> Self {
+        value.clone()
+    }
+}
 #[doc = "Input parameter name (can use *args or **kwargs syntax)"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -375,6 +395,11 @@ impl ::std::ops::Deref for InputDefinitionName {
 impl ::std::convert::From<InputDefinitionName> for ::std::string::String {
     fn from(value: InputDefinitionName) -> Self {
         value.0
+    }
+}
+impl ::std::convert::From<&InputDefinitionName> for InputDefinitionName {
+    fn from(value: &InputDefinitionName) -> Self {
+        value.clone()
     }
 }
 impl ::std::str::FromStr for InputDefinitionName {
@@ -471,6 +496,11 @@ pub struct MetricDefinition {
     #[serde(rename = "type")]
     pub type_: FieldType,
 }
+impl ::std::convert::From<&MetricDefinition> for MetricDefinition {
+    fn from(value: &MetricDefinition) -> Self {
+        value.clone()
+    }
+}
 #[doc = "Metric key used by openrisk.metrics.set/get/inc"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -495,6 +525,11 @@ impl ::std::ops::Deref for MetricDefinitionName {
 impl ::std::convert::From<MetricDefinitionName> for ::std::string::String {
     fn from(value: MetricDefinitionName) -> Self {
         value.0
+    }
+}
+impl ::std::convert::From<&MetricDefinitionName> for MetricDefinitionName {
+    fn from(value: &MetricDefinitionName) -> Self {
+        value.clone()
     }
 }
 impl ::std::str::FromStr for MetricDefinitionName {
@@ -622,7 +657,7 @@ impl<'de> ::serde::Deserialize<'de> for MetricDefinitionName {
 #[doc = "    \"id\": {"]
 #[doc = "      \"description\": \"Stable plugin identifier used in project database\","]
 #[doc = "      \"type\": \"string\","]
-#[doc = "      \"pattern\": \"^[a-z][a-z0-9_-]{1,63}$\""]
+#[doc = "      \"pattern\": \"^[a-z][a-z0-9_-]{0,63}$\""]
 #[doc = "    },"]
 #[doc = "    \"keywords\": {"]
 #[doc = "      \"description\": \"Plugin keywords for searchability\","]
@@ -729,6 +764,11 @@ pub struct OpenRiskPluginManifest {
     #[doc = "Plugin version in semver format (e.g., 0.1.0)"]
     pub version: OpenRiskPluginManifestVersion,
 }
+impl ::std::convert::From<&OpenRiskPluginManifest> for OpenRiskPluginManifest {
+    fn from(value: &OpenRiskPluginManifest) -> Self {
+        value.clone()
+    }
+}
 #[doc = "`OpenRiskPluginManifestAuthorsItem`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -771,6 +811,13 @@ pub struct OpenRiskPluginManifestAuthorsItem {
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub url: ::std::option::Option<::std::string::String>,
 }
+impl ::std::convert::From<&OpenRiskPluginManifestAuthorsItem>
+    for OpenRiskPluginManifestAuthorsItem
+{
+    fn from(value: &OpenRiskPluginManifestAuthorsItem) -> Self {
+        value.clone()
+    }
+}
 #[doc = "Brief description of plugin functionality"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -796,6 +843,13 @@ impl ::std::ops::Deref for OpenRiskPluginManifestDescription {
 impl ::std::convert::From<OpenRiskPluginManifestDescription> for ::std::string::String {
     fn from(value: OpenRiskPluginManifestDescription) -> Self {
         value.0
+    }
+}
+impl ::std::convert::From<&OpenRiskPluginManifestDescription>
+    for OpenRiskPluginManifestDescription
+{
+    fn from(value: &OpenRiskPluginManifestDescription) -> Self {
+        value.clone()
     }
 }
 impl ::std::str::FromStr for OpenRiskPluginManifestDescription {
@@ -870,6 +924,11 @@ impl ::std::convert::From<OpenRiskPluginManifestIcon> for ::std::string::String 
         value.0
     }
 }
+impl ::std::convert::From<&OpenRiskPluginManifestIcon> for OpenRiskPluginManifestIcon {
+    fn from(value: &OpenRiskPluginManifestIcon) -> Self {
+        value.clone()
+    }
+}
 impl ::std::str::FromStr for OpenRiskPluginManifestIcon {
     type Err = self::error::ConversionError;
     fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
@@ -925,7 +984,7 @@ impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifestIcon {
 #[doc = "{"]
 #[doc = "  \"description\": \"Stable plugin identifier used in project database\","]
 #[doc = "  \"type\": \"string\","]
-#[doc = "  \"pattern\": \"^[a-z][a-z0-9_-]{1,63}$\""]
+#[doc = "  \"pattern\": \"^[a-z][a-z0-9_-]{0,63}$\""]
 #[doc = "}"]
 #[doc = r" ```"]
 #[doc = r" </details>"]
@@ -943,15 +1002,20 @@ impl ::std::convert::From<OpenRiskPluginManifestId> for ::std::string::String {
         value.0
     }
 }
+impl ::std::convert::From<&OpenRiskPluginManifestId> for OpenRiskPluginManifestId {
+    fn from(value: &OpenRiskPluginManifestId) -> Self {
+        value.clone()
+    }
+}
 impl ::std::str::FromStr for OpenRiskPluginManifestId {
     type Err = self::error::ConversionError;
     fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
         static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
             ::std::sync::LazyLock::new(|| {
-                ::regress::Regex::new("^[a-z][a-z0-9_-]{1,63}$").unwrap()
+                ::regress::Regex::new("^[a-z][a-z0-9_-]{0,63}$").unwrap()
             });
         if PATTERN.find(value).is_none() {
-            return Err("doesn't match pattern \"^[a-z][a-z0-9_-]{1,63}$\"".into());
+            return Err("doesn't match pattern \"^[a-z][a-z0-9_-]{0,63}$\"".into());
         }
         Ok(Self(value.to_string()))
     }
@@ -1014,6 +1078,11 @@ impl ::std::ops::Deref for OpenRiskPluginManifestLicense {
 impl ::std::convert::From<OpenRiskPluginManifestLicense> for ::std::string::String {
     fn from(value: OpenRiskPluginManifestLicense) -> Self {
         value.0
+    }
+}
+impl ::std::convert::From<&OpenRiskPluginManifestLicense> for OpenRiskPluginManifestLicense {
+    fn from(value: &OpenRiskPluginManifestLicense) -> Self {
+        value.clone()
     }
 }
 impl ::std::str::FromStr for OpenRiskPluginManifestLicense {
@@ -1083,6 +1152,11 @@ impl ::std::ops::Deref for OpenRiskPluginManifestMain {
 impl ::std::convert::From<OpenRiskPluginManifestMain> for ::std::string::String {
     fn from(value: OpenRiskPluginManifestMain) -> Self {
         value.0
+    }
+}
+impl ::std::convert::From<&OpenRiskPluginManifestMain> for OpenRiskPluginManifestMain {
+    fn from(value: &OpenRiskPluginManifestMain) -> Self {
+        value.clone()
     }
 }
 impl ::std::str::FromStr for OpenRiskPluginManifestMain {
@@ -1157,6 +1231,11 @@ impl ::std::convert::From<OpenRiskPluginManifestName> for ::std::string::String 
         value.0
     }
 }
+impl ::std::convert::From<&OpenRiskPluginManifestName> for OpenRiskPluginManifestName {
+    fn from(value: &OpenRiskPluginManifestName) -> Self {
+        value.clone()
+    }
+}
 impl ::std::str::FromStr for OpenRiskPluginManifestName {
     type Err = self::error::ConversionError;
     fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
@@ -1227,6 +1306,13 @@ impl ::std::ops::Deref for OpenRiskPluginManifestUpdateMetricsFn {
 impl ::std::convert::From<OpenRiskPluginManifestUpdateMetricsFn> for ::std::string::String {
     fn from(value: OpenRiskPluginManifestUpdateMetricsFn) -> Self {
         value.0
+    }
+}
+impl ::std::convert::From<&OpenRiskPluginManifestUpdateMetricsFn>
+    for OpenRiskPluginManifestUpdateMetricsFn
+{
+    fn from(value: &OpenRiskPluginManifestUpdateMetricsFn) -> Self {
+        value.clone()
     }
 }
 impl ::std::str::FromStr for OpenRiskPluginManifestUpdateMetricsFn {
@@ -1300,6 +1386,11 @@ impl ::std::ops::Deref for OpenRiskPluginManifestVersion {
 impl ::std::convert::From<OpenRiskPluginManifestVersion> for ::std::string::String {
     fn from(value: OpenRiskPluginManifestVersion) -> Self {
         value.0
+    }
+}
+impl ::std::convert::From<&OpenRiskPluginManifestVersion> for OpenRiskPluginManifestVersion {
+    fn from(value: &OpenRiskPluginManifestVersion) -> Self {
+        value.clone()
     }
 }
 impl ::std::str::FromStr for OpenRiskPluginManifestVersion {
@@ -1411,6 +1502,11 @@ pub struct PluginEntrypointDefinition {
     #[doc = "Human-readable entrypoint name"]
     pub name: PluginEntrypointDefinitionName,
 }
+impl ::std::convert::From<&PluginEntrypointDefinition> for PluginEntrypointDefinition {
+    fn from(value: &PluginEntrypointDefinition) -> Self {
+        value.clone()
+    }
+}
 #[doc = "Named export function in the entrypoint file"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -1435,6 +1531,13 @@ impl ::std::ops::Deref for PluginEntrypointDefinitionFunction {
 impl ::std::convert::From<PluginEntrypointDefinitionFunction> for ::std::string::String {
     fn from(value: PluginEntrypointDefinitionFunction) -> Self {
         value.0
+    }
+}
+impl ::std::convert::From<&PluginEntrypointDefinitionFunction>
+    for PluginEntrypointDefinitionFunction
+{
+    fn from(value: &PluginEntrypointDefinitionFunction) -> Self {
+        value.clone()
     }
 }
 impl ::std::str::FromStr for PluginEntrypointDefinitionFunction {
@@ -1510,6 +1613,11 @@ impl ::std::convert::From<PluginEntrypointDefinitionId> for ::std::string::Strin
         value.0
     }
 }
+impl ::std::convert::From<&PluginEntrypointDefinitionId> for PluginEntrypointDefinitionId {
+    fn from(value: &PluginEntrypointDefinitionId) -> Self {
+        value.clone()
+    }
+}
 impl ::std::str::FromStr for PluginEntrypointDefinitionId {
     type Err = self::error::ConversionError;
     fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
@@ -1579,6 +1687,11 @@ impl ::std::ops::Deref for PluginEntrypointDefinitionName {
 impl ::std::convert::From<PluginEntrypointDefinitionName> for ::std::string::String {
     fn from(value: PluginEntrypointDefinitionName) -> Self {
         value.0
+    }
+}
+impl ::std::convert::From<&PluginEntrypointDefinitionName> for PluginEntrypointDefinitionName {
+    fn from(value: &PluginEntrypointDefinitionName) -> Self {
+        value.clone()
     }
 }
 impl ::std::str::FromStr for PluginEntrypointDefinitionName {
@@ -1690,6 +1803,11 @@ pub struct SettingDefinition {
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub validation: ::std::option::Option<ValidationRules>,
 }
+impl ::std::convert::From<&SettingDefinition> for SettingDefinition {
+    fn from(value: &SettingDefinition) -> Self {
+        value.clone()
+    }
+}
 #[doc = "Setting identifier (snake_case)"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -1714,6 +1832,11 @@ impl ::std::ops::Deref for SettingDefinitionName {
 impl ::std::convert::From<SettingDefinitionName> for ::std::string::String {
     fn from(value: SettingDefinitionName) -> Self {
         value.0
+    }
+}
+impl ::std::convert::From<&SettingDefinitionName> for SettingDefinitionName {
+    fn from(value: &SettingDefinitionName) -> Self {
+        value.clone()
     }
 }
 impl ::std::str::FromStr for SettingDefinitionName {
@@ -1792,6 +1915,11 @@ pub struct ValidationRules {
         skip_serializing_if = "::std::vec::Vec::is_empty"
     )]
     pub enum_: ::std::vec::Vec<::std::string::String>,
+}
+impl ::std::convert::From<&ValidationRules> for ValidationRules {
+    fn from(value: &ValidationRules) -> Self {
+        value.clone()
+    }
 }
 impl ::std::default::Default for ValidationRules {
     fn default() -> Self {
