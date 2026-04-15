@@ -154,7 +154,54 @@ function checkTypifyGeneratedFile() {
 
 const statusBefore = gitStatusSnapshot();
 
-runBackend(["cargo", "check"]);
+function checkBindingsGeneratedFile() {
+  const bindingsPath = path.join(rootDir, "src", "core", "backend", "bindings.ts");
+  const hadOriginal = fs.existsSync(bindingsPath);
+  const original = hadOriginal ? fs.readFileSync(bindingsPath) : null;
+
+  runBackend(["cargo", "test", "export_bindings", "--", "--nocapture"], {
+    label: "cargo test export_bindings (check-only)",
+  });
+
+  const diffProbe = spawnSync(
+    "git",
+    ["diff", "--name-only", "--", "src/core/backend/bindings.ts"],
+    {
+      cwd: rootDir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: isWindows,
+    },
+  );
+
+  if (diffProbe.status !== 0) {
+    console.error("[pre-commit] ERROR: failed to inspect bindings.ts drift.");
+    process.exit(1);
+  }
+
+  if (diffProbe.stdout.trim().length > 0) {
+    console.error(
+      "[pre-commit] ERROR: src/core/backend/bindings.ts is out of date.",
+    );
+    console.error(
+      "[pre-commit] Run: cd src-tauri && cargo test export_bindings -- --nocapture and commit src/core/backend/bindings.ts",
+    );
+    run(
+      "git",
+      ["--no-pager", "diff", "--", "src/core/backend/bindings.ts"],
+      { cwd: rootDir, label: "bindings.ts drift" },
+    );
+
+    if (hadOriginal && original !== null) {
+      fs.writeFileSync(bindingsPath, original);
+    } else {
+      fs.rmSync(bindingsPath, { force: true });
+    }
+
+    process.exit(1);
+  }
+}
+
 runBackend([
   "cargo",
   "clippy",
@@ -166,6 +213,7 @@ runBackend([
 ]);
 runBackend(["cargo", "fmt", "--all", "--", "--check"]);
 checkTypifyGeneratedFile();
+checkBindingsGeneratedFile();
 
 if (backendBinaryAvailable("cargo", ["machete", "--version"])) {
   runBackend(["cargo", "machete", "--with-metadata"], {
