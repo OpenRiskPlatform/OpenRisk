@@ -8,19 +8,6 @@ import { useBackendClient } from "@/hooks/useBackendClient";
 import { formatScanPerformedAt, useProjectWorkspace } from "@/hooks/useProjectWorkspace";
 import { unwrap } from "@/lib/utils";
 
-const TOKEN_PRICE = 0.1;
-const TOKEN_LIMIT = 500;
-
-// Per-plugin token price overrides (€ per token). Falls back to TOKEN_PRICE.
-const PLUGIN_TOKEN_PRICE: Record<string, number> = {
-  adversea: 0.15,
-  opensanctions: 0.1,
-};
-
-function getPluginPrice(pluginId: string): number {
-  return PLUGIN_TOKEN_PRICE[pluginId] ?? TOKEN_PRICE;
-}
-
 interface ProjectPageProps {
   projectDir?: string;
 }
@@ -87,11 +74,6 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     }
     await navigate({ to: "/", search: { mode: undefined } });
   };
-
-  const totalTokens = Object.values(pluginTokens).reduce((a, b) => a + b, 0);
-  const totalCost = Object.entries(pluginTokens)
-    .reduce((sum, [id, tokens]) => sum + tokens * getPluginPrice(id), 0)
-    .toFixed(2);
 
   return (
     <MainLayout
@@ -239,7 +221,6 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
           )}
         </div>
       </div>
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} projectDir={projectDir} />
     </MainLayout>
   );
 }
