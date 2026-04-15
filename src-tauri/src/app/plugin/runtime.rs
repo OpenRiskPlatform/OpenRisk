@@ -160,6 +160,7 @@ pub fn run_plugin_module(
 /// Call the optional `validate(settings)` export of a plugin.
 ///
 /// Returns `{ ok: true }` when no `validate` export exists.
+#[allow(dead_code)]
 pub fn run_validate_module(code: String, settings_json: String) -> Result<Value, String> {
     let wrapper_code = format!(
         r#"

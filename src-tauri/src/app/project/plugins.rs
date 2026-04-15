@@ -82,8 +82,7 @@ pub fn load_plugin_bundle_from_zip(zip_path: &Path) -> Result<LocalPluginBundle,
         s
     };
 
-    let manifest =
-        parse_manifest_relaxed(&manifest_raw).map_err(|e| PersistenceError::Validation(e))?;
+    let manifest = parse_manifest_relaxed(&manifest_raw).map_err(PersistenceError::Validation)?;
     let metric_defs = metric_defs_from_manifest(&manifest).map_err(PersistenceError::Validation)?;
     let update_metrics_fn = manifest.update_metrics_fn.clone().map(Into::into);
 
@@ -218,8 +217,7 @@ pub async fn load_plugin_bundle_from_url(
         .await
         .map_err(|e| PersistenceError::Http(e.to_string()))?;
 
-    let manifest =
-        parse_manifest_relaxed(&manifest_raw).map_err(|e| PersistenceError::Validation(e))?;
+    let manifest = parse_manifest_relaxed(&manifest_raw).map_err(PersistenceError::Validation)?;
     let plugin_id: String = manifest.id.clone().into();
     let metric_defs = metric_defs_from_manifest(&manifest).map_err(PersistenceError::Validation)?;
     let update_metrics_fn = manifest.update_metrics_fn.clone().map(Into::into);
