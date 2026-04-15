@@ -3,7 +3,7 @@
 use super::dao::ProjectPersistence;
 use super::plugins::{
     build_default_settings, extract_manifest_id, load_plugin_bundle_from_url,
-    load_plugin_bundle_from_zip, load_plugin_bundle_with_id, LocalPluginBundle,
+    load_plugin_bundle_from_zip, load_plugin_bundle_with_id,
 };
 use super::types::{
     LogEntry, PersistenceError, PluginEntrypointSelection, PluginMetricDef, PluginMetricValue,
@@ -178,11 +178,14 @@ pub async fn refresh_plugin_metrics(
 // Plugin management
 // ---------------------------------------------------------------------------
 
-async fn upsert_plugin_bundle(
+/// Register or refresh a plugin from a directory on disk into the project.
+pub async fn upsert_plugin_from_dir(
     dao: &dyn ProjectPersistence,
-    bundle: LocalPluginBundle,
+    plugin_dir: &Path,
 ) -> Result<PluginRecord, PersistenceError> {
-    let plugin_id = bundle.id.clone();
+    let plugin_id = extract_manifest_id(plugin_dir)?;
+    let bundle = load_plugin_bundle_with_id(plugin_dir, plugin_id.clone())?;
+
     dao.save_plugin(&bundle).await?;
 
     let existing = dao.get_plugin_setting_values(&plugin_id).await?;
@@ -193,16 +196,6 @@ async fn upsert_plugin_bundle(
     dao.get_plugin_record(&plugin_id).await
 }
 
-/// Register or refresh a plugin from a directory on disk into the project.
-pub async fn upsert_plugin_from_dir(
-    dao: &dyn ProjectPersistence,
-    plugin_dir: &Path,
-) -> Result<PluginRecord, PersistenceError> {
-    let plugin_id = extract_manifest_id(plugin_dir)?;
-    let bundle = load_plugin_bundle_with_id(plugin_dir, plugin_id.clone())?;
-    upsert_plugin_bundle(dao, bundle).await
-}
-
 /// Register or refresh a plugin fetched from a remote `plugin.json` URL.
 ///
 /// Downloads `plugin.json` and the plugin main file from the same remote directory.
@@ -211,7 +204,16 @@ pub async fn upsert_plugin_from_url(
     manifest_url: &str,
 ) -> Result<PluginRecord, PersistenceError> {
     let bundle = load_plugin_bundle_from_url(manifest_url).await?;
-    upsert_plugin_bundle(dao, bundle).await
+    let plugin_id = bundle.id.clone();
+
+    dao.save_plugin(&bundle).await?;
+
+    let existing = dao.get_plugin_setting_values(&plugin_id).await?;
+    let defaults = build_default_settings(&bundle.manifest);
+    let merged = merge_with_defaults(existing, defaults);
+    dao.save_plugin_setting_values(&plugin_id, &merged).await?;
+
+    dao.get_plugin_record(&plugin_id).await
 }
 
 /// Register or refresh a plugin from a `.zip` archive into the project.
@@ -220,7 +222,16 @@ pub async fn upsert_plugin_from_zip(
     zip_path: &Path,
 ) -> Result<PluginRecord, PersistenceError> {
     let bundle = load_plugin_bundle_from_zip(zip_path)?;
-    upsert_plugin_bundle(dao, bundle).await
+    let plugin_id = bundle.id.clone();
+
+    dao.save_plugin(&bundle).await?;
+
+    let existing = dao.get_plugin_setting_values(&plugin_id).await?;
+    let defaults = build_default_settings(&bundle.manifest);
+    let merged = merge_with_defaults(existing, defaults);
+    dao.save_plugin_setting_values(&plugin_id, &merged).await?;
+
+    dao.get_plugin_record(&plugin_id).await
 }
 
 /// Merge existing values with defaults: add defaults only for missing keys.
