@@ -22,6 +22,7 @@ function shellEscape(value) {
 
 const hasCargo = commandExists("cargo");
 const hasNix = commandExists("nix");
+const EXPECTED_CARGO_TYPIFY_VERSION = "0.5.0";
 
 function gitStatusSnapshot() {
   const result = spawnSync("git", ["status", "--porcelain"], {
@@ -105,10 +106,55 @@ function backendBinaryAvailable(binary, args = ["--help"]) {
   return false;
 }
 
+function backendCommandOutput(commandParts) {
+  if (hasCargo) {
+    return spawnSync(commandParts[0], commandParts.slice(1), {
+      cwd: backendDir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: isWindows,
+    });
+  }
+
+  if (hasNix) {
+    const command = commandParts.map(shellEscape).join(" ");
+    return spawnSync(
+      "nix",
+      ["develop", "-c", "bash", "-lc", `cd src-tauri && ${command}`],
+      {
+        cwd: rootDir,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        shell: isWindows,
+      },
+    );
+  }
+
+  return { status: 127, stdout: "", stderr: "" };
+}
+
 function checkTypifyGeneratedFile() {
   if (!backendBinaryAvailable("cargo-typify", ["typify", "--help"])) {
     console.error(
-      "[pre-commit] ERROR: cargo-typify is required for generation checks. Install it (`cargo install cargo-typify`) or use the project Nix shell.",
+      "[pre-commit] ERROR: cargo-typify is required for generation checks. Install it (`cargo install cargo-typify --version 0.5.0`) or use the project Nix shell.",
+    );
+    process.exit(1);
+  }
+
+  const versionProbe = backendCommandOutput(["cargo-typify", "typify", "-V"]);
+  if (versionProbe.status !== 0) {
+    console.error("[pre-commit] ERROR: failed to detect cargo-typify version.");
+    if (versionProbe.stderr) console.error(versionProbe.stderr);
+    process.exit(versionProbe.status ?? 1);
+  }
+
+  const versionLine = (versionProbe.stdout || "").trim();
+  if (!versionLine.includes(`cargo-typify ${EXPECTED_CARGO_TYPIFY_VERSION}`)) {
+    console.error(
+      `[pre-commit] ERROR: unsupported cargo-typify version: '${versionLine || "unknown"}'. Expected ${EXPECTED_CARGO_TYPIFY_VERSION}.`,
+    );
+    console.error(
+      "[pre-commit] Install matching version: cargo install cargo-typify --version 0.5.0 --locked",
     );
     process.exit(1);
   }
