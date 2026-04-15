@@ -19,7 +19,7 @@
           gobject-introspection
           cargo
           cargo-tauri
-          nodejs
+          nodejs_22
           rustPlatform.bindgenHook
         ];
 

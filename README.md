@@ -2,6 +2,16 @@
 
 This template should help get you started developing with Tauri, React and Typescript in Vite.
 
+## Toolchain requirements
+
+- Node.js `22.22.2` (pinned in `.nvmrc` and Nix flake via `nodejs_22`)
+- npm `10.9.7` (via `packageManager`)
+- Rust `1.94.0`
+
+Rust is pinned via `rust-toolchain.toml`, so if you use `rustup`, the correct compiler/tooling is selected automatically in this repo.
+
+`src-tauri/Cargo.toml` also sets `rust-version = "1.94"` so Cargo fails early with a clear error when using an older compiler.
+
 ## Recommended IDE Setup
 
 - [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)

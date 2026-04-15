@@ -3,6 +3,11 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": "22.22.2",
+    "npm": "10.9.7"
+  },
+  "packageManager": "npm@10.9.7",
   "scripts": {
     "routes:generate": "node scripts/generate-routes.mjs",
     "dev": "npm run routes:generate && vite",
