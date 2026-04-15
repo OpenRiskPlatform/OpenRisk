@@ -17,6 +17,7 @@ crate-type = [
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+rusqlite = { version = "0.32", features = ["bundled"] }
 
 [dependencies]
 tauri = { version = "2.10", features = [] }
@@ -44,6 +45,7 @@ tauri-plugin-dialog = "2"
 sqlx = { version = "0.8.6", default-features = false, features = [
   "runtime-tokio-rustls",
   "sqlite",
+  "migrate",
   "macros",
   "derive",
 ] }

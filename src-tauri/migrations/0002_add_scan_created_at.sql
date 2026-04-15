@@ -1,0 +1,4 @@
+ALTER TABLE Scan ADD COLUMN created_at TEXT;
+UPDATE Scan
+SET created_at = CURRENT_TIMESTAMP
+WHERE created_at IS NULL;
