@@ -1,7 +1,7 @@
 //! Plugin loading helpers for explicit plugin import actions.
 
-use crate::plugin_manifest::{parse_manifest, OpenRiskPluginManifest, PluginFieldType};
-use serde_json::{json, Value};
+use crate::plugin_manifest::{OpenRiskPluginManifest, PluginFieldType, parse_manifest};
+use serde_json::{Value, json};
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};

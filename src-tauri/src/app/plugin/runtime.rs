@@ -6,9 +6,9 @@
 //! alongside the entrypoint result.
 
 use rustyscript::{
-    deno_core::{error::ModuleLoaderError, ModuleSpecifier, RequestedModuleType, ResolutionKind},
-    module_loader::ImportProvider,
     Module, Runtime, RuntimeOptions,
+    deno_core::{ModuleSpecifier, RequestedModuleType, ResolutionKind, error::ModuleLoaderError},
+    module_loader::ImportProvider,
 };
 use serde_json::Value;
 

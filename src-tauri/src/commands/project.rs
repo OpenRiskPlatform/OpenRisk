@@ -1,11 +1,11 @@
 //! Tauri command handlers for project and scan operations.
 
-use crate::app::project::{
-    service, AppError, PluginEntrypointSelection, PluginRecord, ProjectPersistence,
-    ProjectSettingsPayload, ProjectSettingsRecord, ProjectSummary, ScanDetailRecord,
-    ScanEntrypointInput, ScanSummaryRecord, SettingValue, SqliteProjectPersistence,
-};
 use crate::ProjectState;
+use crate::app::project::{
+    AppError, PluginEntrypointSelection, PluginRecord, ProjectPersistence, ProjectSettingsPayload,
+    ProjectSettingsRecord, ProjectSummary, ScanDetailRecord, ScanEntrypointInput,
+    ScanSummaryRecord, SettingValue, SqliteProjectPersistence, service,
+};
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::Arc;
