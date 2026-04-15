@@ -116,15 +116,20 @@ jobs:
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
 
-      - name: Install cargo-typify
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-typify
+      - name: Install cargo-typify (pinned)
+        run: cargo install cargo-typify --version 0.5.0 --locked
 
       - name: Verify typify-generated schema is up-to-date (check-only)
         run: |
           tmp_file="$(mktemp)"
           trap 'rm -f "$tmp_file"' EXIT
+
+          version="$(cargo-typify typify -V)"
+          echo "Using $version"
+          if [[ "$version" != "cargo-typify 0.5.0" ]]; then
+            echo "::error title=Unexpected cargo-typify version::Expected cargo-typify 0.5.0, got $version"
+            exit 1
+          fi
 
           cargo-typify typify --no-builder schemas/plugin-manifest.schema.json -o "$tmp_file"
 
