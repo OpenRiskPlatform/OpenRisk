@@ -63,9 +63,10 @@ pub async fn create_project(
     project_path: String,
     state: tauri::State<'_, ProjectState>,
 ) -> Result<ProjectSummary, AppError> {
-    let (summary, persistence) = SqliteProjectPersistence::create(name, PathBuf::from(project_path))
-        .await
-        .map_err(AppError::from)?;
+    let (summary, persistence) =
+        SqliteProjectPersistence::create(&name, &PathBuf::from(project_path))
+            .await
+            .map_err(AppError::from)?;
     *state.lock().await = Some(Arc::new(persistence));
     Ok(summary)
 }
@@ -83,8 +84,8 @@ pub async fn open_project(
 ) -> Result<ProjectSummary, AppError> {
     let path = PathBuf::from(project_path);
     let (summary, persistence) = match password {
-        Some(pw) => SqliteProjectPersistence::open_with_password(path.clone(), pw).await,
-        None => SqliteProjectPersistence::open(path).await,
+        Some(pw) => SqliteProjectPersistence::open_with_password(&path, pw).await,
+        None => SqliteProjectPersistence::open(&path).await,
     }
     .map_err(AppError::from)?;
     *state.lock().await = Some(Arc::new(persistence));

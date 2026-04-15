@@ -62,8 +62,8 @@ impl SqliteProjectPersistence {
     /// Schema is applied and the row is inserted at the current schema version;
     /// plugin sync is handled by the caller (service layer) after construction.
     pub async fn create(
-        name: String,
-        project_path: PathBuf,
+        name: &str,
+        project_path: &Path,
     ) -> Result<(ProjectSummary, Self), PersistenceError> {
         let trimmed_name = name.trim();
         if trimmed_name.is_empty() {
@@ -72,7 +72,7 @@ impl SqliteProjectPersistence {
             ));
         }
 
-        let db_path = Self::resolve_create_path(project_path.as_path(), trimmed_name);
+        let db_path = Self::resolve_create_path(project_path, trimmed_name);
         if db_path.exists() {
             return Err(PersistenceError::Validation(format!(
                 "Project file {:?} already exists. Rename project or open existing one.",
@@ -133,13 +133,13 @@ impl SqliteProjectPersistence {
     ///
     /// Runs pending migrations. Returns a lock error when the database is encrypted
     /// and no cached key is available.
-    pub async fn open(project_path: PathBuf) -> Result<(ProjectSummary, Self), PersistenceError> {
+    pub async fn open(project_path: &Path) -> Result<(ProjectSummary, Self), PersistenceError> {
         Self::open_inner(project_path, None).await
     }
 
     /// Open an existing encrypted project with an explicit password.
     pub async fn open_with_password(
-        project_path: PathBuf,
+        project_path: &Path,
         password: String,
     ) -> Result<(ProjectSummary, Self), PersistenceError> {
         Self::open_inner(project_path, Some(password)).await
@@ -147,9 +147,9 @@ impl SqliteProjectPersistence {
 
     /// Probe the lock status of a project file *without* opening it.
     pub async fn check_lock_status(
-        project_path: PathBuf,
+        project_path: &Path,
     ) -> Result<ProjectLockStatus, PersistenceError> {
-        let db_path = Self::existing_db_path(project_path.as_path())?;
+        let db_path = Self::existing_db_path(project_path)?;
         Self::read_lock_status(&db_path).await
     }
 
@@ -158,10 +158,10 @@ impl SqliteProjectPersistence {
     // ---------------------------------------------------------------------------
 
     async fn open_inner(
-        project_path: PathBuf,
+        project_path: &Path,
         password: Option<String>,
     ) -> Result<(ProjectSummary, Self), PersistenceError> {
-        let db_path = Self::existing_db_path(project_path.as_path())?;
+        let db_path = Self::existing_db_path(project_path)?;
 
         let mut conn = match &password {
             Some(pw) => Self::connect(&db_path, false, Some(pw.as_str()))

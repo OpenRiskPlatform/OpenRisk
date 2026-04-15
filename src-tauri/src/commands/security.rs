@@ -17,7 +17,7 @@ use std::path::PathBuf;
 #[tauri::command]
 #[specta::specta]
 pub async fn get_project_lock_status(project_path: String) -> Result<ProjectLockStatus, String> {
-    SqliteProjectPersistence::check_lock_status(PathBuf::from(project_path))
+    SqliteProjectPersistence::check_lock_status(&PathBuf::from(project_path))
         .await
         .map_err(|e| e.to_string())
 }
