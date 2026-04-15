@@ -131,7 +131,7 @@ export const commands = {
 
 /* Types */
 // Typed error returned by all Tauri commands.
-export type AppError = { kind: "validation"; message: string } | { kind: "database"; message: string } | { kind: "internal"; message: string };
+export type AppError = { kind: "validation"; message: string } | { kind: "notFound"; message: string } | { kind: "database"; message: string } | { kind: "internal"; message: string };
 
 // A single console log entry captured from plugin execution.
 export type LogEntry = {

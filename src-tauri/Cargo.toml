@@ -23,6 +23,7 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 tauri = { version = "2.10", features = [] }
 tauri-plugin-shell = "2.3.1"
 tauri-plugin-store = "2"
+tauri-plugin-fs = "2"
 tauri-plugin-mcp-bridge = "0.10"
 rustyscript = { version = "0.12.3", features = [
   "safe_extensions",
