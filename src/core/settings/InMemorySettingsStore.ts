@@ -7,9 +7,7 @@ import type { GlobalSettings, PluginSettings, SettingsStore } from "./types";
 
 const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   theme: "system",
-  language: "en",
-  autoSave: true,
-  compactMode: false,
+  advancedMode: false,
 };
 
 export class InMemorySettingsStore implements SettingsStore {
@@ -67,33 +65,5 @@ export class InMemorySettingsStore implements SettingsStore {
   resetToDefaults(): void {
     this.globalSettings = { ...DEFAULT_GLOBAL_SETTINGS };
     this.pluginSettings.clear();
-  }
-
-  exportSettings(): string {
-    return JSON.stringify(
-      {
-        global: this.globalSettings,
-        plugins: Object.fromEntries(this.pluginSettings),
-      },
-      null,
-      2
-    );
-  }
-
-  importSettings(json: string): void {
-    try {
-      const data = JSON.parse(json);
-
-      if (data.global) {
-        this.globalSettings = { ...DEFAULT_GLOBAL_SETTINGS, ...data.global };
-      }
-
-      if (data.plugins) {
-        this.pluginSettings = new Map(Object.entries(data.plugins));
-      }
-    } catch (error) {
-      console.error("Failed to import settings:", error);
-      throw new Error("Invalid settings format");
-    }
   }
 }

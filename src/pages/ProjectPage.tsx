@@ -1,20 +1,12 @@
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { FolderKanban, Search, BarChart2 } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { useBackendClient } from "@/hooks/useBackendClient";
-import { usePersonSearchContext } from "@/core/personSearch/PersonSearchContext";
-import { usePlugins } from "@/hooks/usePlugins";
-import { FolderOpen, Hash, Lock, Coins, CheckCircle2, XCircle, Search, Settings } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { SettingsDialog } from "@/components/settings/SettingsDialog";
-import type { ProjectSummary } from "@/core/backend/types";
+import { useBackendClient } from "@/hooks/useBackendClient";
+import { formatScanPerformedAt, useProjectWorkspace } from "@/hooks/useProjectWorkspace";
+import { unwrap } from "@/lib/utils";
 
 const TOKEN_PRICE = 0.1;
 const TOKEN_LIMIT = 500;
@@ -33,53 +25,68 @@ interface ProjectPageProps {
   projectDir?: string;
 }
 
+function CountCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: number | string;
+}) {
+  return (
+    <div className="rounded-[22px] border border-border/70 bg-card px-5 py-5 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.15)]">
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-2 text-2xl font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[18px] border border-border/70 bg-card px-4 py-4">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 break-words text-sm font-medium">{value}</p>
+    </div>
+  );
+}
+
 export function ProjectPage({ projectDir }: ProjectPageProps) {
+  const navigate = useNavigate();
   const backendClient = useBackendClient();
-  const { switchProject, pluginTokens, pluginStats } = usePersonSearchContext();
-  const { installedPlugins } = usePlugins();
-  const [project, setProject] = useState<ProjectSummary | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const workspace = useProjectWorkspace(projectDir);
 
-  // Reset search state only when switching to a different project
-  useEffect(() => {
-    switchProject(projectDir);
-  }, [projectDir]);
+  const scanStats = useMemo(() => {
+    let draft = 0;
+    let running = 0;
+    let completed = 0;
+    let failed = 0;
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!projectDir) {
-      setProject(null);
-      return;
+    for (const scan of workspace.scans) {
+      if (scan.isArchived) {
+        continue;
+      }
+      if (scan.status === "Draft") draft += 1;
+      if (scan.status === "Running") running += 1;
+      if (scan.status === "Completed") completed += 1;
+      if (scan.status === "Failed") failed += 1;
     }
 
-    setLoading(true);
-    setError(null);
+    return { draft, running, completed, failed };
+  }, [workspace.scans]);
 
-    backendClient
-      .openProject(projectDir)
-      .then((summary) => {
-        if (!cancelled) {
-          setProject(summary);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
-          setProject(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
+  const latestActiveScan = useMemo(() => {
+    return workspace.scans.find((scan) => !scan.isArchived) ?? null;
+  }, [workspace.scans]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [projectDir, backendClient]);
+  const goBack = async () => {
+    try {
+      await unwrap(backendClient.closeProject());
+    } catch {
+      // Ignore close errors; the entry page can reopen the project.
+    }
+    await navigate({ to: "/", search: { mode: undefined } });
+  };
 
   const totalTokens = Object.values(pluginTokens).reduce((a, b) => a + b, 0);
   const totalCost = Object.entries(pluginTokens)
@@ -87,215 +94,152 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     .toFixed(2);
 
   return (
-    <MainLayout projectDir={projectDir}>
-      <div className="px-6 py-6 max-w-screen-xl mx-auto space-y-4">
-        {/* Header */}
-        <header className="space-y-0.5">
-          <h1 className="text-2xl font-bold">
-            {project?.name || "Project Overview"}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {project
-              ? "Overview of your current project."
-              : projectDir
-              ? "Loading…"
-              : "Select or create a project to begin."}
-          </p>
-        </header>
-
-        {!projectDir && (
-          <Card>
-            <CardHeader>
-              <CardTitle>No project selected</CardTitle>
-              <CardDescription>
-                Use the entry page to create or open a project before visiting this
-                screen.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        )}
-
-        {projectDir && loading && (
-          <p className="text-sm text-muted-foreground">Loading project…</p>
-        )}
-        {projectDir && error && (
-          <p className="text-sm text-destructive">{error}</p>
-        )}
-
-        {projectDir && project && !loading && !error && (
-          <>
-            {/* Top row: Project Details + Search Statistics side by side */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-              {/* Project Details */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Project Details</CardTitle>
-                  <CardDescription className="text-xs">Information stored in the local project database.</CardDescription>
-                </CardHeader>
-                <CardContent className="grid grid-cols-2 gap-3">
-                  <InfoItem icon={<Hash className="h-3.5 w-3.5" />} label="Project Name" value={project.name} />
-                  <InfoItem icon={<Hash className="h-3.5 w-3.5" />} label="Project ID" value={project.id} />
-                  <InfoItem icon={<FolderOpen className="h-3.5 w-3.5" />} label="Directory" value={project.directory} mono />
-                  <div className="border rounded-lg p-3 flex flex-col gap-1 relative">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="absolute top-1 right-1 h-5 w-5"
-                      onClick={() => setSettingsOpen(true)}
-                    >
-                      <Settings className="h-3 w-3" />
-                    </Button>
-                    <div className="flex items-center gap-1.5 text-xs uppercase text-muted-foreground">
-                      <Lock className="h-3.5 w-3.5" />
-                      Password Lock
-                    </div>
-                    <div className="mt-1">
-                      <Badge variant="outline" className="text-xs">Not locked</Badge>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Search Statistics */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Search className="h-4 w-4 text-primary" />
-                    Search Statistics
-                  </CardTitle>
-                  <CardDescription className="text-xs">Overall search activity in this session.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {(() => {
-                    const allStats = Object.values(pluginStats);
-                    const overallSuccess = allStats.reduce((s, p) => s + p.success, 0);
-                    const overallError = allStats.reduce((s, p) => s + p.error, 0);
-                    const overallTotal = overallSuccess + overallError;
-                    return (
-                      <div className="flex flex-col gap-3 h-full">
-                        <div className="flex flex-col items-center justify-center rounded-lg bg-muted py-4 px-3">
-                          <Search className="h-5 w-5 text-muted-foreground mb-1.5" />
-                          <span className="text-3xl font-bold">{overallTotal}</span>
-                          <span className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5">Total Searches</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3 flex-1">
-                          <div className="flex flex-col items-center justify-center rounded-lg bg-green-500/10 py-4 px-3">
-                            <CheckCircle2 className="h-5 w-5 text-green-500 mb-1.5" />
-                            <span className="text-3xl font-bold text-green-600 dark:text-green-400">{overallSuccess}</span>
-                            <span className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5">Success</span>
-                          </div>
-                          <div className="flex flex-col items-center justify-center rounded-lg bg-destructive/10 py-4 px-3">
-                            <XCircle className="h-5 w-5 text-destructive mb-1.5" />
-                            <span className="text-3xl font-bold text-destructive">{overallError}</span>
-                            <span className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5">Failed</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Token Usage — full width */}
+    <MainLayout
+      projectDir={projectDir}
+      selectedScanId={workspace.selectedScanId}
+      onGoBack={() => void goBack()}
+    >
+      <div className="min-h-full bg-muted/[0.18] px-6 py-6 lg:px-8 xl:px-10">
+        <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-6">
+          {!projectDir ? (
             <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Coins className="h-4 w-4 text-primary" />
-                      Token Usage
-                    </CardTitle>
-                    <CardDescription className="text-xs mt-0.5">
-                      Each successful search consumes tokens.
-                    </CardDescription>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground">Total estimated cost</p>
-                    <p className="text-xl font-bold">€{totalCost}</p>
-                    <p className="text-xs text-muted-foreground">{totalTokens} token{totalTokens !== 1 ? "s" : ""}</p>
-                  </div>
-                </div>
+              <CardHeader>
+                <CardTitle>No project selected</CardTitle>
               </CardHeader>
               <CardContent>
-                {installedPlugins.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No plugins installed.</p>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                    {installedPlugins.map((plugin) => {
-                      const used = pluginTokens[plugin.id] ?? 0;
-                      const remaining = TOKEN_LIMIT - used;
-                      const pct = Math.min((used / TOKEN_LIMIT) * 100, 100);
-                      const isWarning = pct >= 80;
-                      const price = getPluginPrice(plugin.id);
-                      const cost = (used * price).toFixed(2);
-                      return (
-                        <div key={plugin.id} className="rounded-lg border px-4 py-3 space-y-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <p className="text-sm font-medium">{plugin.name}</p>
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
-                                  €{price.toFixed(2)}/token
-                                </Badge>
-                              </div>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {used} / {TOKEN_LIMIT} &nbsp;·&nbsp; {remaining} left
-                              </p>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <p className="text-sm font-semibold">€{cost}</p>
-                              <p className={`text-xs ${isWarning ? "text-destructive" : "text-muted-foreground"}`}>
-                                {pct.toFixed(0)}%
-                              </p>
-                            </div>
-                          </div>
-                          <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${isWarning ? "bg-destructive" : "bg-green-500"}`}
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                <p className="text-sm text-muted-foreground">
+                  Open or create a project first.
+                </p>
               </CardContent>
             </Card>
-          </>
-        )}
+          ) : (
+            <>
+              <div className="rounded-[28px] border border-border/70 bg-card px-6 py-6 shadow-[0_20px_46px_-34px_rgba(15,23,42,0.18)]">
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-3">
+                    <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                      <FolderKanban className="h-6 w-6" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-sm text-muted-foreground">Project overview</p>
+                      <h1 className="text-3xl font-semibold tracking-tight">
+                        {workspace.settingsData?.project.name ?? "Project"}
+                      </h1>
+                      <p className="max-w-2xl text-sm text-muted-foreground">
+                        This view matches the FE branch project screen: project
+                        metadata, plugin inventory, and scan summary.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <Button
+                      className="gap-2"
+                      onClick={() =>
+                        void navigate({
+                          to: "/scans",
+                          search: {
+                            dir: projectDir,
+                            scan: workspace.selectedScanId ?? undefined,
+                          },
+                        })
+                      }
+                    >
+                      <Search className="h-4 w-4" />
+                      Open Search
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() =>
+                        void navigate({
+                          to: "/report",
+                          search: {
+                            dir: projectDir,
+                            scan: workspace.selectedScanId ?? undefined,
+                          },
+                        })
+                      }
+                    >
+                      <BarChart2 className="h-4 w-4" />
+                      View Report
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {workspace.settingsError ? (
+                <p className="text-sm text-red-600">{workspace.settingsError}</p>
+              ) : null}
+              {workspace.scansError ? (
+                <p className="text-sm text-red-600">{workspace.scansError}</p>
+              ) : null}
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <CountCard
+                  label="Enabled plugins"
+                  value={
+                    workspace.settingsData?.plugins.filter((plugin) => plugin.enabled)
+                      .length ?? 0
+                  }
+                />
+                <CountCard label="Draft scans" value={scanStats.draft} />
+                <CountCard label="Completed scans" value={scanStats.completed} />
+                <CountCard label="Failed scans" value={scanStats.failed} />
+              </div>
+
+              <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+                <div className="space-y-4 rounded-[28px] border border-border/70 bg-card p-6 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.16)]">
+                  <h2 className="text-lg font-semibold">Project details</h2>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <InfoRow
+                      label="Project name"
+                      value={workspace.settingsData?.project.name ?? "Unknown"}
+                    />
+                    <InfoRow
+                      label="Project ID"
+                      value={workspace.settingsData?.project.id ?? "Unknown"}
+                    />
+                    <InfoRow label="Directory" value={projectDir} />
+                    <InfoRow
+                      label="Audit"
+                      value={workspace.settingsData?.project.audit ?? "Not configured"}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-4 rounded-[28px] border border-border/70 bg-card p-6 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.16)]">
+                  <h2 className="text-lg font-semibold">Current activity</h2>
+                  {latestActiveScan ? (
+                    <div className="space-y-3">
+                      <InfoRow
+                        label="Latest scan"
+                        value={
+                          latestActiveScan.preview?.trim() ||
+                          `New Scan ${latestActiveScan.id.slice(0, 8)}`
+                        }
+                      />
+                      <InfoRow
+                        label="Performed at"
+                        value={formatScanPerformedAt(latestActiveScan.createdAt)}
+                      />
+                      <InfoRow
+                        label="Status"
+                        value={latestActiveScan.status}
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No active scans yet.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} projectDir={projectDir} />
     </MainLayout>
-  );
-}
-
-function InfoItem({
-  icon,
-  label,
-  value,
-  mono = false,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  return (
-    <div className="border rounded-lg p-4 flex flex-col gap-1">
-      <div className="flex items-center gap-1.5 text-xs uppercase text-muted-foreground">
-        {icon}
-        {label}
-      </div>
-      <p
-        className={`text-sm font-medium break-all mt-1 ${
-          mono ? "font-mono text-xs" : ""
-        }`}
-      >
-        {value}
-      </p>
-    </div>
   );
 }
