@@ -1,7 +1,7 @@
 //! Canonical SQLx migration runner for project schema lifecycle.
 
-use crate::app::project::types::PersistenceError;
 use crate::EMBEDDED_MIGRATOR;
+use crate::app::project::types::PersistenceError;
 use sqlx::SqliteConnection;
 
 async fn mark_scan_created_at_migration_if_already_applied(

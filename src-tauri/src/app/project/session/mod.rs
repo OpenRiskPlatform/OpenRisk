@@ -14,12 +14,12 @@
 
 pub(super) mod migrations;
 
-use super::plugins::{sidecar_path, LocalPluginBundle};
+use super::plugins::{LocalPluginBundle, sidecar_path};
 use super::security::{
     cache_key, clear_cached_key, escape_sql_literal, get_cached_key, lock_error,
 };
 use super::types::{PersistenceError, ProjectLockStatus, ProjectSummary};
-use sqlx::{sqlite::SqliteConnectOptions, Connection, SqliteConnection};
+use sqlx::{Connection, SqliteConnection, sqlite::SqliteConnectOptions};
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};

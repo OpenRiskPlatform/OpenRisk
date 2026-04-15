@@ -7,8 +7,8 @@
 //! The `unlock_project` command is removed: the unlock flow is now merged into [`open_project`]
 //! — call it with `password: Some(...)` to authenticate and open in one step.
 
-use crate::app::project::{ProjectLockStatus, ProjectPersistence, SqliteProjectPersistence};
 use crate::ProjectState;
+use crate::app::project::{ProjectLockStatus, ProjectPersistence, SqliteProjectPersistence};
 use std::path::PathBuf;
 
 /// Probe the lock status of a project file *without* opening it.
