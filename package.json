@@ -15,6 +15,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "precommit:backend": "node scripts/precommit-backend.mjs",
+    "udeps:backend": "node scripts/udeps-backend.mjs",  
     "prepare": "husky"
   },
   "dependencies": {
