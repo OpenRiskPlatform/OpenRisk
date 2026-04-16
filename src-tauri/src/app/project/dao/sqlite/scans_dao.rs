@@ -3,10 +3,10 @@
 use super::helpers::{conn_unavailable, load_scan_logs, project_id, project_settings_id};
 use crate::app::project::session::SqliteProjectPersistence;
 use crate::app::project::types::*;
+use serde_json::Value;
 use sqlx::SqliteConnection;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
-use serde_json::Value;
 
 async fn load_scan_result_count(
     conn: &mut sqlx::SqliteConnection,

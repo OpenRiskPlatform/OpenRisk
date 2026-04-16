@@ -90,6 +90,13 @@ fn parse_field_type(type_json: &str, enum_values_json: Option<&str>) -> PluginFi
     field_type
 }
 
+fn plugin_status_field_type() -> PluginFieldTypeDef {
+    PluginFieldTypeDef {
+        name: "string".to_string(),
+        values: None,
+    }
+}
+
 fn parse_default_setting_value(default_value_json: Option<&str>) -> Option<SettingValue> {
     default_value_json.and_then(|s| {
         serde_json::from_str::<serde_json::Value>(s)
@@ -310,14 +317,45 @@ async fn load_plugin_metric_values(
 
     Ok(rows
         .into_iter()
-        .map(|row| PluginMetricValue {
-            name: row.metric_name,
-            title: row.title,
-            type_: parse_field_type(&row.type_json, None),
-            description: row.description,
-            value: parse_setting_value_json(&row.value_json),
+        .map(|row| {
+            let is_status = row.metric_name == PLUGIN_STATUS_METRIC_NAME;
+            PluginMetricValue {
+                name: row.metric_name,
+                title: row.title,
+                type_: if is_status {
+                    plugin_status_field_type()
+                } else {
+                    parse_field_type(&row.type_json, None)
+                },
+                description: row.description,
+                value: parse_setting_value_json(&row.value_json),
+            }
         })
         .collect())
+}
+
+async fn load_plugin_status(
+    conn: &mut SqliteConnection,
+    plugin_id: &str,
+) -> Result<String, PersistenceError> {
+    let row = sqlx::query!(
+        r#"SELECT value_json as "value_json!: String"
+           FROM PluginMetric
+           WHERE plugin_id = ?1 AND metric_name = ?2
+           LIMIT 1"#,
+        plugin_id,
+        PLUGIN_STATUS_METRIC_NAME,
+    )
+    .fetch_optional(&mut *conn)
+    .await?;
+
+    Ok(match row {
+        Some(row) => match parse_setting_value_json(&row.value_json) {
+            SettingValue::String(value) => value,
+            _ => String::new(),
+        },
+        None => String::new(),
+    })
 }
 
 async fn load_plugin_setting_values(
@@ -356,6 +394,7 @@ pub(super) async fn load_plugin_record(
     let setting_defs = load_plugin_setting_defs(conn, plugin_id, project_id).await?;
     let metric_defs = load_plugin_metric_defs(conn, plugin_id, project_id).await?;
     let metric_values = load_plugin_metric_values(conn, plugin_id, project_id).await?;
+    let status = load_plugin_status(conn, plugin_id).await?;
     let setting_values = load_plugin_setting_values(conn, plugin_id, project_settings_id).await?;
 
     Ok(PluginRecord {
@@ -363,6 +402,7 @@ pub(super) async fn load_plugin_record(
         name: head.name,
         version: head.version,
         enabled: head.enabled,
+        status,
         manifest: head.manifest,
         entrypoints,
         input_defs,

@@ -6,9 +6,9 @@ use super::plugins::{
     load_plugin_bundle_from_zip, load_plugin_bundle_with_id,
 };
 use super::types::{
-    LogEntry, PersistenceError, PluginEntrypointSelection, PluginMetricDef, PluginMetricValue,
-    PluginOutput, PluginRecord, PluginSettingValue, ScanEntrypointInput, ScanPluginResultRecord,
-    ScanSummaryRecord, SettingValue,
+    LogEntry, PersistenceError, PluginEntrypointSelection, PluginFieldTypeDef, PluginMetricDef,
+    PluginMetricValue, PluginOutput, PluginRecord, PluginSettingValue, ScanEntrypointInput,
+    ScanPluginResultRecord, ScanSummaryRecord, SettingValue, PLUGIN_STATUS_METRIC_NAME,
 };
 use serde_json::{Map, Value};
 use std::path::Path;
@@ -266,8 +266,19 @@ fn parse_metrics(
         None => return vec![],
     };
 
-    let mut metrics = Vec::with_capacity(defs.len());
+    let builtin_status =
+        parse_builtin_status_metric(metric_map.get(PLUGIN_STATUS_METRIC_NAME), logs);
+    let mut saw_status_def = false;
+    let mut metrics = Vec::with_capacity(defs.len() + usize::from(builtin_status.is_some()));
     for def in defs {
+        if def.name == PLUGIN_STATUS_METRIC_NAME {
+            saw_status_def = true;
+            if let Some(status_metric) = builtin_status.clone() {
+                metrics.push(status_metric);
+            }
+            continue;
+        }
+
         let Some(raw_value) = metric_map.get(&def.name) else {
             continue;
         };
@@ -292,7 +303,38 @@ fn parse_metrics(
         });
     }
 
+    if !saw_status_def {
+        if let Some(status_metric) = builtin_status {
+            metrics.push(status_metric);
+        }
+    }
+
     metrics
+}
+
+fn parse_builtin_status_metric(
+    raw_value: Option<&Value>,
+    logs: &mut Vec<LogEntry>,
+) -> Option<PluginMetricValue> {
+    let raw_value = raw_value?;
+    let Some(status) = raw_value.as_str() else {
+        logs.push(LogEntry {
+            level: super::types::LogLevel::Warn,
+            message: "Metric 'status' ignored: value must be string".to_string(),
+        });
+        return None;
+    };
+
+    Some(PluginMetricValue {
+        name: PLUGIN_STATUS_METRIC_NAME.to_string(),
+        title: PLUGIN_STATUS_METRIC_NAME.to_string(),
+        type_: PluginFieldTypeDef {
+            name: "string".to_string(),
+            values: None,
+        },
+        description: None,
+        value: SettingValue::String(status.to_string()),
+    })
 }
 
 fn metric_value_matches_type(
