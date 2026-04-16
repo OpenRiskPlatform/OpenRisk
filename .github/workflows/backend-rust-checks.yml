@@ -22,10 +22,103 @@ env:
   RUST_TOOLCHAIN: "1.94.0"
 
 jobs:
-  # Light checks: run in parallel for fast feedback.
-  fmt:
-    name: cargo fmt --check
+  scope:
+    name: Backend - scope
     runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      manifest_sync: ${{ steps.filter.outputs.manifest_sync }}
+      client_sync: ${{ steps.filter.outputs.client_sync }}
+      dead_deps: ${{ steps.filter.outputs.dead_deps }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect changed backend paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            rust:
+              - 'src-tauri/**/*.rs'
+              - 'src-tauri/Cargo.toml'
+              - 'src-tauri/Cargo.lock'
+              - 'rust-toolchain.toml'
+            manifest_sync:
+              - 'src-tauri/schemas/plugin-manifest.schema.json'
+              - 'src-tauri/schemas/plugin-manifest.schema.rs'
+            client_sync:
+              - 'src-tauri/src/**/*.rs'
+              - 'src-tauri/Cargo.toml'
+              - 'src/core/backend/bindings.ts'
+            dead_deps:
+              - 'src-tauri/**/*.rs'
+              - 'src-tauri/Cargo.toml'
+              - 'src-tauri/Cargo.lock'
+
+  lint:
+    name: Backend - lint
+    runs-on: ubuntu-latest
+    needs: [scope]
+    if: needs.scope.outputs.rust == 'true'
+    defaults:
+      run:
+        working-directory: src-tauri
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies (Tauri)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libssl-dev \
+            libsqlite3-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libsoup-3.0-dev \
+            libwebkit2gtk-4.1-dev \
+            libjavascriptcoregtk-4.1-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri -> target
+          shared-key: ${{ format('backend-rust-{0}-{1}', runner.os, hashFiles('src-tauri/Cargo.lock')) }}
+
+      - name: cargo check
+        run: cargo check --all-targets --all-features
+
+      - name: cargo clippy (-D warnings)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Verify checks are non-mutating (clean git tree)
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error title=Checks modified files::One or more check steps modified the repository."
+            git status --short
+            git --no-pager diff -- . || true
+            exit 1
+          fi
+
+  format:
+    name: Backend - format
+    runs-on: ubuntu-latest
+    needs: [scope, lint]
+    if: |
+      needs.scope.outputs.rust == 'true' &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped')
     defaults:
       run:
         working-directory: src-tauri
@@ -52,9 +145,13 @@ jobs:
             exit 1
           fi
 
-  typify-drift:
-    name: typify generated schema up-to-date
+  manifest_sync:
+    name: Backend - manifest-sync
     runs-on: ubuntu-latest
+    needs: [scope, format]
+    if: |
+      needs.scope.outputs.manifest_sync == 'true' &&
+      (needs.format.result == 'success' || needs.format.result == 'skipped')
     defaults:
       run:
         working-directory: src-tauri
@@ -99,111 +196,13 @@ jobs:
             exit 1
           fi
 
-  # Heavy compile lane: warm cache once, then reuse for compile-heavy jobs.
-  cargo-check:
-    name: cargo check
+  client_sync:
+    name: Backend - client-sync
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: src-tauri
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Linux system dependencies (Tauri)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            pkg-config \
-            libssl-dev \
-            libsqlite3-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libsoup-3.0-dev \
-            libwebkit2gtk-4.1-dev \
-            libjavascriptcoregtk-4.1-dev
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            src-tauri -> target
-          shared-key: ${{ format('backend-rust-{0}-{1}', runner.os, hashFiles('src-tauri/Cargo.lock')) }}
-
-      - name: cargo check
-        run: cargo check --all-targets --all-features
-
-      - name: Verify checks are non-mutating (clean git tree)
-        run: |
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "::error title=Checks modified files::One or more check steps modified the repository."
-            git status --short
-            git --no-pager diff -- . || true
-            exit 1
-          fi
-
-  clippy:
-    name: cargo clippy -D warnings
-    runs-on: ubuntu-latest
-    needs: [cargo-check]
-    defaults:
-      run:
-        working-directory: src-tauri
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Linux system dependencies (Tauri)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            pkg-config \
-            libssl-dev \
-            libsqlite3-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libsoup-3.0-dev \
-            libwebkit2gtk-4.1-dev \
-            libjavascriptcoregtk-4.1-dev
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
-          components: clippy
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            src-tauri -> target
-          shared-key: ${{ format('backend-rust-{0}-{1}', runner.os, hashFiles('src-tauri/Cargo.lock')) }}
-
-      - name: cargo clippy (-D warnings)
-        run: cargo clippy --all-targets --all-features -- -D warnings
-
-      - name: Verify checks are non-mutating (clean git tree)
-        run: |
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "::error title=Checks modified files::One or more check steps modified the repository."
-            git status --short
-            git --no-pager diff -- . || true
-            exit 1
-          fi
-
-  export-bindings-drift:
-    name: export_bindings output up-to-date
-    runs-on: ubuntu-latest
-    needs: [cargo-check]
+    needs: [scope, manifest_sync]
+    if: |
+      needs.scope.outputs.client_sync == 'true' &&
+      (needs.manifest_sync.result == 'success' || needs.manifest_sync.result == 'skipped')
     defaults:
       run:
         working-directory: src-tauri
@@ -257,10 +256,13 @@ jobs:
             exit 1
           fi
 
-  udeps:
-    name: cargo udeps --all-targets
+  dead_deps:
+    name: Backend - dead-deps
     runs-on: ubuntu-latest
-    needs: [cargo-check]
+    needs: [scope, client_sync]
+    if: |
+      needs.scope.outputs.dead_deps == 'true' &&
+      (needs.client_sync.result == 'success' || needs.client_sync.result == 'skipped')
     defaults:
       run:
         working-directory: src-tauri

@@ -40,6 +40,57 @@ function gitStatusSnapshot() {
   return result.stdout;
 }
 
+function stagedFiles() {
+  const result = spawnSync(
+    "git",
+    ["diff", "--cached", "--name-only", "--diff-filter=ACMR"],
+    {
+      cwd: rootDir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: isWindows,
+    },
+  );
+
+  if (result.status !== 0) {
+    console.error("[pre-commit] ERROR: failed to read staged files.");
+    if (result.stderr) console.error(result.stderr.trim());
+    process.exit(result.status ?? 1);
+  }
+
+  return (result.stdout || "")
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function shouldRunChecks(files) {
+  const matches = (re) => files.some((f) => re.test(f));
+  const inSet = (p) => files.includes(p);
+
+  const rust =
+    matches(/^src-tauri\/.*\.rs$/) ||
+    inSet("src-tauri/Cargo.toml") ||
+    inSet("src-tauri/Cargo.lock") ||
+    inSet("rust-toolchain.toml");
+
+  const manifestSync =
+    inSet("src-tauri/schemas/plugin-manifest.schema.json") ||
+    inSet("src-tauri/schemas/plugin-manifest.schema.rs");
+
+  const clientSync =
+    matches(/^src-tauri\/src\/.*\.rs$/) ||
+    inSet("src-tauri/Cargo.toml") ||
+    inSet("src/core/backend/bindings.ts");
+
+  const deadDeps =
+    matches(/^src-tauri\/.*\.rs$/) ||
+    inSet("src-tauri/Cargo.toml") ||
+    inSet("src-tauri/Cargo.lock");
+
+  return { rust, manifestSync, clientSync, deadDeps };
+}
+
 function run(command, args, { cwd = rootDir, nonBlocking = false, label } = {}) {
   const title = label ?? `${command} ${args.join(" ")}`;
   console.log(`[pre-commit] ${title}`);
@@ -199,6 +250,15 @@ function checkTypifyGeneratedFile() {
 }
 
 const statusBefore = gitStatusSnapshot();
+const staged = stagedFiles();
+const checks = shouldRunChecks(staged);
+
+if (!checks.rust && !checks.manifestSync && !checks.clientSync && !checks.deadDeps) {
+  console.log("[pre-commit] No relevant backend files staged; skipping backend checks.");
+  process.exit(0);
+}
+
+console.log("[pre-commit] Scope:", JSON.stringify(checks));
 
 function checkBindingsGeneratedFile() {
   const bindingsPath = path.join(rootDir, "src", "core", "backend", "bindings.ts");
@@ -248,23 +308,33 @@ function checkBindingsGeneratedFile() {
   }
 }
 
-runBackend([
-  "cargo",
-  "clippy",
-  "--all-targets",
-  "--all-features",
-  "--",
-  "-D",
-  "warnings",
-]);
-runBackend(["cargo", "fmt", "--all", "--", "--check"]);
-checkTypifyGeneratedFile();
-checkBindingsGeneratedFile();
+if (checks.rust) {
+  runBackend([
+    "cargo",
+    "clippy",
+    "--all-targets",
+    "--all-features",
+    "--",
+    "-D",
+    "warnings",
+  ]);
+  runBackend(["cargo", "fmt", "--all", "--", "--check"]);
+}
 
-run("node", ["scripts/udeps-backend.mjs"], {
-  cwd: rootDir,
-  label: "cargo udeps --all-targets (nightly)",
-});
+if (checks.manifestSync) {
+  checkTypifyGeneratedFile();
+}
+
+if (checks.clientSync) {
+  checkBindingsGeneratedFile();
+}
+
+if (checks.deadDeps) {
+  run("node", ["scripts/udeps-backend.mjs"], {
+    cwd: rootDir,
+    label: "cargo udeps --all-targets (nightly)",
+  });
+}
 
 const statusAfter = gitStatusSnapshot();
 if (statusBefore !== null && statusAfter !== null && statusBefore !== statusAfter) {
