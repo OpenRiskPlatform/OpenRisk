@@ -261,14 +261,10 @@ runBackend(["cargo", "fmt", "--all", "--", "--check"]);
 checkTypifyGeneratedFile();
 checkBindingsGeneratedFile();
 
-if (backendBinaryAvailable("cargo", ["machete", "--version"])) {
-  runBackend(["cargo", "machete", "--with-metadata"], {
-    nonBlocking: true,
-    label: "cargo machete (non-blocking)",
-  });
-} else {
-  console.warn("[pre-commit] WARNING: cargo-machete not installed; skipping (non-blocking).");
-}
+run("node", ["scripts/udeps-backend.mjs"], {
+  cwd: rootDir,
+  label: "cargo udeps --all-targets (nightly)",
+});
 
 const statusAfter = gitStatusSnapshot();
 if (statusBefore !== null && statusAfter !== null && statusBefore !== statusAfter) {

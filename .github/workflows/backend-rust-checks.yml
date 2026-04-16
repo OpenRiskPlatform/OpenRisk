@@ -202,8 +202,8 @@ jobs:
             exit 1
           fi
 
-  machete:
-    name: cargo machete (non-blocking)
+  udeps:
+    name: cargo udeps --all-targets
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -213,37 +213,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install Linux system dependencies (Tauri)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libssl-dev \
+            libsqlite3-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libsoup-3.0-dev \
+            libwebkit2gtk-4.1-dev \
+            libjavascriptcoregtk-4.1-dev
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
 
-      - name: Install cargo-machete
-        uses: taiki-e/install-action@v2
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
         with:
-          tool: cargo-machete
+          workspaces: |
+            src-tauri -> target
 
-      - name: cargo machete (non-blocking)
-        continue-on-error: true
+      - name: Install nightly toolchain
+        run: rustup toolchain install nightly --profile minimal
+
+      - name: Install cargo-udeps on nightly
+        run: rustup run nightly cargo install cargo-udeps --locked
+
+      - name: cargo udeps (nightly)
         run: |
-          set +e
-          output="$(cargo machete --with-metadata 2>&1)"
-          status=$?
-
-          echo "$output"
-
-          if [ $status -ne 0 ]; then
-            echo "::warning title=cargo machete::Potential unused dependency issues found (non-blocking)."
-            {
-              echo "### cargo machete (non-blocking)"
-              echo
-              echo '```text'
-              echo "$output"
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-          exit 0
+          export RUSTC="$(rustup which --toolchain nightly rustc)"
+          rustup run nightly cargo udeps --all-targets
 
       - name: Verify checks are non-mutating (clean git tree)
         run: |

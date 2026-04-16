@@ -32,6 +32,7 @@
         ];
 
         packages = with pkgs; [
+          cargo-udeps
           cargo-machete
           llvmPackages_21.libllvm
           lld_21
