@@ -8,6 +8,7 @@ import type {
     PluginRecord,
     ProjectSettingsRecord,
 } from "@/core/backend/bindings";
+import { Settings } from "lucide-react";
 
 interface PluginSettingsProps {
     projectDir?: string;
@@ -63,6 +64,7 @@ export function PluginSettings({
 
             {projectDir && !loading && !error && enabledPlugins.length === 0 && (
                 <div className="text-center py-12 text-muted-foreground">
+                    <Settings className="h-12 w-12 mx-auto mb-3 text-muted-foreground/60" aria-hidden="true" />
                     No enabled plugins. Enable plugins in the Manage tab.
                 </div>
             )}
