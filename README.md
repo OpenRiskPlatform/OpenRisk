@@ -12,6 +12,38 @@ Rust is pinned via `rust-toolchain.toml`, so if you use `rustup`, the correct co
 
 `src-tauri/Cargo.toml` also sets `rust-version = "1.94"` so Cargo fails early with a clear error when using an older compiler.
 
+## Backend quality checks (Rust only)
+
+A backend-only CI workflow is defined in `.github/workflows/backend-rust-checks.yml` under workflow name `Backend` and runs as named jobs:
+
+- `lint` (cargo check + clippy `-D warnings`)
+- `format` (cargo fmt check)
+- `manifest-sync` (typify drift check)
+- `client-sync` (export_bindings drift check)
+- `dead-deps` (cargo udeps)
+
+Checks run only when relevant backend files change. Compile-heavy checks are staged with `needs` and use a shared Rust cache key.
+
+Local pre-commit hook is managed by Husky (`.husky/pre-commit`) and runs the same backend checks via:
+
+```bash
+npm run precommit:backend
+```
+
+Husky is installed automatically on `npm install` through the `prepare` script.
+The hook is scope-aware and runs checks only when relevant staged backend files changed.
+All hook/CI steps are check-only and do not auto-fix tracked files.
+
+### Optional: unused dependency scan
+
+`cargo udeps` requires a nightly Rust toolchain. Use:
+
+```bash
+npm run udeps:backend
+```
+
+This is a cross-platform script (Windows/macOS/Linux) that runs `cargo udeps` on nightly via `rustup`, ensures `cargo-udeps` is installed, and pins `RUSTC` to nightly to avoid stable-toolchain `-Z` failures.
+
 ## Recommended IDE Setup
 
 - [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
