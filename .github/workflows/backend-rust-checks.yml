@@ -1,4 +1,4 @@
-name: Backend Rust checks
+name: Backend
 
 on:
   pull_request:
@@ -23,7 +23,7 @@ env:
 
 jobs:
   scope:
-    name: Backend - scope
+    name: scope
     runs-on: ubuntu-latest
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
@@ -39,6 +39,7 @@ jobs:
         id: filter
         uses: dorny/paths-filter@v3
         with:
+          list-files: shell
           filters: |
             rust:
               - 'src-tauri/**/*.rs'
@@ -57,8 +58,23 @@ jobs:
               - 'src-tauri/Cargo.toml'
               - 'src-tauri/Cargo.lock'
 
+      - name: Print scope
+        run: |
+          echo "rust=${{ steps.filter.outputs.rust }}"
+          echo "manifest_sync=${{ steps.filter.outputs.manifest_sync }}"
+          echo "client_sync=${{ steps.filter.outputs.client_sync }}"
+          echo "dead_deps=${{ steps.filter.outputs.dead_deps }}"
+          echo "--- rust files ---"
+          echo "${{ steps.filter.outputs.rust_files }}"
+          echo "--- manifest files ---"
+          echo "${{ steps.filter.outputs.manifest_sync_files }}"
+          echo "--- client files ---"
+          echo "${{ steps.filter.outputs.client_sync_files }}"
+          echo "--- dead-deps files ---"
+          echo "${{ steps.filter.outputs.dead_deps_files }}"
+
   lint:
-    name: Backend - lint
+    name: lint
     runs-on: ubuntu-latest
     needs: [scope]
     if: needs.scope.outputs.rust == 'true'
@@ -113,7 +129,7 @@ jobs:
           fi
 
   format:
-    name: Backend - format
+    name: format
     runs-on: ubuntu-latest
     needs: [scope, lint]
     if: |
@@ -146,7 +162,7 @@ jobs:
           fi
 
   manifest_sync:
-    name: Backend - manifest-sync
+    name: manifest-sync
     runs-on: ubuntu-latest
     needs: [scope, format]
     if: |
@@ -197,7 +213,7 @@ jobs:
           fi
 
   client_sync:
-    name: Backend - client-sync
+    name: client-sync
     runs-on: ubuntu-latest
     needs: [scope, manifest_sync]
     if: |
@@ -257,7 +273,7 @@ jobs:
           fi
 
   dead_deps:
-    name: Backend - dead-deps
+    name: dead-deps
     runs-on: ubuntu-latest
     needs: [scope, client_sync]
     if: |
