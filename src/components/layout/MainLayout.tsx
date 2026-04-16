@@ -103,7 +103,7 @@ export function MainLayout({
       </header>
 
       <div className="flex flex-1 min-h-0">
-        <Sidebar projectDir={projectDir} selectedScanId={selectedScanId} />
+        <Sidebar projectDir={projectDir} selectedScanId={selectedScanId} onQuitClick={() => setExitOpen(true)} />
         <main className="flex-1 min-h-0 overflow-auto overscroll-none">{children}</main>
       </div>
 
