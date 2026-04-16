@@ -20,8 +20,10 @@ permissions:
 
 env:
   RUST_TOOLCHAIN: "1.94.0"
+  RUST_CACHE_SHARED_KEY: backend-rust-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
 
 jobs:
+  # Light checks: run in parallel for fast feedback.
   fmt:
     name: cargo fmt --check
     runs-on: ubuntu-latest
@@ -41,55 +43,6 @@ jobs:
 
       - name: cargo fmt (check)
         run: cargo fmt --all -- --check
-
-      - name: Verify checks are non-mutating (clean git tree)
-        run: |
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "::error title=Checks modified files::One or more check steps modified the repository."
-            git status --short
-            git --no-pager diff -- . || true
-            exit 1
-          fi
-
-  clippy:
-    name: cargo clippy -D warnings
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: src-tauri
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Linux system dependencies (Tauri)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            pkg-config \
-            libssl-dev \
-            libsqlite3-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libsoup-3.0-dev \
-            libwebkit2gtk-4.1-dev \
-            libjavascriptcoregtk-4.1-dev
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
-          components: clippy
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            src-tauri -> target
-
-      - name: cargo clippy (-D warnings)
-        run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Verify checks are non-mutating (clean git tree)
         run: |
@@ -147,8 +100,9 @@ jobs:
             exit 1
           fi
 
-  export-bindings-drift:
-    name: export_bindings output up-to-date
+  # Heavy compile lane: warm cache once, then reuse for compile-heavy jobs.
+  cargo-check:
+    name: cargo check
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -182,6 +136,108 @@ jobs:
         with:
           workspaces: |
             src-tauri -> target
+          shared-key: ${{ env.RUST_CACHE_SHARED_KEY }}
+
+      - name: cargo check
+        run: cargo check --all-targets --all-features
+
+      - name: Verify checks are non-mutating (clean git tree)
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error title=Checks modified files::One or more check steps modified the repository."
+            git status --short
+            git --no-pager diff -- . || true
+            exit 1
+          fi
+
+  clippy:
+    name: cargo clippy -D warnings
+    runs-on: ubuntu-latest
+    needs: [cargo-check]
+    defaults:
+      run:
+        working-directory: src-tauri
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies (Tauri)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libssl-dev \
+            libsqlite3-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libsoup-3.0-dev \
+            libwebkit2gtk-4.1-dev \
+            libjavascriptcoregtk-4.1-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri -> target
+          shared-key: ${{ env.RUST_CACHE_SHARED_KEY }}
+
+      - name: cargo clippy (-D warnings)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Verify checks are non-mutating (clean git tree)
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error title=Checks modified files::One or more check steps modified the repository."
+            git status --short
+            git --no-pager diff -- . || true
+            exit 1
+          fi
+
+  export-bindings-drift:
+    name: export_bindings output up-to-date
+    runs-on: ubuntu-latest
+    needs: [cargo-check]
+    defaults:
+      run:
+        working-directory: src-tauri
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies (Tauri)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libssl-dev \
+            libsqlite3-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libsoup-3.0-dev \
+            libwebkit2gtk-4.1-dev \
+            libjavascriptcoregtk-4.1-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri -> target
+          shared-key: ${{ env.RUST_CACHE_SHARED_KEY }}
 
       - name: Run export_bindings generator test
         run: cargo test export_bindings -- --nocapture
@@ -205,6 +261,7 @@ jobs:
   udeps:
     name: cargo udeps --all-targets
     runs-on: ubuntu-latest
+    needs: [cargo-check]
     defaults:
       run:
         working-directory: src-tauri
@@ -237,6 +294,7 @@ jobs:
         with:
           workspaces: |
             src-tauri -> target
+          shared-key: ${{ env.RUST_CACHE_SHARED_KEY }}
 
       - name: Install nightly toolchain
         run: rustup toolchain install nightly --profile minimal
