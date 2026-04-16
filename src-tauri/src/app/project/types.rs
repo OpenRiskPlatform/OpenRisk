@@ -137,6 +137,9 @@ pub struct PluginMetricValue {
     pub value: SettingValue,
 }
 
+/// Reserved metric name used to expose plugin runtime status as a first-class plugin field.
+pub const PLUGIN_STATUS_METRIC_NAME: &str = "status";
+
 // ---------------------------------------------------------------------------
 // Setting / input values
 // ---------------------------------------------------------------------------
@@ -198,6 +201,7 @@ pub struct PluginRecord {
     pub name: String,
     pub version: String,
     pub enabled: bool,
+    pub status: String,
     pub manifest: PluginManifestRecord,
     pub entrypoints: Vec<PluginEntrypointRecord>,
     pub input_defs: Vec<PluginInputDef>,
