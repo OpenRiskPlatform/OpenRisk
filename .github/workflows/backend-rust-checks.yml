@@ -20,7 +20,6 @@ permissions:
 
 env:
   RUST_TOOLCHAIN: "1.94.0"
-  RUST_CACHE_SHARED_KEY: backend-rust-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
 
 jobs:
   # Light checks: run in parallel for fast feedback.
@@ -136,7 +135,7 @@ jobs:
         with:
           workspaces: |
             src-tauri -> target
-          shared-key: ${{ env.RUST_CACHE_SHARED_KEY }}
+          shared-key: ${{ format('backend-rust-{0}-{1}', runner.os, hashFiles('src-tauri/Cargo.lock')) }}
 
       - name: cargo check
         run: cargo check --all-targets --all-features
@@ -187,7 +186,7 @@ jobs:
         with:
           workspaces: |
             src-tauri -> target
-          shared-key: ${{ env.RUST_CACHE_SHARED_KEY }}
+          shared-key: ${{ format('backend-rust-{0}-{1}', runner.os, hashFiles('src-tauri/Cargo.lock')) }}
 
       - name: cargo clippy (-D warnings)
         run: cargo clippy --all-targets --all-features -- -D warnings
@@ -237,7 +236,7 @@ jobs:
         with:
           workspaces: |
             src-tauri -> target
-          shared-key: ${{ env.RUST_CACHE_SHARED_KEY }}
+          shared-key: ${{ format('backend-rust-{0}-{1}', runner.os, hashFiles('src-tauri/Cargo.lock')) }}
 
       - name: Run export_bindings generator test
         run: cargo test export_bindings -- --nocapture
@@ -294,7 +293,7 @@ jobs:
         with:
           workspaces: |
             src-tauri -> target
-          shared-key: ${{ env.RUST_CACHE_SHARED_KEY }}
+          shared-key: ${{ format('backend-rust-{0}-{1}', runner.os, hashFiles('src-tauri/Cargo.lock')) }}
 
       - name: Install nightly toolchain
         run: rustup toolchain install nightly --profile minimal
