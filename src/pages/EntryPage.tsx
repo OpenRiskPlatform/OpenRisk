@@ -1,11 +1,12 @@
 import { FormEvent, useEffect, useState } from "react";
-import { FolderOpen, FolderPlus, History, LogOut, Settings } from "lucide-react";
+import { ChevronRight, FolderOpen, FolderPlus, History, Trash, X } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Toggle } from "@/components/ui/toggle";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "@/components/ui/item";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
     Dialog,
@@ -14,9 +15,9 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { useBackendClient } from "@/hooks/useBackendClient";
 import { unwrap } from "@/lib/utils";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const LAST_PROJECT_DIR_KEY = "openrisk:last-project-dir";
 const RECENT_PROJECTS_KEY = "openrisk:recent-projects";
@@ -29,25 +30,16 @@ const PROJECT_FILE_FILTERS = [
 ];
 
 interface EntryPageProps {
-    initialMode?: "create" | "open";
 }
 
-export function EntryPage({ initialMode }: EntryPageProps) {
+export function EntryPage({}: EntryPageProps) {
     const navigate = useNavigate();
     const backendClient = useBackendClient();
-
-    const [mode, setMode] = useState<"idle" | "create" | "open" | "recent">(
-        initialMode ?? "recent"
-    );
-    const [settingsOpen, setSettingsOpen] = useState(false);
-
-    const [projectName, setProjectName] = useState("");
-    const [projectPath, setProjectPath] = useState("");
-    const [openProjectPath, setOpenProjectPath] = useState("");
 
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [recentProjects, setRecentProjects] = useState<string[]>([]);
+    const [recentDeleteEnabled, setRecentDeleteEnabled] = useState(false);
     const [unlockOpen, setUnlockOpen] = useState(false);
     const [unlockPath, setUnlockPath] = useState("");
     const [unlockPassword, setUnlockPassword] = useState("");
@@ -83,12 +75,6 @@ export function EntryPage({ initialMode }: EntryPageProps) {
     };
 
     useEffect(() => {
-        if (mode === "create" && projectPath && !projectName.trim()) {
-            setProjectName(inferProjectName(projectPath));
-        }
-    }, [mode, projectPath, projectName]);
-
-    useEffect(() => {
         try {
             const raw = localStorage.getItem(RECENT_PROJECTS_KEY);
             if (!raw) {
@@ -121,18 +107,11 @@ export function EntryPage({ initialMode }: EntryPageProps) {
 
     const chooseCreateFile = async () => {
         setError(null);
-        const fileNameHint = projectName.trim() ? `${projectName.trim()}.orproj` : "new-project.orproj";
         const selection = await save({
-            defaultPath: fileNameHint,
+            defaultPath: "new-project.orproj",
             filters: PROJECT_FILE_FILTERS,
         });
-        if (typeof selection === "string") {
-            setProjectPath(selection);
-            if (!projectName.trim()) {
-                setProjectName(inferProjectName(selection));
-            }
-            setMode("create");
-        }
+        return typeof selection === "string" ? selection : null;
     };
 
     const chooseOpenFile = async () => {
@@ -142,27 +121,21 @@ export function EntryPage({ initialMode }: EntryPageProps) {
             multiple: false,
             filters: PROJECT_FILE_FILTERS,
         });
-        if (typeof selection === "string") {
-            setOpenProjectPath(selection);
-            setMode("open");
-        }
+        return typeof selection === "string" ? selection : null;
     };
 
-    const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
+    const handleCreate = async () => {
         setError(null);
+        const projectPath = await chooseCreateFile();
         if (!projectPath) {
-            setError("Select project file path");
             return;
         }
-        if (!projectName.trim()) {
-            setError("Project name is required");
-            return;
-        }
+
+        const finalProjectName = inferProjectName(projectPath);
 
         setBusy(true);
         try {
-            const project = await unwrap(backendClient.createProject(projectName.trim(), projectPath));
+            const project = await unwrap(backendClient.createProject(finalProjectName, projectPath));
             localStorage.setItem(LAST_PROJECT_DIR_KEY, project.directory);
             saveRecent(project.directory);
             await navigate({ to: "/project", search: { dir: project.directory } });
@@ -175,8 +148,8 @@ export function EntryPage({ initialMode }: EntryPageProps) {
 
     const handleOpen = async () => {
         setError(null);
+        const openProjectPath = await chooseOpenFile();
         if (!openProjectPath) {
-            setError("Select project file");
             return;
         }
 
@@ -198,15 +171,6 @@ export function EntryPage({ initialMode }: EntryPageProps) {
         }
     };
 
-    const handleExit = async () => {
-        try {
-            const win = getCurrentWindow();
-            await win.destroy();
-        } catch {
-            window.close();
-        }
-    };
-
     const openRecentProject = async (projectPathValue: string) => {
         setError(null);
         setBusy(true);
@@ -225,6 +189,15 @@ export function EntryPage({ initialMode }: EntryPageProps) {
         } finally {
             setBusy(false);
         }
+    };
+
+    const removeRecentProject = (projectPathValue: string) => {
+        const next = recentProjects.filter((item) => item !== projectPathValue);
+        setRecentProjects(next);
+        if (next.length === 0) {
+            setRecentDeleteEnabled(false);
+        }
+        localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(next));
     };
 
     const handleUnlock = async (event: FormEvent<HTMLFormElement>) => {
@@ -255,126 +228,94 @@ export function EntryPage({ initialMode }: EntryPageProps) {
                     LOGO
                 </div>
 
-                <div className="flex items-center justify-center gap-3">
-                    <Button
-                        size="icon"
-                        variant={mode === "open" ? "default" : "outline"}
-                        onClick={() => {
-                            setMode("open");
-                        }}
-                    >
-                        <FolderOpen className="h-5 w-5" />
+                <div className="space-y-2">
+                    <Button type="button" size="lg" disabled={busy} className="w-full gap-2" onClick={() => void handleCreate()}>
+                        <FolderPlus className="h-4 w-4" />
+                        {busy ? "Creating..." : "Create New Project"}
                     </Button>
-                    <Button
-                        size="icon"
-                        variant={mode === "create" ? "default" : "outline"}
-                        onClick={() => {
-                            setMode("create");
-                        }}
-                    >
-                        <FolderPlus className="h-5 w-5" />
-                    </Button>
-                    <Button
-                        size="icon"
-                        variant={mode === "recent" ? "default" : "outline"}
-                        onClick={() => setMode("recent")}
-                    >
-                        <History className="h-5 w-5" />
-                    </Button>
-                    <Button size="icon" variant="outline" onClick={() => setSettingsOpen(true)}>
-                        <Settings className="h-5 w-5" />
-                    </Button>
-                    <Button size="icon" variant="outline" onClick={handleExit}>
-                        <LogOut className="h-5 w-5" />
+
+                    <Button type="button" size="lg" variant="outline" disabled={busy} onClick={handleOpen} className="w-full gap-2">
+                        <FolderOpen className="h-4 w-4" />
+                        {busy ? "Opening..." : "Open Existing Project"}
                     </Button>
                 </div>
 
-                {mode === "recent" ? (
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-2xl">Recent Projects</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                            {recentProjects.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">no projects opened before</p>
-                            ) : (
-                                recentProjects.map((projectPathValue) => {
-                                    const parts = projectPathValue.split(/[\\/]/).filter(Boolean);
-                                    const fileName = parts[parts.length - 1] || projectPathValue;
-                                    const name = fileName.replace(/\.(db|orproj)$/i, "");
-                                    return (
-                                        <button
-                                            key={projectPathValue}
-                                            type="button"
-                                            className="w-full text-left rounded-md border px-3 py-2 hover:bg-muted/30"
-                                            onClick={() => void openRecentProject(projectPathValue)}
-                                            disabled={busy}
-                                        >
-                                            <p className="text-sm font-medium truncate">{name}</p>
-                                            <p className="text-xs text-muted-foreground truncate">{projectPathValue}</p>
-                                        </button>
-                                    );
-                                })
-                            )}
-                        </CardContent>
-                    </Card>
-                ) : null}
-
-                {mode === "create" ? (
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-base">Create Project</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <form className="space-y-3" onSubmit={handleCreate}>
-                                <div className="space-y-1">
-                                    <Label>Project file</Label>
-                                    <div className="flex gap-2">
-                                        <Input value={projectPath} readOnly placeholder="Select .orproj or .db path" />
-                                        <Button type="button" variant="outline" onClick={chooseCreateFile}>Browse</Button>
-                                    </div>
-                                </div>
-                                <div className="space-y-1">
-                                    <Label>Project name</Label>
-                                    <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} />
-                                </div>
-                                <Button type="submit" disabled={busy} className="w-full">
-                                    {busy ? "Creating..." : "Create"}
-                                </Button>
-                            </form>
-                        </CardContent>
-                    </Card>
-                ) : null}
-
-                {mode === "open" ? (
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-base">Open Project</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            <div className="space-y-1">
-                                <Label>Project file</Label>
-                                <div className="flex gap-2">
-                                    <Input value={openProjectPath} readOnly placeholder="Select .orproj or .db file" />
-                                    <Button type="button" variant="outline" onClick={chooseOpenFile}>Browse</Button>
-                                </div>
-                            </div>
-                            <Button type="button" disabled={busy} onClick={handleOpen} className="w-full">
-                                {busy ? "Opening..." : "Open"}
-                            </Button>
-                        </CardContent>
-                    </Card>
-                ) : null}
+                <Card>
+                    <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
+                        <CardTitle className="text-base flex items-center gap-2">
+                            <History className="h-4 w-4" />
+                            Recent Projects
+                        </CardTitle>
+                        <div className="flex items-center gap-2">
+                            <Toggle
+                                variant="ghost"
+                                size="default"
+                                pressed={recentDeleteEnabled && recentProjects.length !== 0}
+                                disabled={recentProjects.length === 0}
+                                onPressedChange={setRecentDeleteEnabled}
+                                aria-label="Enable removing recent projects"
+                            >
+                                <Trash className="group-data-[state=on]/toggle:fill-foreground" />
+                            </Toggle>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                        <ScrollArea className="h-64 w-full pr-4">
+                            <ItemGroup className="gap-2 p-4">
+                                {recentProjects.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground">No projects opened before.</p>
+                                ) : (
+                                    recentProjects.map((projectPathValue) => {
+                                        const parts = projectPathValue.split(/[\\/]/).filter(Boolean);
+                                        const fileName = parts[parts.length - 1] || projectPathValue;
+                                        const name = fileName.replace(/\.(db|orproj)$/i, "");
+                                        return (
+                                            <Item
+                                                key={projectPathValue}
+                                                variant="outline"
+                                                size="xs"
+                                                className={recentDeleteEnabled ? "" : "hover:bg-muted"} >
+                                                <button
+                                                    type="button"
+                                                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                                    onClick={() => void openRecentProject(projectPathValue)}
+                                                    disabled={busy || recentDeleteEnabled}
+                                                >
+                                                    <ItemContent>
+                                                        <ItemTitle className="w-full">{name}</ItemTitle>
+                                                        <ItemDescription className="line-clamp-1">{projectPathValue}</ItemDescription>
+                                                    </ItemContent>
+                                                    {!recentDeleteEnabled && (
+                                                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                                    )}
+                                                </button>
+                                                {recentDeleteEnabled ? (
+                                                    <ItemActions>
+                                                        <Button
+                                                            type="button"
+                                                            variant="destructive"
+                                                            size="sm"
+                                                            onClick={() => removeRecentProject(projectPathValue)}
+                                                            disabled={busy}
+                                                            aria-label={`Remove ${name} from recent projects`}
+                                                        >
+                                                            <X className="h-4 w-4" />
+                                                            Remove
+                                                        </Button>
+                                                    </ItemActions>
+                                                ) : null}
+                                            </Item>
+                                        );
+                                    })
+                                )}
+                            </ItemGroup>
+                        </ScrollArea>
+                    </CardContent>
+                </Card>
 
                 {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
             </div>
-
-            <SettingsDialog
-                open={settingsOpen}
-                onOpenChange={setSettingsOpen}
-                projectDir={openProjectPath || projectPath || undefined}
-            />
 
             <Dialog open={unlockOpen} onOpenChange={setUnlockOpen}>
                 <DialogContent className="sm:max-w-md">
