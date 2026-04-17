@@ -1,5 +1,16 @@
 # AGENTS.md
 
+This is OpenRisk project repository. It's Tauri application with rust backend in src-tauri/ and React frontend in src/.
+OpenRisk helps users investigate different entities for personal or legal reasons, more detailed motivation can be found in ./docs/OpenRisk.archimate file which is Archi syntax, you may use archi-mcp to connect to it.
+OpenRisk consist of backend application in Rust, frontend in React, plugins written in Typescript/Javascript.
+
+## Plugins
+Plugin is a way to integrate external sources into OpenRisk app.
+Logically plugin is code with access to filesystem and to http-fetch.
+
+Each plugin has index.js/ts file and plugin.json.
+index.js/ts file is js code that is executed in deno runtime via rustyscript. Inside the runtime plugin has these extensions allowed to run   "safe\_extensions", "http", "fs\_import";
+
 ## Critical Rules (Do Not Break)
 
 - Never manually edit generated files.

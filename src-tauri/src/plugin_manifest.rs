@@ -2,6 +2,7 @@ use jsonschema::JSONSchema;
 use serde_json::Value;
 use std::sync::OnceLock;
 
+#[allow(clippy::all)]
 #[path = "../schemas/plugin-manifest.schema.rs"]
 mod manifest_types;
 

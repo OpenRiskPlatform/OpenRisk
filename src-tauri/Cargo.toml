@@ -3,7 +3,8 @@ name = "openrisk"
 version = "0.1.0"
 description = "A Tauri App"
 authors = ["Tim 14", "Illia Chaban <ic-it@mail.com>"]
-edition = "2021"
+edition = "2024"
+rust-version = "1.94"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -40,7 +41,6 @@ async-trait = "0.1"
 # For ubuntu -> aarch64-unknown-linux-gnu cross-compilation.
 # If you feel the compilation is too slow, you can remove this dependency,
 # and build aarch64-unknown-linux-gnu target on the matched machine (don't cross-compile)
-openssl = { version = "0.10", features = ["vendored"] }
 tauri-plugin-dialog = "2.6.2"
 sqlx = { version = "0.8.6", default-features = false, features = [
   "runtime-tokio-rustls",

@@ -370,6 +370,7 @@ pub struct ProjectLockStatus {
 #[serde(tag = "kind", content = "message", rename_all = "camelCase")]
 pub enum AppError {
     Validation(String),
+    #[allow(dead_code)]
     NotFound(String),
     Database(String),
     Internal(String),

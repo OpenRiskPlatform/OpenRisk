@@ -1,10 +1,10 @@
 //! Public API for the project subsystem.
 //!
 //! Module layout:
-//! - [`session`]  — [`SqliteProjectPersistence`] struct, factory methods (create/open),
-//!                  connection management, schema migrations, and re-encryption.
-//! - [`dao`]      — [`ProjectPersistence`] trait and its `impl` for [`SqliteProjectPersistence`];
-//!                  all CRUD operations on an open session.
+//! - [`session`] — [`SqliteProjectPersistence`] struct, factory methods (create/open),
+//!   connection management, schema migrations, and re-encryption.
+//! - [`dao`] — [`ProjectPersistence`] trait and its `impl` for [`SqliteProjectPersistence`];
+//!   all CRUD operations on an open session.
 //! - [`service`]  — Business-logic orchestration: plugin sync, scan execution, settings merge.
 //! - [`types`]    — Shared domain DTOs and the [`PersistenceError`] type.
 //! - [`plugins`]  — Plugin bundle discovery and loading from disk.

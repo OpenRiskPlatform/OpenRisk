@@ -19,7 +19,7 @@
           gobject-introspection
           cargo
           cargo-tauri
-          nodejs
+          nodejs_22
           rustPlatform.bindgenHook
         ];
 
@@ -32,6 +32,8 @@
         ];
 
         packages = with pkgs; [
+          cargo-udeps
+          cargo-machete
           llvmPackages_21.libllvm
           lld_21
           nsis

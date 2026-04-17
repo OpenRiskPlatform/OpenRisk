@@ -1,7 +1,7 @@
 //! Canonical SQLx migration runner for project schema lifecycle.
 
-use crate::app::project::types::PersistenceError;
 use crate::EMBEDDED_MIGRATOR;
+use crate::app::project::types::PersistenceError;
 use sqlx::SqliteConnection;
 
 async fn mark_scan_created_at_migration_if_already_applied(
@@ -32,10 +32,11 @@ CREATE TABLE IF NOT EXISTS _sqlx_migrations (
         return Ok(());
     }
 
-    let has_created_at: Option<i64> =
-        sqlx::query_scalar(r#"SELECT 1 FROM pragma_table_info('Scan') WHERE name = 'created_at' LIMIT 1"#)
-            .fetch_optional(&mut *conn)
-            .await?;
+    let has_created_at: Option<i64> = sqlx::query_scalar(
+        r#"SELECT 1 FROM pragma_table_info('Scan') WHERE name = 'created_at' LIMIT 1"#,
+    )
+    .fetch_optional(&mut *conn)
+    .await?;
     if has_created_at.is_none() {
         return Ok(());
     }
