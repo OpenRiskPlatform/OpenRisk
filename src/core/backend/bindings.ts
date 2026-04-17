@@ -228,6 +228,7 @@ export type PluginRecord = {
 	name: string,
 	version: string,
 	enabled: boolean,
+	status: string,
 	manifest: PluginManifestRecord,
 	entrypoints: PluginEntrypointRecord[],
 	inputDefs: PluginInputDef[],
