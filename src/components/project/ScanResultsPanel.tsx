@@ -64,22 +64,20 @@ export function ScanResultsPanel({
             : null;
         const entities =
           parsedData !== null && isDataModelResult(parsedData) ? parsedData : null;
-        const revisionSuffix = result.pluginRevisionId
-          ? ` [${result.pluginRevisionId.slice(0, 8)}]`
-          : "";
-        const subtitle = `${result.pluginId} / ${result.entrypointId}${revisionSuffix}`;
+
+        const pluginName = pluginNameById[result.pluginId] ?? result.pluginId;
+        const epName = result.entrypointId
+          .replace(/-/g, " ")
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+        const cardTitle =
+          scanDetail.results.length > 1 ? epName : pluginName;
 
         return (
           <div
             key={`${result.pluginId}::${result.entrypointId}`}
-            className="rounded-[24px] border border-border/70 bg-card p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.16)]"
+            className="rounded-[24px] border border-border/70 bg-card p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.16)] space-y-3"
           >
-            <div className="mb-2">
-              <h3 className="text-lg font-semibold">
-                {pluginNameById[result.pluginId] ?? result.pluginId}
-              </h3>
-              <p className="text-xs text-muted-foreground">{subtitle}</p>
-            </div>
+            <h3 className="text-base font-semibold">{cardTitle}</h3>
             <div>
               {!envelope.ok ? (
                 <>

@@ -1,6 +1,7 @@
 import { Fragment, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
     Table,
@@ -34,15 +35,22 @@ interface EntityTableSectionProps {
 export function EntityTableSection({
     entityType,
     title,
-    entities,
+    entities: initialEntities,
     columns,
     renderExpanded,
 }: EntityTableSectionProps) {
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [entities, setEntities] = useState(initialEntities);
 
-    if (!entities.length) {
-        return null;
-    }
+    if (!entities.length) return null;
+
+    const move = (index: number, delta: -1 | 1) => {
+        const next = [...entities];
+        const target = index + delta;
+        if (target < 0 || target >= next.length) return;
+        [next[index], next[target]] = [next[target], next[index]];
+        setEntities(next);
+    };
 
     return (
         <Card className="overflow-hidden rounded-[24px] border border-border/70 bg-card shadow-[0_18px_40px_-28px_rgba(15,23,42,0.14)]">
@@ -62,6 +70,7 @@ export function EntityTableSection({
                     <Table className="border-separate border-spacing-0">
                         <TableHeader className="[&_tr]:border-b-0">
                             <TableRow className="!border-b-0 hover:!bg-transparent">
+                                {/* expand chevron col */}
                                 <TableHead
                                     className="sticky top-0 z-10 w-10 bg-card"
                                     style={{ boxShadow: "inset 0 -1px 0 hsl(var(--border))" }}
@@ -75,11 +84,17 @@ export function EntityTableSection({
                                         {column.header}
                                     </TableHead>
                                 ))}
+                                {/* reorder col */}
+                                <TableHead
+                                    className="sticky top-0 z-10 w-16 bg-card"
+                                    style={{ boxShadow: "inset 0 -1px 0 hsl(var(--border))" }}
+                                />
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {entities.map((entity) => {
+                            {entities.map((entity, index) => {
                                 const isExpanded = expandedId === entity.$id;
+                                const bg = isExpanded ? "bg-muted" : "";
                                 return (
                                     <Fragment key={`${entity.$entity}-${entity.$id}`}>
                                         <TableRow
@@ -90,15 +105,13 @@ export function EntityTableSection({
                                                 )
                                             }
                                         >
-                                            <TableCell className={`w-10 pr-0 ${isExpanded ? "bg-muted" : ""}`}>
-                                                {isExpanded ? (
-                                                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                                                ) : (
-                                                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                                                )}
+                                            <TableCell className={`w-10 pr-0 ${bg}`}>
+                                                {isExpanded
+                                                    ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                                    : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                                             </TableCell>
                                             {columns.map((column) => (
-                                                <TableCell key={column.id} className={isExpanded ? "bg-muted" : ""}>
+                                                <TableCell key={column.id} className={bg}>
                                                     <CompactEntityCell
                                                         values={column.getValues(entity)}
                                                         variant={column.variant ?? "text"}
@@ -106,15 +119,43 @@ export function EntityTableSection({
                                                     />
                                                 </TableCell>
                                             ))}
+                                            <TableCell
+                                                className={`w-16 ${bg}`}
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                <div className="flex gap-0.5">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6 text-muted-foreground"
+                                                        disabled={index === 0}
+                                                        onClick={() => move(index, -1)}
+                                                        title="Move up"
+                                                    >
+                                                        <ArrowUp className="h-3 w-3" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6 text-muted-foreground"
+                                                        disabled={index === entities.length - 1}
+                                                        onClick={() => move(index, 1)}
+                                                        title="Move down"
+                                                    >
+                                                        <ArrowDown className="h-3 w-3" />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
                                         </TableRow>
-                                        {isExpanded ? (
+                                        {isExpanded && (
                                             <TableRow className="bg-muted hover:bg-muted">
                                                 <TableCell className="w-10 bg-muted" />
                                                 <TableCell colSpan={columns.length} className="bg-muted p-5 lg:p-6">
                                                     {renderExpanded(entity)}
                                                 </TableCell>
+                                                <TableCell className="w-16 bg-muted" />
                                             </TableRow>
-                                        ) : null}
+                                        )}
                                     </Fragment>
                                 );
                             })}
@@ -141,7 +182,6 @@ function CompactEntityCell({
         if (!visibleValues.length) {
             return <span className="text-xs text-muted-foreground">-</span>;
         }
-
         return (
             <div className="flex flex-wrap items-center gap-1">
                 {visibleValues.slice(0, 2).map((value, index) => (
@@ -149,11 +189,11 @@ function CompactEntityCell({
                         <span className="truncate">{typedValueToCompactText(value)}</span>
                     </Badge>
                 ))}
-                {visibleValues.length > 2 ? (
+                {visibleValues.length > 2 && (
                     <span className="text-xs text-muted-foreground">
                         +{visibleValues.length - 2}
                     </span>
-                ) : null}
+                )}
             </div>
         );
     }
@@ -165,29 +205,21 @@ function CompactEntityCell({
         <div className="min-w-0 space-y-1.5">
             <p
                 className="max-w-full overflow-hidden text-sm leading-snug [overflow-wrap:anywhere]"
-                style={{
-                    display: "-webkit-box",
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: "vertical",
-                }}
+                style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
             >
                 {primaryText}
             </p>
-            {secondaryText ? (
+            {secondaryText && (
                 <p
                     className="max-w-full overflow-hidden text-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]"
-                    style={{
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                    }}
+                    style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
                 >
                     {secondaryText}
                 </p>
-            ) : null}
-            {!secondaryText && overflowCount > 0 ? (
+            )}
+            {!secondaryText && overflowCount > 0 && (
                 <p className="text-xs text-muted-foreground">+{overflowCount} more</p>
-            ) : null}
+            )}
         </div>
     );
 }

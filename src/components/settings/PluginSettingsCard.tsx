@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { TypedSettingInput } from "@/components/settings/TypedSettingInput";
 import type { PluginRecord, SettingValue } from "@/core/backend/bindings";
 import { useBackendClient } from "@/hooks/useBackendClient";
+import { Settings } from "lucide-react";
 
 function unknownToSettingValue(v: unknown): SettingValue {
     if (v === null || v === undefined) return { type: "null" };
@@ -119,16 +120,14 @@ export function PluginSettingsCard({
         <div className="border rounded-lg p-4 space-y-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <div>
-                    <p className="font-medium text-lg">{plugin.name}</p>
-                    <p className="text-sm text-muted-foreground">ID: {plugin.id}</p>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm text-muted-foreground">v{plugin.version}</p>
+                    <h2 className="font-medium text-lg">{plugin.name}</h2>
+                    <p className="text-sm text-base">{plugin.id} · v{plugin.version}</p>
                 </div>
             </div>
 
             {plugin.settingDefs.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
+                    <Settings />
                     This plugin does not declare configurable settings.
                 </p>
             ) : (
