@@ -246,9 +246,9 @@ export function EntryPage({}: EntryPageProps) {
                             <History className="h-4 w-4" />
                             Recent Projects
                         </CardTitle>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 pr-4">
                             <Toggle
-                                variant="ghost"
+                                variant="default"
                                 size="default"
                                 pressed={recentDeleteEnabled && recentProjects.length !== 0}
                                 disabled={recentProjects.length === 0}
@@ -260,8 +260,8 @@ export function EntryPage({}: EntryPageProps) {
                         </div>
                     </CardHeader>
                     <CardContent className="space-y-2">
-                        <ScrollArea className="h-64 w-full pr-4">
-                            <ItemGroup className="gap-2 p-4">
+                        <ScrollArea className="h-64 w-full">
+                            <ItemGroup className="gap-2 pr-4">
                                 {recentProjects.length === 0 ? (
                                     <p className="text-sm text-muted-foreground">No projects opened before.</p>
                                 ) : (
@@ -272,7 +272,7 @@ export function EntryPage({}: EntryPageProps) {
                                         return (
                                             <Item
                                                 key={projectPathValue}
-                                                variant="outline"
+                                                variant="default"
                                                 size="xs"
                                                 className={recentDeleteEnabled ? "" : "hover:bg-muted"} >
                                                 <button
@@ -281,9 +281,11 @@ export function EntryPage({}: EntryPageProps) {
                                                     onClick={() => void openRecentProject(projectPathValue)}
                                                     disabled={busy || recentDeleteEnabled}
                                                 >
-                                                    <ItemContent>
+                                                    <ItemContent className="min-w-0">
                                                         <ItemTitle className="w-full">{name}</ItemTitle>
-                                                        <ItemDescription className="line-clamp-1">{projectPathValue}</ItemDescription>
+                                                        <ItemDescription className="block overflow-hidden whitespace-nowrap text-ellipsis [text-align:left]">
+                                                            {projectPathValue}
+                                                        </ItemDescription>
                                                     </ItemContent>
                                                     {!recentDeleteEnabled && (
                                                         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
