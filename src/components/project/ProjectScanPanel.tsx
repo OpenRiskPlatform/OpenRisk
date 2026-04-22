@@ -4,6 +4,9 @@ import { ProjectPluginSelector } from "@/components/project/ProjectPluginSelecto
 import { EntrypointSelector } from "@/components/project/EntrypointSelector";
 import { PluginRunCard } from "@/components/project/PluginRunCard";
 import { ScanResultsPanel } from "@/components/project/ScanResultsPanel";
+import { ExportPdfButton } from "@/components/project/ExportPdfButton";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatScanPerformedAt } from "@/hooks/useProjectWorkspace";
 import type {
     PluginRecord,
     ProjectSettingsPayload,
@@ -80,10 +83,10 @@ export function ProjectScanPanel({
     }, [scanDetail?.status]);
 
     return (
-        <section className="flex-1 min-w-0 overflow-y-auto">
+        <section className="flex-1 min-w-0">
             <div
                 id="project-main-anchor"
-                className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 lg:px-8"
+                className="flex w-full flex-col gap-6 px-16 py-10 lg:px-24"
             >
                 {/* Settings error — shown at top since it's a config issue */}
                 {settingsError ? (
@@ -125,6 +128,7 @@ export function ProjectScanPanel({
                             disabled={running || creatingScan}
                             onSelect={onSelectPlugin}
                         />
+
 
                         {selectedPlugin ? (
                             <EntrypointSelector
@@ -173,20 +177,65 @@ export function ProjectScanPanel({
 
                         {/* Results — below the form, scrolled into view on completion */}
                         {showResults ? (
-                            <div ref={resultsRef} className="space-y-4">
-                                <div className="border-t pt-2">
-                                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                                        Results — {selectedScan?.preview ?? selectedScan?.id}
-                                        <span className="ml-2 normal-case font-normal">
-                                            ({scanDetail!.status})
-                                        </span>
-                                    </p>
-                                </div>
-                                <ScanResultsPanel
-                                    anchorId="project-results-section"
-                                    scanDetail={scanDetail!}
-                                    pluginNameById={pluginNameById}
-                                />
+                            <div ref={resultsRef}>
+                                <Card className="rounded-[16px] border-border/60">
+                                    <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                                        <CardTitle className="text-sm">Search Criteria</CardTitle>
+                                        <ExportPdfButton
+                                            scanDetail={scanDetail}
+                                            scanTitle={selectedScan?.preview?.trim() || `Scan ${selectedScan?.id.slice(0, 8) ?? ""}`}
+                                            performedAt={formatScanPerformedAt(scanDetail!.createdAt)}
+                                            pluginNameById={pluginNameById}
+                                            label="Save PDF"
+                                            size="sm"
+                                        />
+                                    </CardHeader>
+                                    <CardContent className="space-y-4">
+                                        {(() => {
+                                            const nonNull = scanDetail!.inputs.filter((inp) => inp.value.type !== "null");
+                                            if (!nonNull.length) {
+                                                return (
+                                                    <p className="text-xs text-muted-foreground">No input values were used for this scan.</p>
+                                                );
+                                            }
+                                            const seen = new Set<string>();
+                                            const unique = nonNull.filter((inp) => {
+                                                const key = `${inp.fieldName}::${"value" in inp.value ? String(inp.value.value) : ""}`;
+                                                if (seen.has(key)) return false;
+                                                seen.add(key);
+                                                return true;
+                                            });
+                                            return (
+                                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                                                    {unique.map((inp, i) => (
+                                                        <span key={i}>
+                                                            <span className="text-muted-foreground">
+                                                                {inp.fieldName.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}:
+                                                            </span>{" "}
+                                                            <span className="font-medium">
+                                                                {"value" in inp.value ? String(inp.value.value) : "—"}
+                                                            </span>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            );
+                                        })()}
+
+                                        <div className="border-t border-border/50 my-4" />
+
+                                        <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                                            Results
+                                            <span className="ml-2 normal-case font-normal">
+                                                ({scanDetail!.status})
+                                            </span>
+                                        </p>
+                                        <ScanResultsPanel
+                                            anchorId="project-results-section"
+                                            scanDetail={scanDetail!}
+                                            pluginNameById={pluginNameById}
+                                        />
+                                    </CardContent>
+                                </Card>
                             </div>
                         ) : null}
                     </>

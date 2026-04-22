@@ -326,7 +326,14 @@ pub async fn reorder_scans(
 #[tauri::command]
 #[specta::specta]
 pub async fn get_plugin_registry() -> Result<PluginRegistryRecord, AppError> {
-    let response = reqwest::get(PLUGIN_REGISTRY_URL)
+    let client = reqwest::Client::builder()
+        .user_agent("OpenRisk/1.0")
+        .build()
+        .map_err(|e| AppError::Internal(format!("Failed to build HTTP client: {}", e)))?;
+
+    let response = client
+        .get(PLUGIN_REGISTRY_URL)
+        .send()
         .await
         .map_err(|e| AppError::Internal(format!("Failed to fetch plugin registry: {}", e)))?;
 

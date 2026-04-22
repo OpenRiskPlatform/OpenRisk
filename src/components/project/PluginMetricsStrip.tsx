@@ -10,12 +10,17 @@ interface PluginMetricsStripProps {
 const STATUS_METRIC_NAME = "status";
 
 function settingValueToDisplay(value: SettingValue | undefined | null): string {
-    if (!value || value.type === "null") return "—";
-    // SettingValue has { type, value? } shape; type === "null" handled above.
+    if (!value || value.type === "null") return "";
     if ("value" in value) {
         return String(value.value);
     }
-    return "—";
+    return "";
+}
+
+function hasValue(mv: PluginMetricValue | undefined): boolean {
+    if (!mv) return false;
+    const display = settingValueToDisplay(mv.value);
+    return display.length > 0 && display !== "—";
 }
 
 function statusTone(status: string): string {
@@ -38,57 +43,44 @@ export function PluginMetricsStrip({ plugin, compact = false }: PluginMetricsStr
         valuesByName[mv.name] = mv;
     }
 
-    // Build display metrics: declared metric defs + the builtin "status" metric
-    // (which may be present in metricValues even if not in metricDefs).
-    const defs = plugin.metricDefs ?? [];
-    const orderedNames: string[] = [];
-    if (valuesByName[STATUS_METRIC_NAME] || defs.some((d) => d.name === STATUS_METRIC_NAME)) {
-        orderedNames.push(STATUS_METRIC_NAME);
-    }
-    for (const def of defs) {
-        if (def.name === STATUS_METRIC_NAME) continue;
-        orderedNames.push(def.name);
-    }
+    const statusMv = valuesByName[STATUS_METRIC_NAME];
+    const statusDisplay = statusMv ? settingValueToDisplay(statusMv.value) : "";
 
-    if (!orderedNames.length) {
-        return (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Activity className="h-3.5 w-3.5" />
-                <span>No metrics declared</span>
-            </div>
-        );
+    // Only show other metrics if there's a status value set
+    const defs = plugin.metricDefs ?? [];
+    const otherMetrics = defs
+        .filter((d) => d.name !== STATUS_METRIC_NAME)
+        .filter((d) => hasValue(valuesByName[d.name]));
+
+    // Nothing to show at all
+    if (!statusDisplay && !otherMetrics.length) {
+        return null;
     }
 
     return (
         <div className={`flex flex-wrap items-center gap-1.5 ${compact ? "" : "py-1"}`}>
-            {orderedNames.map((name) => {
-                const mv = valuesByName[name];
-                const def = defs.find((d) => d.name === name);
-                const title = mv?.title ?? def?.title ?? name;
+            {statusDisplay ? (
+                <span
+                    key={STATUS_METRIC_NAME}
+                    className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium ${statusTone(statusDisplay)}`}
+                    title={statusMv?.description ?? "Status"}
+                >
+                    <Activity className="h-3 w-3" />
+                    {statusMv?.title ?? "Status"}: {statusDisplay}
+                </span>
+            ) : null}
+
+            {otherMetrics.map((def) => {
+                const mv = valuesByName[def.name];
                 const display = settingValueToDisplay(mv?.value);
-                const isStatus = name === STATUS_METRIC_NAME;
-
-                if (isStatus) {
-                    return (
-                        <span
-                            key={name}
-                            className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium ${statusTone(display)}`}
-                            title={def?.description ?? title}
-                        >
-                            <Activity className="h-3 w-3" />
-                            {title}: {display}
-                        </span>
-                    );
-                }
-
                 return (
                     <Badge
-                        key={name}
+                        key={def.name}
                         variant="outline"
                         className="text-[11px] font-normal"
-                        title={def?.description ?? title}
+                        title={def.description ?? def.title}
                     >
-                        <span className="text-muted-foreground mr-1">{title}:</span>
+                        <span className="text-muted-foreground mr-1">{def.title}:</span>
                         <span className="font-medium text-foreground">{display}</span>
                     </Badge>
                 );
@@ -96,4 +88,3 @@ export function PluginMetricsStrip({ plugin, compact = false }: PluginMetricsStr
         </div>
     );
 }
-

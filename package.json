@@ -15,7 +15,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "precommit:backend": "node scripts/precommit-backend.mjs",
-    "udeps:backend": "node scripts/udeps-backend.mjs",  
+    "udeps:backend": "node scripts/udeps-backend.mjs",
     "prepare": "husky"
   },
   "dependencies": {
@@ -36,6 +36,7 @@
     "@tauri-apps/plugin-dialog": "^2.7.0",
     "@tauri-apps/plugin-fs": "^2.5.0",
     "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-shell": "^2.3.5",
     "@tauri-apps/plugin-store": "^2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -45,6 +46,7 @@
     "radix-ui": "^1.4.3",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7"
   },

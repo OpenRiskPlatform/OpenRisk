@@ -6,9 +6,10 @@ use super::plugins::{
     load_plugin_bundle_from_zip, load_plugin_bundle_with_id,
 };
 use super::types::{
-    LogEntry, PersistenceError, PluginEntrypointSelection, PluginFieldTypeDef, PluginMetricDef,
-    PluginMetricValue, PluginOutput, PluginRecord, PluginSettingValue, ScanEntrypointInput,
-    ScanPluginResultRecord, ScanSummaryRecord, SettingValue, PLUGIN_STATUS_METRIC_NAME,
+    LogEntry, PLUGIN_STATUS_METRIC_NAME, PersistenceError, PluginEntrypointSelection,
+    PluginFieldTypeDef, PluginMetricDef, PluginMetricValue, PluginOutput, PluginRecord,
+    PluginSettingValue, ScanEntrypointInput, ScanPluginResultRecord, ScanSummaryRecord,
+    SettingValue,
 };
 use serde_json::{Map, Value};
 use std::path::Path;
@@ -303,10 +304,8 @@ fn parse_metrics(
         });
     }
 
-    if !saw_status_def {
-        if let Some(status_metric) = builtin_status {
-            metrics.push(status_metric);
-        }
+    if !saw_status_def && let Some(status_metric) = builtin_status {
+        metrics.push(status_metric);
     }
 
     metrics

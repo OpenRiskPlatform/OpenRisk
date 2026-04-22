@@ -21,6 +21,7 @@ interface MainLayoutProps {
   projectDir?: string;
   selectedScanId?: string | null;
   onGoBack?: () => void;
+  hasPlugins?: boolean;
 }
 
 export function MainLayout({
@@ -28,6 +29,7 @@ export function MainLayout({
   projectDir,
   selectedScanId,
   onGoBack,
+  hasPlugins = true,
 }: MainLayoutProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exitOpen, setExitOpen] = useState(false);
@@ -103,7 +105,7 @@ export function MainLayout({
       </header>
 
       <div className="flex flex-1 min-h-0">
-        <Sidebar projectDir={projectDir} selectedScanId={selectedScanId} onQuitClick={() => setExitOpen(true)} />
+        <Sidebar projectDir={projectDir} selectedScanId={selectedScanId} onQuitClick={() => setExitOpen(true)} hasPlugins={hasPlugins} />
         <main className="flex-1 min-h-0 overflow-auto overscroll-none">{children}</main>
       </div>
 

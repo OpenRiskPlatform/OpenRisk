@@ -1,7 +1,8 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { save } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
+import { writeFile, BaseDirectory, mkdir } from "@tauri-apps/plugin-fs";
+import { openPath } from "@tauri-apps/plugin-opener";
 import type {
   ScanDetailRecord,
   ScanPluginResultRecord,
@@ -283,13 +284,86 @@ function parseResultData(result: ScanPluginResultRecord): DataModelResult | stri
   }
 }
 
-export async function exportScanPdf({
+export function buildScanPdfDoc({
   scanTitle,
   performedAt,
   detail,
   pluginNameById,
-}: ExportScanPdfOptions) {
+}: ExportScanPdfOptions): jsPDF {
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+  _appendScanToDoc(doc, { scanTitle, performedAt, detail, pluginNameById }, true);
+  addFooter(doc);
+  return doc;
+}
+
+interface AllScansPdfEntry {
+  scanTitle: string;
+  performedAt: string;
+  detail: ScanDetailRecord;
+  pluginNameById: Record<string, string>;
+}
+
+export function buildAllScansPdfDoc(scans: AllScansPdfEntry[]): jsPDF {
+  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+
+  // Cover page
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(22);
+  doc.setTextColor(...PRIMARY);
+  doc.text("OpenRisk", 40, 80);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(14);
+  doc.setTextColor(30, 30, 30);
+  doc.text("All Scans Report", 40, 110);
+
+  doc.setFontSize(9);
+  doc.setTextColor(...MUTED);
+  doc.text(`Generated ${new Date().toLocaleString()} · ${scans.length} scan${scans.length === 1 ? "" : "s"}`, 40, 130);
+
+  doc.setDrawColor(...MUTED);
+  doc.setLineWidth(0.4);
+  doc.line(40, 142, doc.internal.pageSize.width - 40, 142);
+
+  // TOC
+  let tocY = 165;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(...PRIMARY);
+  doc.text("Contents", 40, tocY);
+  tocY += 16;
+
+  scans.forEach((scan, i) => {
+    if (tocY > doc.internal.pageSize.height - 60) {
+      doc.addPage();
+      tocY = 40;
+    }
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(30, 30, 30);
+    doc.text(`${i + 1}. ${scan.scanTitle}`, 50, tocY);
+    doc.setTextColor(...MUTED);
+    doc.setFontSize(8);
+    doc.text(`${scan.performedAt} · ${scan.detail.status}`, 50, tocY + 11);
+    tocY += 26;
+  });
+
+  // Each scan on its own page
+  for (const scan of scans) {
+    doc.addPage();
+    _appendScanToDoc(doc, scan, false);
+  }
+
+  addFooter(doc);
+  return doc;
+}
+
+/** Shared internal renderer — appends a single scan's content to an existing doc. */
+function _appendScanToDoc(
+  doc: jsPDF,
+  { scanTitle, performedAt, detail, pluginNameById }: ExportScanPdfOptions,
+  _isFirstPage: boolean,
+) {
   const resultCount = detail.results.length;
 
   addHeader(
@@ -307,18 +381,10 @@ export async function exportScanPdf({
       ["Performed at", performedAt],
       ["Selected entrypoints", String(detail.selectedPlugins.length)],
     ],
-    headStyles: {
-      fillColor: CARD_HEAD,
-      textColor: [30, 30, 30],
-      fontStyle: "bold",
-      fontSize: 8,
-    },
+    headStyles: { fillColor: CARD_HEAD, textColor: [30, 30, 30], fontStyle: "bold", fontSize: 8 },
     bodyStyles: { fontSize: 8 },
     alternateRowStyles: { fillColor: ALT_ROW },
-    columnStyles: {
-      0: { cellWidth: 140, fontStyle: "bold" },
-      1: { cellWidth: "auto" },
-    },
+    columnStyles: { 0: { cellWidth: 140, fontStyle: "bold" }, 1: { cellWidth: "auto" } },
     margin: { left: 40, right: 40 },
   });
 
@@ -343,24 +409,15 @@ export async function exportScanPdf({
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(...MUTED);
-    doc.text(
-      `${result.pluginId} / ${result.entrypointId}${revisionSuffix}`,
-      40,
-      y + 12,
-    );
+    doc.text(`${result.pluginId} / ${result.entrypointId}${revisionSuffix}`, 40, y + 12);
     y += 24;
 
     if (!result.output.ok) {
       autoTable(doc, {
         startY: y,
         head: [["Error", "Details"]],
-        body: [[result.output.error ?? "Unknown error", (result.output.logs ?? []).map((entry) => `${entry.level}: ${entry.message}`).join("\n") || "No logs"]],
-        headStyles: {
-          fillColor: CARD_HEAD,
-          textColor: [30, 30, 30],
-          fontStyle: "bold",
-          fontSize: 8,
-        },
+        body: [[result.output.error ?? "Unknown error", (result.output.logs ?? []).map((e) => `${e.level}: ${e.message}`).join("\n") || "No logs"]],
+        headStyles: { fillColor: CARD_HEAD, textColor: [30, 30, 30], fontStyle: "bold", fontSize: 8 },
         bodyStyles: { fontSize: 8 },
         margin: { left: 40, right: 40 },
       });
@@ -392,13 +449,8 @@ export async function exportScanPdf({
       autoTable(doc, {
         startY: y,
         head: [["Logs"]],
-        body: result.output.logs.map((entry) => [`${entry.level}: ${entry.message}`]),
-        headStyles: {
-          fillColor: CARD_HEAD,
-          textColor: [30, 30, 30],
-          fontStyle: "bold",
-          fontSize: 8,
-        },
+        body: result.output.logs.map((e) => [`${e.level}: ${e.message}`]),
+        headStyles: { fillColor: CARD_HEAD, textColor: [30, 30, 30], fontStyle: "bold", fontSize: 8 },
         bodyStyles: { fontSize: 8 },
         alternateRowStyles: { fillColor: ALT_ROW },
         margin: { left: 40, right: 40 },
@@ -408,11 +460,76 @@ export async function exportScanPdf({
       y += 8;
     }
   }
+}
+
+export function buildFavoritesPdfDoc(entities: DataModelEntity[]): jsPDF {
+  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+
+  // Cover / header
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(22);
+  doc.setTextColor(...PRIMARY);
+  doc.text("OpenRisk", 40, 80);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(14);
+  doc.setTextColor(30, 30, 30);
+  doc.text("Favourites Report", 40, 110);
+
+  doc.setFontSize(9);
+  doc.setTextColor(...MUTED);
+  doc.text(
+    `Generated ${new Date().toLocaleString()} · ${entities.length} favourite${entities.length === 1 ? "" : "s"}`,
+    40,
+    130,
+  );
+
+  doc.setDrawColor(...MUTED);
+  doc.setLineWidth(0.4);
+  doc.line(40, 142, doc.internal.pageSize.width - 40, 142);
+
+  let y = 165;
+  entities.forEach((entity, index) => {
+    y = renderEntityCard(doc, entity, y, index + 1);
+  });
 
   addFooter(doc);
-
-  return savePdf(
-    doc,
-    `openrisk-${sanitizeFilenamePart(scanTitle)}.pdf`,
-  );
+  return doc;
 }
+
+export async function exportScanPdf(options: ExportScanPdfOptions) {
+  const doc = buildScanPdfDoc(options);
+  return savePdf(doc, `openrisk-${sanitizeFilenamePart(options.scanTitle)}.pdf`);
+}
+
+export async function exportFavoritesPdf(entities: DataModelEntity[]): Promise<string | null> {
+  const doc = buildFavoritesPdfDoc(entities);
+  return savePdf(doc, "openrisk-favourites.pdf");
+}
+
+/**
+ * Write the PDF to the app's temp data folder and open it with the system's
+ * default PDF viewer. This is the reliable way to "print" from Tauri WebView —
+ * the user can then print from the viewer (Preview, Adobe, etc.).
+ */
+export async function openPdfInViewer(doc: jsPDF, filenameHint: string): Promise<void> {
+  const filename = `openrisk-${sanitizeFilenamePart(filenameHint)}-${Date.now()}.pdf`;
+  const relativePath = `prints/${filename}`;
+
+  try {
+    await mkdir("prints", { baseDir: BaseDirectory.AppData, recursive: true });
+  } catch {
+    // directory may already exist
+  }
+
+  const bytes = new Uint8Array(doc.output("arraybuffer"));
+  await writeFile(relativePath, bytes, { baseDir: BaseDirectory.AppData });
+
+  // Resolve to absolute path and open via shell (uses shell:allow-open permission)
+  const { appDataDir, join } = await import("@tauri-apps/api/path");
+  const dir = await appDataDir();
+  const fullPath = await join(dir, relativePath);
+  await openPath(fullPath);
+}
+
+

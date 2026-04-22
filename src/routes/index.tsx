@@ -13,6 +13,6 @@ export const Route = createFileRoute("/")({
 });
 
 function IndexRoute() {
-  const { mode } = Route.useSearch();
-  return <EntryPage initialMode={mode} />;
+  Route.useSearch();
+  return <EntryPage />;
 }

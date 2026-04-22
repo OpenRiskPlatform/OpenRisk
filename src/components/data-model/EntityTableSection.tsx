@@ -1,5 +1,5 @@
 import { Fragment, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import type { DataModelEntity, TypedValue } from "@/core/data-model/types";
+import { useFavorites } from "@/core/favorites-context";
 import { EntityTypeBadge } from "./EntityTypeBadge";
 import { typedValueToCompactText } from "./entityProps";
 
@@ -41,6 +42,7 @@ export function EntityTableSection({
 }: EntityTableSectionProps) {
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [entities, setEntities] = useState(initialEntities);
+    const { isFavorite, toggleFavorite: ctxToggle } = useFavorites();
 
     if (!entities.length) return null;
 
@@ -51,6 +53,7 @@ export function EntityTableSection({
         [next[index], next[target]] = [next[target], next[index]];
         setEntities(next);
     };
+
 
     return (
         <Card className="overflow-hidden rounded-[24px] border border-border/70 bg-card shadow-[0_18px_40px_-28px_rgba(15,23,42,0.14)]">
@@ -86,7 +89,7 @@ export function EntityTableSection({
                                 ))}
                                 {/* reorder col */}
                                 <TableHead
-                                    className="sticky top-0 z-10 w-16 bg-card"
+                                    className="sticky top-0 z-10 w-24 bg-card"
                                     style={{ boxShadow: "inset 0 -1px 0 hsl(var(--border))" }}
                                 />
                             </TableRow>
@@ -98,7 +101,7 @@ export function EntityTableSection({
                                 return (
                                     <Fragment key={`${entity.$entity}-${entity.$id}`}>
                                         <TableRow
-                                            className={isExpanded ? "bg-muted hover:bg-muted" : "cursor-pointer"}
+                                            className={isExpanded ? "bg-muted hover:bg-muted" : isFavorite(entity.$id) ? "bg-amber-50/60 dark:bg-amber-900/10 cursor-pointer" : "cursor-pointer"}
                                             onClick={() =>
                                                 setExpandedId((current) =>
                                                     current === entity.$id ? null : entity.$id,
@@ -120,10 +123,19 @@ export function EntityTableSection({
                                                 </TableCell>
                                             ))}
                                             <TableCell
-                                                className={`w-16 ${bg}`}
+                                                className={`w-24 ${bg}`}
                                                 onClick={(e) => e.stopPropagation()}
                                             >
-                                                <div className="flex gap-0.5">
+                                                <div className="flex gap-0.5 items-center">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className={`h-6 w-6 ${isFavorite(entity.$id) ? "text-amber-500" : "text-muted-foreground"}`}
+                                                        onClick={() => ctxToggle(entity)}
+                                                        title={isFavorite(entity.$id) ? "Remove favourite" : "Mark as favourite"}
+                                                    >
+                                                        <Star className={`h-3.5 w-3.5 ${isFavorite(entity.$id) ? "fill-amber-400" : ""}`} />
+                                                    </Button>
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
@@ -153,7 +165,7 @@ export function EntityTableSection({
                                                 <TableCell colSpan={columns.length} className="bg-muted p-5 lg:p-6">
                                                     {renderExpanded(entity)}
                                                 </TableCell>
-                                                <TableCell className="w-16 bg-muted" />
+                                                <TableCell className="w-24 bg-muted" />
                                             </TableRow>
                                         )}
                                     </Fragment>

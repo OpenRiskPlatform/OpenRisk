@@ -12,6 +12,7 @@ import { ScanResultsPanel } from "@/components/project/ScanResultsPanel";
 import { useBackendClient } from "@/hooks/useBackendClient";
 import { formatScanPerformedAt, useProjectWorkspace } from "@/hooks/useProjectWorkspace";
 import { unwrap } from "@/lib/utils";
+import { FavoritesProvider } from "@/core/favorites-context";
 
 interface ReportPageProps {
   projectDir?: string;
@@ -45,10 +46,7 @@ export function ReportPage({ projectDir, routeScanId }: ReportPageProps) {
 
   const filteredEntries = useMemo<ProjectScanHistoryEntry[]>(() => {
     const q = querySearch.trim().toLowerCase();
-    if (!q) {
-      return workspace.scanHistoryEntries;
-    }
-
+    if (!q) return workspace.scanHistoryEntries;
     return workspace.scanHistoryEntries.filter((entry) => {
       return (
         entry.title.toLowerCase().includes(q) ||
@@ -96,10 +94,12 @@ export function ReportPage({ projectDir, routeScanId }: ReportPageProps) {
   };
 
   return (
+    <FavoritesProvider>
     <MainLayout
       projectDir={projectDir}
       selectedScanId={workspace.selectedScanId}
       onGoBack={() => void goBack()}
+      hasPlugins={workspace.settingsData === null ? true : workspace.settingsData.plugins.length > 0}
     >
       <div className="flex h-full w-full min-h-0 min-w-0 overflow-hidden bg-muted/[0.18] select-none">
         {!projectDir ? (
@@ -116,7 +116,7 @@ export function ReportPage({ projectDir, routeScanId }: ReportPageProps) {
         ) : (
           <>
             <section className="flex-1 min-w-0 overflow-y-auto">
-              <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-6 px-4 py-6 lg:px-8 xl:px-10">
+              <div className="flex w-full flex-col gap-6 px-16 py-10 lg:px-24 xl:px-32">
                 <div className="rounded-[28px] border border-border/70 bg-card px-6 py-6 shadow-[0_20px_46px_-34px_rgba(15,23,42,0.18)]">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                     <div className="space-y-2">
@@ -199,6 +199,7 @@ export function ReportPage({ projectDir, routeScanId }: ReportPageProps) {
 
             <ProjectScanHistorySidebar
               entries={filteredEntries}
+              totalEntryCount={workspace.scanHistoryEntries.length}
               activeId={workspace.selectedScanId}
               querySearch={querySearch}
               creatingScan={workspace.creatingScan}
@@ -233,11 +234,21 @@ export function ReportPage({ projectDir, routeScanId }: ReportPageProps) {
               onOpenSettings={() =>
                 window.dispatchEvent(new CustomEvent("openrisk:open-settings"))
               }
+              onOpenHistoryPage={() =>
+                void navigate({
+                  to: "/history",
+                  search: {
+                    dir: projectDir,
+                    scan: workspace.selectedScanId ?? undefined,
+                  },
+                })
+              }
               onGoBack={() => void goBack()}
             />
           </>
         )}
       </div>
     </MainLayout>
+    </FavoritesProvider>
   );
 }

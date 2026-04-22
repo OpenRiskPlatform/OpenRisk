@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { FolderKanban, Search, BarChart2 } from "lucide-react";
+import { FolderKanban, Search, BarChart2, Puzzle } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -75,14 +75,20 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
     await navigate({ to: "/", search: { mode: undefined } });
   };
 
+  // While settings are loading, assume plugins exist to avoid flash of empty state
+  const hasPlugins = workspace.settingsData === null
+    ? true
+    : workspace.settingsData.plugins.length > 0;
+
   return (
     <MainLayout
       projectDir={projectDir}
       selectedScanId={workspace.selectedScanId}
       onGoBack={() => void goBack()}
+      hasPlugins={hasPlugins}
     >
-      <div className="min-h-full bg-muted/[0.18] px-6 py-6 lg:px-8 xl:px-10">
-        <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-6">
+      <div className="min-h-full bg-muted/[0.18] px-16 py-10 lg:px-24 xl:px-32">
+        <div className="flex w-full flex-col gap-6">
           {!projectDir ? (
             <Card>
               <CardHeader>
@@ -107,46 +113,65 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                       <h1 className="text-3xl font-semibold tracking-tight">
                         {workspace.settingsData?.project.name ?? "Project"}
                       </h1>
-                      <p className="max-w-2xl text-sm text-muted-foreground">
-                        This view matches the FE branch project screen: project
-                        metadata, plugin inventory, and scan summary.
-                      </p>
                     </div>
                   </div>
 
                   <div className="flex flex-wrap gap-3">
-                    <Button
-                      className="gap-2"
-                      onClick={() =>
-                        void navigate({
-                          to: "/scans",
-                          search: {
-                            dir: projectDir,
-                            scan: workspace.selectedScanId ?? undefined,
-                          },
-                        })
-                      }
-                    >
-                      <Search className="h-4 w-4" />
-                      Open Search
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="gap-2"
-                      onClick={() =>
-                        void navigate({
-                          to: "/report",
-                          search: {
-                            dir: projectDir,
-                            scan: workspace.selectedScanId ?? undefined,
-                          },
-                        })
-                      }
-                    >
-                      <BarChart2 className="h-4 w-4" />
-                      View Report
-                    </Button>
+                    {hasPlugins ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          className="gap-2"
+                          onClick={() =>
+                            window.dispatchEvent(new CustomEvent("openrisk:open-settings"))
+                          }
+                        >
+                          <Puzzle className="h-4 w-4" />
+                          Add Plugin
+                        </Button>
+                        <Button
+                          className="gap-2"
+                          onClick={() =>
+                            void navigate({
+                              to: "/scans",
+                              search: {
+                                dir: projectDir,
+                                scan: workspace.selectedScanId ?? undefined,
+                              },
+                            })
+                          }
+                        >
+                          <Search className="h-4 w-4" />
+                          Open Search
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="gap-2"
+                          onClick={() =>
+                            void navigate({
+                              to: "/report",
+                              search: {
+                                dir: projectDir,
+                                scan: workspace.selectedScanId ?? undefined,
+                              },
+                            })
+                          }
+                        >
+                          <BarChart2 className="h-4 w-4" />
+                          View Report
+                        </Button>
+                      </>
+                    ) : null}
                   </div>
+                </div>
+
+                {/* Project details inline */}
+                <div className="mt-6 pt-5 border-t border-border/50 grid gap-3 sm:grid-cols-2">
+                  <InfoRow
+                    label="Project ID"
+                    value={workspace.settingsData?.project.id ?? "Unknown"}
+                  />
+                  <InfoRow label="Directory" value={projectDir} />
                 </div>
               </div>
 
@@ -157,65 +182,77 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                 <p className="text-sm text-red-600">{workspace.scansError}</p>
               ) : null}
 
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <CountCard
-                  label="Enabled plugins"
-                  value={
-                    workspace.settingsData?.plugins.filter((plugin) => plugin.enabled)
-                      .length ?? 0
-                  }
-                />
-                <CountCard label="Draft scans" value={scanStats.draft} />
-                <CountCard label="Completed scans" value={scanStats.completed} />
-                <CountCard label="Failed scans" value={scanStats.failed} />
-              </div>
-
-              <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-                <div className="space-y-4 rounded-[28px] border border-border/70 bg-card p-6 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.16)]">
-                  <h2 className="text-lg font-semibold">Project details</h2>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <InfoRow
-                      label="Project name"
-                      value={workspace.settingsData?.project.name ?? "Unknown"}
-                    />
-                    <InfoRow
-                      label="Project ID"
-                      value={workspace.settingsData?.project.id ?? "Unknown"}
-                    />
-                    <InfoRow label="Directory" value={projectDir} />
-                    <InfoRow
-                      label="Audit"
-                      value={workspace.settingsData?.project.audit ?? "Not configured"}
-                    />
-                  </div>
+              {hasPlugins ? (
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <CountCard
+                    label="Enabled plugins"
+                    value={
+                      workspace.settingsData?.plugins.filter((plugin) => plugin.enabled)
+                        .length ?? 0
+                    }
+                  />
+                  <CountCard label="Draft scans" value={scanStats.draft} />
+                  <CountCard label="Completed scans" value={scanStats.completed} />
+                  <CountCard label="Failed scans" value={scanStats.failed} />
                 </div>
+              ) : null}
 
-                <div className="space-y-4 rounded-[28px] border border-border/70 bg-card p-6 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.16)]">
-                  <h2 className="text-lg font-semibold">Current activity</h2>
-                  {latestActiveScan ? (
-                    <div className="space-y-3">
-                      <InfoRow
-                        label="Latest scan"
-                        value={
-                          latestActiveScan.preview?.trim() ||
-                          `New Scan ${latestActiveScan.id.slice(0, 8)}`
-                        }
-                      />
-                      <InfoRow
-                        label="Performed at"
-                        value={formatScanPerformedAt(latestActiveScan.createdAt)}
-                      />
-                      <InfoRow
-                        label="Status"
-                        value={latestActiveScan.status}
-                      />
+              {!hasPlugins ? (
+                <div className="rounded-[24px] border-2 border-amber-400/60 bg-amber-50 dark:bg-amber-950/40 px-6 py-6 shadow-[0_12px_32px_-16px_rgba(245,158,11,0.25)] flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-4">
+                    <div className="shrink-0 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-300">
+                      <Puzzle className="h-6 w-6" />
                     </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No active scans yet.
-                    </p>
-                  )}
+                    <div className="space-y-1">
+                      <p className="font-semibold text-amber-900 dark:text-amber-200 text-base">
+                        No plugins installed
+                      </p>
+                      <p className="text-sm text-amber-700 dark:text-amber-400 max-w-lg">
+                        This project has no plugins yet. Install at least one plugin to unlock scanning, reports, history and all other features.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    className="shrink-0 gap-2 bg-amber-500 hover:bg-amber-600 text-white dark:bg-amber-600 dark:hover:bg-amber-500"
+                    onClick={() =>
+                      window.dispatchEvent(new CustomEvent("openrisk:open-settings"))
+                    }
+                  >
+                    <Puzzle className="h-4 w-4" />
+                    Install a Plugin
+                  </Button>
                 </div>
+              ) : null}
+
+              <div className="grid gap-6 xl:grid-cols-[1fr]">
+                {hasPlugins ? (
+                  <div className="space-y-4 rounded-[28px] border border-border/70 bg-card p-6 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.16)]">
+                    <h2 className="text-lg font-semibold">Current activity</h2>
+                    {latestActiveScan ? (
+                      <div className="space-y-3">
+                        <InfoRow
+                          label="Latest scan"
+                          value={
+                            latestActiveScan.preview?.trim() ||
+                            `New Scan ${latestActiveScan.id.slice(0, 8)}`
+                          }
+                        />
+                        <InfoRow
+                          label="Performed at"
+                          value={formatScanPerformedAt(latestActiveScan.createdAt)}
+                        />
+                        <InfoRow
+                          label="Status"
+                          value={latestActiveScan.status}
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        No active scans yet.
+                      </p>
+                    )}
+                  </div>
+                ) : null}
               </div>
             </>
           )}

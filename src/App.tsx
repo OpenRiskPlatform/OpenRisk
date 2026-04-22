@@ -1,4 +1,5 @@
 import { RouterProvider, createRouter } from "@tanstack/react-router";
+import { Toaster } from "sonner";
 import { routeTree } from "./routeTree.gen";
 
 // Create router instance
@@ -12,7 +13,12 @@ declare module "@tanstack/react-router" {
 }
 
 function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <>
+      <RouterProvider router={router} />
+      <Toaster position="bottom-left" richColors closeButton />
+    </>
+  );
 }
 
 export default App;

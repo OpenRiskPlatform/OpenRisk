@@ -238,6 +238,7 @@ export function useProjectWorkspace(
           performedAt: formatScanPerformedAt(scan.createdAt),
           pluginName,
           resultCount: scan.resultCount,
+          errorResultCount: scan.errorResultCount,
           isArchived: scan.isArchived,
           canMoveUp: siblingIndex > 0,
           canMoveDown:
