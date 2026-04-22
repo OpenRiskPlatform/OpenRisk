@@ -1,12 +1,14 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { BarChart2, Calendar, FileText, Printer, Search } from "lucide-react";
+import { BarChart2, Calendar, FileText, Printer, Search, LogOut } from "lucide-react";
+import { Button } from "./button";
 
 interface SidebarProps {
   projectDir?: string;
   selectedScanId?: string | null;
+  onQuitClick?: () => void | null;
 }
 
-export function Sidebar({ projectDir, selectedScanId }: SidebarProps) {
+export function Sidebar({ projectDir, selectedScanId, onQuitClick }: SidebarProps) {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
 
@@ -66,9 +68,13 @@ export function Sidebar({ projectDir, selectedScanId }: SidebarProps) {
         })}
       </nav>
 
-      <div className="w-10 h-10 rounded-lg bg-purple-600 flex items-center justify-center">
-        <Calendar className="w-5 h-5 text-white" />
-      </div>
+      <Button
+      variant="ghost"
+      size="icon"
+      onClick={onQuitClick}
+      >
+        <LogOut />
+      </Button>
     </div>
   );
 }

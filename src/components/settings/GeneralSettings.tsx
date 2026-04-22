@@ -224,29 +224,27 @@ export function GeneralSettings({
 
       {projectDir && !loading && !error && projectSettings && (
         <div className="space-y-4">
-          <div className="rounded-lg border p-4 space-y-3">
-            <div className="space-y-0.5">
-              <Label>Project Name</Label>
-              <p className="text-sm text-muted-foreground">
-                Update display name for this project.
-              </p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Input
-                value={projectNameDraft}
-                onChange={(e) => setProjectNameDraft(e.target.value)}
-                placeholder="Project name"
-              />
-              <Button
-                type="button"
-                onClick={() => void submitRenameProject()}
-                disabled={renamingProject}
-              >
-                {renamingProject ? "Saving..." : "Rename"}
-              </Button>
-            </div>
-            {renameError ? <p className="text-sm text-red-600">{renameError}</p> : null}
+          <div className="space-y-0.5">
+            <Label>Project Name</Label>
+            <p className="text-sm text-muted-foreground">
+              Update display name for this project.
+            </p>
           </div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Input
+              value={projectNameDraft}
+              onChange={(e) => setProjectNameDraft(e.target.value)}
+              placeholder="Project name"
+            />
+            <Button
+              type="button"
+              onClick={() => void submitRenameProject()}
+              disabled={renamingProject}
+            >
+              {renamingProject ? "Saving..." : "Rename"}
+            </Button>
+          </div>
+          {renameError ? <p className="text-sm text-red-600">{renameError}</p> : null}
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">

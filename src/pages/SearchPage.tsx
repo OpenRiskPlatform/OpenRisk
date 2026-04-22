@@ -96,10 +96,12 @@ export function SearchPage({ projectDir, routeScanId }: SearchPageProps) {
                 enabledPlugins={workspace.enabledPlugins}
                 pluginInputs={workspace.pluginInputs}
                 running={workspace.running}
+                creatingScan={workspace.creatingScan}
                 onSelectPlugin={(pluginId) => workspace.setSelectedPluginId(pluginId)}
                 onSetPluginEnabled={workspace.setPluginEnabled}
                 onSetPluginField={workspace.setPluginField}
                 onRunScan={() => void workspace.runScan()}
+                onCreateScan={() => void workspace.createScan()}
               />
             </div>
 
