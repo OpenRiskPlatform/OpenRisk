@@ -1,8 +1,7 @@
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Star } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
     Table,
     TableBody,
@@ -13,7 +12,6 @@ import {
 } from "@/components/ui/table";
 import type { DataModelEntity, TypedValue } from "@/core/data-model/types";
 import { useFavorites } from "@/core/favorites-context";
-import { EntityTypeBadge } from "./EntityTypeBadge";
 import { typedValueToCompactText } from "./entityProps";
 
 export interface EntityTableColumnConfig {
@@ -31,18 +29,30 @@ interface EntityTableSectionProps {
     entities: DataModelEntity[];
     columns: EntityTableColumnConfig[];
     renderExpanded: (entity: DataModelEntity) => ReactNode;
+    /** When true, renders without card wrapper (no border/shadow/rounded) to sit flush inside a parent card */
+    flat?: boolean;
+    /** When true, hides the favourite star button */
+    hideFavorite?: boolean;
 }
 
 export function EntityTableSection({
-    entityType,
+    entityType: _entityType,
     title,
     entities: initialEntities,
     columns,
     renderExpanded,
+    flat = false,
+    hideFavorite = false,
 }: EntityTableSectionProps) {
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [entities, setEntities] = useState(initialEntities);
     const { isFavorite, toggleFavorite: ctxToggle } = useFavorites();
+
+    // Sync entities when the incoming data changes (e.g. user selects a different scan)
+    useEffect(() => {
+        setEntities(initialEntities);
+        setExpandedId(null);
+    }, [initialEntities]);
 
     if (!entities.length) return null;
 
@@ -56,33 +66,21 @@ export function EntityTableSection({
 
 
     return (
-        <Card className="overflow-hidden rounded-[24px] border border-border/70 bg-card shadow-[0_18px_40px_-28px_rgba(15,23,42,0.14)]">
-            <CardHeader className="px-5 pb-4 pt-5">
-                <div className="flex items-center justify-between gap-3">
-                    <CardTitle className="text-base flex items-center gap-2">
-                        <EntityTypeBadge entityType={entityType} />
-                        {title}
-                    </CardTitle>
-                    <Badge variant="secondary" className="text-xs shrink-0">
-                        {entities.length}
-                    </Badge>
-                </div>
-            </CardHeader>
-            <CardContent className="p-0">
-                <div className="overflow-x-auto border-t">
+        <div className={flat ? "overflow-x-auto" : "overflow-hidden rounded-[24px] border border-border/70 bg-card shadow-[0_18px_40px_-28px_rgba(15,23,42,0.14)]"}>
+            <div className="overflow-x-auto">
                     <Table className="border-separate border-spacing-0">
                         <TableHeader className="[&_tr]:border-b-0">
                             <TableRow className="!border-b-0 hover:!bg-transparent">
                                 {/* expand chevron col */}
                                 <TableHead
                                     className="sticky top-0 z-10 w-10 bg-card"
-                                    style={{ boxShadow: "inset 0 -1px 0 hsl(var(--border))" }}
+                                    style={{ boxShadow: flat ? "inset 0 1px 0 hsl(var(--border)), inset 0 -1px 0 hsl(var(--border))" : "inset 0 -1px 0 hsl(var(--border))" }}
                                 />
                                 {columns.map((column) => (
                                     <TableHead
                                         key={column.id}
                                         className={`sticky top-0 z-10 bg-card ${column.className ?? ""}`}
-                                        style={{ boxShadow: "inset 0 -1px 0 hsl(var(--border))" }}
+                                        style={{ boxShadow: flat ? "inset 0 1px 0 hsl(var(--border)), inset 0 -1px 0 hsl(var(--border))" : "inset 0 -1px 0 hsl(var(--border))" }}
                                     >
                                         {column.header}
                                     </TableHead>
@@ -90,7 +88,7 @@ export function EntityTableSection({
                                 {/* reorder col */}
                                 <TableHead
                                     className="sticky top-0 z-10 w-24 bg-card"
-                                    style={{ boxShadow: "inset 0 -1px 0 hsl(var(--border))" }}
+                                    style={{ boxShadow: flat ? "inset 0 1px 0 hsl(var(--border)), inset 0 -1px 0 hsl(var(--border))" : "inset 0 -1px 0 hsl(var(--border))" }}
                                 />
                             </TableRow>
                         </TableHeader>
@@ -127,15 +125,17 @@ export function EntityTableSection({
                                                 onClick={(e) => e.stopPropagation()}
                                             >
                                                 <div className="flex gap-0.5 items-center">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className={`h-6 w-6 ${isFavorite(entity.$id) ? "text-amber-500" : "text-muted-foreground"}`}
-                                                        onClick={() => ctxToggle(entity)}
-                                                        title={isFavorite(entity.$id) ? "Remove favourite" : "Mark as favourite"}
-                                                    >
-                                                        <Star className={`h-3.5 w-3.5 ${isFavorite(entity.$id) ? "fill-amber-400" : ""}`} />
-                                                    </Button>
+                                                    {!hideFavorite && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className={`h-6 w-6 ${isFavorite(entity.$id) ? "text-amber-500" : "text-muted-foreground"}`}
+                                                            onClick={() => ctxToggle(entity)}
+                                                            title={isFavorite(entity.$id) ? "Remove favourite" : "Mark as favourite"}
+                                                        >
+                                                            <Star className={`h-3.5 w-3.5 ${isFavorite(entity.$id) ? "fill-amber-400" : ""}`} />
+                                                        </Button>
+                                                    )}
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
@@ -173,9 +173,8 @@ export function EntityTableSection({
                             })}
                         </TableBody>
                     </Table>
-                </div>
-            </CardContent>
-        </Card>
+            </div>
+        </div>
     );
 }
 

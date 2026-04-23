@@ -20,7 +20,6 @@ import { ScanResultsPanel } from "@/components/project/ScanResultsPanel";
 import { useBackendClient } from "@/hooks/useBackendClient";
 import { useProjectWorkspace } from "@/hooks/useProjectWorkspace";
 import { unwrap } from "@/lib/utils";
-import { FavoritesProvider } from "@/core/favorites-context";
 
 interface HistoryPageProps {
     projectDir?: string;
@@ -118,7 +117,6 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
     };
 
     return (
-        <FavoritesProvider>
         <MainLayout
             projectDir={projectDir}
             selectedScanId={workspace.selectedScanId}
@@ -237,92 +235,88 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
                                         </CardContent>
                                     </Card>
 
-                                    {/* Scan list card */}
-                                    <Card className="rounded-[24px] border-border/70">
-                                        <CardHeader className="pb-2">
-                                            <CardTitle className="text-base flex items-center gap-2">
-                                                <Clock className="h-4 w-4" />
-                                                All Scans
-                                                <Badge variant="secondary" className="ml-1 text-[10px]">
-                                                    {filtered.length === allEntries.length ? allEntries.length : `${filtered.length}/${allEntries.length}`}
-                                                </Badge>
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <CardContent className="p-0">
-                                            {filtered.length === 0 ? (
-                                                <p className="p-4 text-sm text-muted-foreground">
-                                                    No scans found.
-                                                </p>
-                                            ) : (
-                                                <ul className="divide-y">
-                                                    {filtered.map((entry) => {
-                                                        const isActive =
-                                                            entry.id === workspace.selectedScanId;
-                                                        return (
-                                                            <li key={entry.id}>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => openScan(entry.id)}
-                                                                    className={`w-full text-left px-4 py-3 hover:bg-muted/60 transition-colors ${
-                                                                        isActive ? "bg-muted" :
-                                                                        (entry.status === "Failed" || entry.errorResultCount > 0) ? "bg-red-50 dark:bg-red-950/30" : ""
-                                                                    }`}
-                                                                >
-                                                                    <div className="flex items-start gap-3">
-                                                                        <div className="mt-0.5">
-                                                                            <StatusIcon status={entry.status} />
-                                                                        </div>
-                                                                        <div className="min-w-0 flex-1">
-                                                                            <div className="flex items-center gap-2">
-                                                                                <p className={`truncate text-sm font-medium ${(entry.status === "Failed" || entry.errorResultCount > 0) ? "text-red-700 dark:text-red-400" : ""}`}>
-                                                                                    {entry.title}
-                                                                                </p>
-                                                                                {entry.status === "Failed" || entry.errorResultCount > 0 ? (
-                                                                                    <Badge variant="destructive" className="text-[9px] px-1.5 py-0 shrink-0">
-                                                                                        {entry.status === "Failed" ? "Failed" : `${entry.errorResultCount} error${entry.errorResultCount === 1 ? "" : "s"}`}
-                                                                                    </Badge>
-                                                                                ) : null}
-                                                                                {entry.isArchived ? (
-                                                                                    <Badge
-                                                                                        variant="outline"
-                                                                                        className="text-[9px] px-1 py-0"
-                                                                                    >
-                                                                                        archived
-                                                                                    </Badge>
-                                                                                ) : null}
-                                                                            </div>
-                                                                            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-                                                                                <span>{entry.status}</span>
-                                                                                {entry.pluginName ? (
-                                                                                    <>
-                                                                                        <span>·</span>
-                                                                                        <span>{entry.pluginName}</span>
-                                                                                    </>
-                                                                                ) : null}
-                                                                                {entry.resultCount !== null && entry.status !== "Failed" ? (
-                                                                                    <>
-                                                                                        <span>·</span>
-                                                                                        <span>
-                                                                                            {entry.resultCount} result
-                                                                                            {entry.resultCount === 1 ? "" : "s"}
-                                                                                        </span>
-                                                                                    </>
-                                                                                ) : null}
-                                                                            </div>
-                                                                            <p className="mt-0.5 text-[10px] text-muted-foreground/70">
-                                                                                {entry.performedAt}
-                                                                            </p>
-                                                                        </div>
-                                                                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                    {/* Scan list — no card header, rows start immediately */}
+                                    <div className="rounded-[24px] border border-border/70 overflow-hidden">
+                                        <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30">
+                                            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                                            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">All Scans</span>
+                                            <Badge variant="secondary" className="ml-1 text-[10px]">
+                                                {filtered.length === allEntries.length ? allEntries.length : `${filtered.length}/${allEntries.length}`}
+                                            </Badge>
+                                        </div>
+                                        {filtered.length === 0 ? (
+                                            <p className="p-4 text-sm text-muted-foreground">
+                                                No scans found.
+                                            </p>
+                                        ) : (
+                                            <ul className="divide-y">
+                                                {filtered.map((entry) => {
+                                                    const isActive =
+                                                        entry.id === workspace.selectedScanId;
+                                                    return (
+                                                        <li key={entry.id} className={isActive ? "ring-2 ring-emerald-500 ring-inset" : ""}>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openScan(entry.id)}
+                                                                className={`w-full text-left px-4 py-3 hover:bg-muted/60 transition-colors ${
+                                                                    isActive ? "bg-emerald-50/60 dark:bg-emerald-950/30" :
+                                                                    (entry.status === "Failed" || entry.errorResultCount > 0) ? "bg-red-50 dark:bg-red-950/30" : ""
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-start gap-3">
+                                                                    <div className="mt-0.5">
+                                                                        <StatusIcon status={entry.status} />
                                                                     </div>
-                                                                </button>
-                                                            </li>
-                                                        );
-                                                    })}
-                                                </ul>
-                                            )}
-                                        </CardContent>
-                                    </Card>
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <p className={`truncate text-sm font-medium ${(entry.status === "Failed" || entry.errorResultCount > 0) ? "text-red-700 dark:text-red-400" : ""}`}>
+                                                                                {entry.title}
+                                                                            </p>
+                                                                            {entry.status === "Failed" || entry.errorResultCount > 0 ? (
+                                                                                <Badge variant="destructive" className="text-[9px] px-1.5 py-0 shrink-0">
+                                                                                    {entry.status === "Failed" ? "Failed" : `${entry.errorResultCount} error${entry.errorResultCount === 1 ? "" : "s"}`}
+                                                                                </Badge>
+                                                                            ) : null}
+                                                                            {entry.isArchived ? (
+                                                                                <Badge
+                                                                                    variant="outline"
+                                                                                    className="text-[9px] px-1 py-0"
+                                                                                >
+                                                                                    archived
+                                                                                </Badge>
+                                                                            ) : null}
+                                                                        </div>
+                                                                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                                                                            <span>{entry.status}</span>
+                                                                            {entry.pluginName ? (
+                                                                                <>
+                                                                                    <span>·</span>
+                                                                                    <span>{entry.pluginName}</span>
+                                                                                </>
+                                                                            ) : null}
+                                                                            {entry.resultCount !== null && entry.status !== "Failed" ? (
+                                                                                <>
+                                                                                    <span>·</span>
+                                                                                    <span>
+                                                                                        {entry.resultCount} result
+                                                                                        {entry.resultCount === 1 ? "" : "s"}
+                                                                                    </span>
+                                                                                </>
+                                                                            ) : null}
+                                                                        </div>
+                                                                        <p className="mt-0.5 text-[10px] text-muted-foreground/70">
+                                                                            {entry.performedAt}
+                                                                        </p>
+                                                                    </div>
+                                                                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                                                </div>
+                                                            </button>
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {/* Right column: detail */}
@@ -367,7 +361,7 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
                                                 {/* Search Criteria card with results inside */}
                                                 <Card className="rounded-[16px] border-border/60">
                                                     <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                                                        <CardTitle className="text-sm">Search Criteria</CardTitle>
+                                                        <CardTitle className="text-lg font-semibold">Search Criteria</CardTitle>
                                                         <ExportPdfButton
                                                             scanDetail={selectedScanDetail}
                                                             scanTitle={selectedEntry.title}
@@ -377,12 +371,19 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
                                                             size="sm"
                                                         />
                                                     </CardHeader>
-                                                    <CardContent className="space-y-4">
+                                                    <CardContent className="space-y-4 px-6 pb-0">
                                                         {selectedScanDetail && (() => {
                                                             const nonNull = selectedScanDetail.inputs.filter((inp) => inp.value.type !== "null");
-                                                            if (!nonNull.length) {
+                                                            const pluginNames = Array.from(
+                                                                new Set(
+                                                                    selectedScanDetail.selectedPlugins.map(
+                                                                        (sp) => workspace.pluginNameById[sp.pluginId] ?? sp.pluginId
+                                                                    )
+                                                                )
+                                                            );
+                                                            if (!nonNull.length && !pluginNames.length) {
                                                                 return (
-                                                                    <p className="text-xs text-muted-foreground">No input values were used for this scan.</p>
+                                                                    <p className="text-sm text-muted-foreground">No input values were used for this scan.</p>
                                                                 );
                                                             }
                                                             const seen = new Set<string>();
@@ -393,35 +394,50 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
                                                                 return true;
                                                             });
                                                             return (
-                                                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                                                                <div className="flex flex-wrap gap-x-6 gap-y-2">
+                                                                    {pluginNames.map((name) => (
+                                                                        <span key={`plugin::${name}`} className="text-sm">
+                                                                            <span className="text-muted-foreground">Plugin: </span>
+                                                                            <span className="font-semibold">{name}</span>
+                                                                        </span>
+                                                                    ))}
                                                                     {unique.map((inp, i) => (
-                                                                        <span key={i}>
+                                                                        <span key={i} className="text-sm">
                                                                             <span className="text-muted-foreground">
                                                                                 {inp.fieldName.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}:
                                                                             </span>{" "}
-                                                                            <span className="font-medium">
+                                                                            <span className="font-semibold">
                                                                                 {"value" in inp.value ? String(inp.value.value) : "—"}
                                                                             </span>
                                                                         </span>
                                                                     ))}
+                                                                    {pluginNames.length === 0 && unique.length === 0 && (
+                                                                        <p className="text-sm text-muted-foreground">No input values were used for this scan.</p>
+                                                                    )}
                                                                 </div>
                                                             );
                                                         })()}
 
                                                         {selectedScanDetail ? (
                                                             <>
-                                                                <div className="border-t border-border/50 my-4" />
-
-                                                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+                                                                <div className="border-t border-border/50" />
+                                                                <p className="text-base font-semibold uppercase tracking-wide text-muted-foreground">
                                                                     Results
                                                                 </p>
-                                                                <ScanResultsPanel
-                                                                    scanDetail={selectedScanDetail}
-                                                                    pluginNameById={workspace.pluginNameById}
-                                                                />
                                                             </>
                                                         ) : null}
                                                     </CardContent>
+
+                                                    {selectedScanDetail ? (
+                                                        <div className="pt-8 pb-8">
+                                                            <ScanResultsPanel
+                                                                scanDetail={selectedScanDetail}
+                                                                pluginNameById={workspace.pluginNameById}
+                                                                showInputsPerResult={false}
+                                                                hideFavorite
+                                                            />
+                                                        </div>
+                                                    ) : null}
                                                 </Card>
                                             </>
                                         ) : (
@@ -437,7 +453,6 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
                 </div>
             </div>
         </MainLayout>
-        </FavoritesProvider>
     );
 }
 

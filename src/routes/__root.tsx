@@ -1,5 +1,6 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 import { SettingsProvider } from "@/core/settings/SettingsContext";
+import { FavoritesProvider } from "@/core/favorites-context";
 import { useTheme } from "@/hooks/useTheme";
 
 export const Route = createRootRoute({
@@ -14,8 +15,10 @@ function ThemeWrapper() {
 function RootComponent() {
   return (
     <SettingsProvider>
-      <ThemeWrapper />
-      <Outlet />
+      <FavoritesProvider>
+        <ThemeWrapper />
+        <Outlet />
+      </FavoritesProvider>
     </SettingsProvider>
   );
 }

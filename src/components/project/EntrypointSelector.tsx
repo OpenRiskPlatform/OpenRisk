@@ -33,13 +33,13 @@ export function EntrypointSelector({
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-col gap-2">
                     {entrypoints.map((ep) => {
                         const isEnabled = Boolean(enabledEntrypoints[ep.id]);
                         return (
                             <label
                                 key={ep.id}
-                                className={`flex items-center gap-2 rounded-full border px-3 py-1.5 select-none transition-colors text-sm ${
+                                className={`flex items-center gap-2 rounded-lg border px-3 py-2 select-none transition-colors text-sm ${
                                     disabled
                                         ? "opacity-50 cursor-not-allowed"
                                         : "cursor-pointer"

@@ -144,22 +144,6 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
                           <Search className="h-4 w-4" />
                           Open Search
                         </Button>
-                        <Button
-                          variant="outline"
-                          className="gap-2"
-                          onClick={() =>
-                            void navigate({
-                              to: "/report",
-                              search: {
-                                dir: projectDir,
-                                scan: workspace.selectedScanId ?? undefined,
-                              },
-                            })
-                          }
-                        >
-                          <BarChart2 className="h-4 w-4" />
-                          View Report
-                        </Button>
                       </>
                     ) : null}
                   </div>

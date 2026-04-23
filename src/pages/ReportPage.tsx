@@ -12,7 +12,6 @@ import { ScanResultsPanel } from "@/components/project/ScanResultsPanel";
 import { useBackendClient } from "@/hooks/useBackendClient";
 import { formatScanPerformedAt, useProjectWorkspace } from "@/hooks/useProjectWorkspace";
 import { unwrap } from "@/lib/utils";
-import { FavoritesProvider } from "@/core/favorites-context";
 
 interface ReportPageProps {
   projectDir?: string;
@@ -94,7 +93,6 @@ export function ReportPage({ projectDir, routeScanId }: ReportPageProps) {
   };
 
   return (
-    <FavoritesProvider>
     <MainLayout
       projectDir={projectDir}
       selectedScanId={workspace.selectedScanId}
@@ -219,12 +217,6 @@ export function ReportPage({ projectDir, routeScanId }: ReportPageProps) {
               onCommitRename={() => void workspace.commitRename()}
               onCancelRename={workspace.cancelRename}
               onQuerySearchChange={setQuerySearch}
-              onMoveScan={(scanId, delta) => {
-                const scan = workspace.scans.find((candidate) => candidate.id === scanId);
-                if (scan) {
-                  void workspace.moveScan(scan, delta);
-                }
-              }}
               onArchive={(scanId) => {
                 const scan = workspace.scans.find((candidate) => candidate.id === scanId);
                 if (scan) {
@@ -249,6 +241,5 @@ export function ReportPage({ projectDir, routeScanId }: ReportPageProps) {
         )}
       </div>
     </MainLayout>
-    </FavoritesProvider>
   );
 }

@@ -15,7 +15,6 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
-import { FavoritesProvider } from "@/core/favorites-context";
 
 interface SearchPageProps {
   projectDir?: string;
@@ -107,7 +106,6 @@ export function SearchPage({ projectDir, routeScanId }: SearchPageProps) {
   };
 
   return (
-    <FavoritesProvider>
     <MainLayout
       projectDir={projectDir}
       selectedScanId={workspace.selectedScanId}
@@ -171,12 +169,6 @@ export function SearchPage({ projectDir, routeScanId }: SearchPageProps) {
               onCommitRename={() => void workspace.commitRename()}
               onCancelRename={workspace.cancelRename}
               onQuerySearchChange={setQuerySearch}
-              onMoveScan={(scanId, delta) => {
-                const scan = workspace.scans.find((candidate) => candidate.id === scanId);
-                if (scan) {
-                  void workspace.moveScan(scan, delta);
-                }
-              }}
               onArchive={(scanId) => {
                 const scan = workspace.scans.find((candidate) => candidate.id === scanId);
                 if (scan) {
@@ -202,6 +194,5 @@ export function SearchPage({ projectDir, routeScanId }: SearchPageProps) {
         )}
       </div>
     </MainLayout>
-    </FavoritesProvider>
   );
 }

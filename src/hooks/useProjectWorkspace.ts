@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useBackendClient } from "@/hooks/useBackendClient";
 import { unwrap } from "@/lib/utils";
@@ -302,6 +303,16 @@ export function useProjectWorkspace(
             inputDefs: p.inputDefs,
           })),
         );
+        console.group("[useProjectWorkspace] Plugin statuses on load");
+        console.table(settings.plugins.map((p) => ({
+          id: p.id,
+          name: p.name,
+          enabled: p.enabled,
+          status: p.status,
+          metricValues: JSON.stringify(p.metricValues),
+        })));
+        console.log("[useProjectWorkspace] Full plugin objects on load:", settings.plugins);
+        console.groupEnd();
         setProjectName(settings.project?.name ?? "");
         setScans(sortScans(scansList));
         setSelectedScanId((prev) => {
@@ -676,6 +687,37 @@ export function useProjectWorkspace(
       const freshDetail = await unwrap(backendClient.getScan(scanId));
       setScanDetailRecord(freshDetail);
       setSelectedScanId(scanId);
+
+      // Reload settings to pick up updated plugin statuses (e.g. credit spent)
+      try {
+        const freshSettings = await unwrap(backendClient.loadSettings());
+        setSettingsData(freshSettings);
+
+        // DEBUG: log each plugin's status after scan so it's visible in devtools
+        console.group("[useProjectWorkspace] Plugin statuses after scan");
+        console.table(freshSettings.plugins.map((p) => ({
+          id: p.id,
+          name: p.name,
+          enabled: p.enabled,
+          status: p.status,
+          metricValues: JSON.stringify(p.metricValues),
+        })));
+        console.log("[useProjectWorkspace] Full plugin objects after scan:", freshSettings.plugins);
+        console.groupEnd();
+
+        // Show a dismissable toast for any plugin that reports a "used" status
+        for (const plugin of freshSettings.plugins) {
+          if (plugin.status && /used/i.test(plugin.status)) {
+            toast.info(`${plugin.name}: ${plugin.status}`, {
+              duration: Infinity,
+              dismissible: true,
+              description: "This charge was incurred during the last scan.",
+            });
+          }
+        }
+      } catch {
+        // Non-critical — ignore settings refresh errors after scan
+      }
     } catch (err) {
       setDetailError(err instanceof Error ? err.message : String(err));
       if (selectedScanId) {

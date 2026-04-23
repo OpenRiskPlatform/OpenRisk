@@ -1,7 +1,5 @@
 import { RefObject, useMemo, useState } from "react";
 import {
-    ArrowDown,
-    ArrowUp,
     ChevronDown,
     ChevronLeft,
     ChevronRight,
@@ -34,8 +32,6 @@ export interface ProjectScanHistoryEntry {
     resultCount: number;
     errorResultCount: number;
     isArchived: boolean;
-    canMoveUp: boolean;
-    canMoveDown: boolean;
 }
 
 interface ProjectScanHistorySidebarProps {
@@ -55,7 +51,6 @@ interface ProjectScanHistorySidebarProps {
     onCommitRename: () => void;
     onCancelRename: () => void;
     onQuerySearchChange: (value: string) => void;
-    onMoveScan: (scanId: string, delta: -1 | 1) => void;
     onArchive: (scanId: string) => void;
     onPrintAll?: () => void;
     onOpenSettings: () => void;
@@ -78,7 +73,6 @@ export function ProjectScanHistorySidebar({
     onCommitRename,
     onCancelRename,
     onQuerySearchChange,
-    onMoveScan,
     onPrintAll,
     onOpenHistoryPage,
 }: ProjectScanHistorySidebarProps) {
@@ -251,7 +245,7 @@ export function ProjectScanHistorySidebar({
                                     <div className="px-3 py-2 border-t space-y-2">
                                         <Input
                                             ref={searchInputRef}
-                                            placeholder="Search by name, ID, or plugin..."
+                                            placeholder="Search for scan"
                                             value={querySearch}
                                             onChange={(event) => onQuerySearchChange(event.target.value)}
                                             className="h-8 text-sm"
@@ -340,31 +334,6 @@ export function ProjectScanHistorySidebar({
                                                                 </div>
                                                             </div>
                                                         </button>
-
-                                                        <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                                                            <Button
-                                                                type="button"
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-6 w-6 text-muted-foreground"
-                                                                disabled={!entry.canMoveUp}
-                                                                onClick={(event) => { event.stopPropagation(); onMoveScan(entry.id, -1); }}
-                                                                title="Move up"
-                                                            >
-                                                                <ArrowUp className="h-3 w-3" />
-                                                            </Button>
-                                                            <Button
-                                                                type="button"
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-6 w-6 text-muted-foreground"
-                                                                disabled={!entry.canMoveDown}
-                                                                onClick={(event) => { event.stopPropagation(); onMoveScan(entry.id, 1); }}
-                                                                title="Move down"
-                                                            >
-                                                                <ArrowDown className="h-3 w-3" />
-                                                            </Button>
-                                                        </div>
                                                     </li>
                                                 );
                                             })}

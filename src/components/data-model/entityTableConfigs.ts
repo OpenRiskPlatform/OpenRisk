@@ -36,17 +36,6 @@ export const PERSON_TABLE_COLUMNS: EntityTableColumnConfig[] = [
         getValues: (entity) => collectPropValues(entity, ["nationality", "nationalities"]),
         variant: "badges",
     },
-    {
-        id: "country",
-        header: "country",
-        getValues: (entity) => collectPropValues(entity, ["country"]),
-        variant: "badges",
-    },
-    {
-        id: "position",
-        header: "position",
-        getValues: (entity) => collectPropValues(entity, ["position"]),
-    },
 ];
 
 export const ORGANIZATION_TABLE_COLUMNS: EntityTableColumnConfig[] = [
@@ -60,12 +49,6 @@ export const ORGANIZATION_TABLE_COLUMNS: EntityTableColumnConfig[] = [
         id: "registrationId",
         header: "registrationId",
         getValues: (entity) => collectPropValues(entity, ["registrationId", "organizationId"]),
-    },
-    {
-        id: "country",
-        header: "country",
-        getValues: (entity) => collectPropValues(entity, ["country"]),
-        variant: "badges",
     },
     {
         id: "status",

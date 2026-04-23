@@ -13,6 +13,10 @@ interface ScanResultsPanelProps {
   scanDetail: ScanDetailRecord;
   pluginNameById: Record<string, string>;
   anchorId?: string;
+  /** When false, do not show per-result inputs for single-endpoint scans (inputs shown externally). Default true. */
+  showInputsPerResult?: boolean;
+  /** When true, hides the favourite star button on result rows. Default false. */
+  hideFavorite?: boolean;
 }
 
 function inputsForResult(inputs: ScanEntrypointInput[], pluginId: string, entrypointId: string) {
@@ -93,6 +97,8 @@ export function ScanResultsPanel({
   scanDetail,
   pluginNameById,
   anchorId,
+  showInputsPerResult = true,
+  hideFavorite = false,
 }: ScanResultsPanelProps) {
   const sidebarRef = useRef<HTMLDivElement>(null);
 
@@ -168,6 +174,9 @@ export function ScanResultsPanel({
   if (!multipleResults) {
     // Single endpoint: no sidebar, no collapsible
     if (!resultSections.length) {
+      if (!showInputsPerResult) {
+        return <p className="text-sm text-muted-foreground">Scan finished without any plugin results.</p>;
+      }
       return (
         <div id={anchorId} className="rounded-[20px] border border-border/70 bg-card px-5 py-6">
           <p className="text-sm text-muted-foreground">Scan finished without any plugin results.</p>
@@ -175,6 +184,31 @@ export function ScanResultsPanel({
       );
     }
     const { envelope, isError, entities, cardTitle, usedInputs } = resultSections[0];
+
+    // Flat/inline mode — already inside outer card (Search Criteria card)
+    if (!showInputsPerResult) {
+      return (
+        <div id={anchorId} className="space-y-4 select-text">
+          {isError ? (
+            <>
+              <PluginErrorView message={envelope.error ?? "Unknown error"} />
+              <PluginLogsView logs={envelope.logs ?? []} />
+            </>
+          ) : entities ? (
+            <>
+              <PluginResultView entities={entities} flat hideFavorite={hideFavorite} />
+              <PluginLogsView logs={envelope.logs ?? []} />
+            </>
+          ) : (
+            <>
+              <pre className="overflow-auto rounded bg-muted p-3 text-xs">{envelope.dataJson ?? "null"}</pre>
+              <PluginLogsView logs={envelope.logs ?? []} />
+            </>
+          )}
+        </div>
+      );
+    }
+
     return (
       <div
         id={anchorId}
@@ -194,7 +228,7 @@ export function ScanResultsPanel({
           </>
         ) : entities ? (
           <>
-            <PluginResultView entities={entities} />
+            <PluginResultView entities={entities} hideFavorite={hideFavorite} />
             <PluginLogsView logs={envelope.logs ?? []} />
           </>
         ) : (
@@ -207,7 +241,74 @@ export function ScanResultsPanel({
     );
   }
 
-  // Multiple endpoints: sidebar TOC + collapsible sections
+  // Multiple endpoints
+  // Flat/inline mode — sticky left TOC + main content
+  if (!showInputsPerResult) {
+    return (
+      <div id={anchorId} className="flex gap-6 select-text">
+        {/* Left sticky Summary nav */}
+        <aside className="hidden lg:flex flex-col gap-1 shrink-0 w-40 sticky top-4 self-start pt-0.5">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-2 pb-1">
+            Summary
+          </p>
+          {resultSections.map(({ sectionId, cardTitle, isError }) => (
+            <a
+              key={sectionId}
+              href={`#${sectionId}`}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors hover:bg-muted",
+                isError ? "text-red-600 dark:text-red-400" : "text-foreground/80 hover:text-foreground",
+              )}
+              onClick={(e) => {
+                e.preventDefault();
+                document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+            >
+              <span className={cn("mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full", isError ? "bg-red-500" : "bg-primary/60")} />
+              <span className="truncate">{cardTitle}</span>
+            </a>
+          ))}
+        </aside>
+
+        {/* Main content */}
+        <div className="flex-1 min-w-0 space-y-6">
+          {!scanDetail.results.length ? (
+            <p className="text-sm text-muted-foreground">Scan finished without any plugin results.</p>
+          ) : null}
+          {resultSections.map(({ result, envelope, isError, entities, usedInputs, sectionId, cardTitle }) => (
+            <div key={`${result.pluginId}::${result.entrypointId}`} id={sectionId} className="space-y-4">
+              {/* Section label with left border */}
+              <div className={`border-l-2 pl-3 ${isError ? "border-red-400" : "border-primary/40"}`}>
+                <p className={`text-sm font-semibold ${isError ? "text-red-600 dark:text-red-400" : "text-foreground"}`}>
+                  {cardTitle}
+                  {isError && <span className="ml-2 font-normal text-xs text-red-500">error</span>}
+                </p>
+              </div>
+              <InputsInline inputs={usedInputs} />
+              {isError ? (
+                <>
+                  <PluginErrorView message={envelope.error ?? "Unknown error"} />
+                  <PluginLogsView logs={envelope.logs ?? []} />
+                </>
+              ) : entities ? (
+                <>
+                  <PluginResultView entities={entities} flat hideFavorite={hideFavorite} />
+                  <PluginLogsView logs={envelope.logs ?? []} />
+                </>
+              ) : (
+                <>
+                  <pre className="overflow-auto rounded bg-muted p-3 text-xs">{envelope.dataJson ?? "null"}</pre>
+                  <PluginLogsView logs={envelope.logs ?? []} />
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Multiple endpoints: sidebar TOC + collapsible sections (standalone mode)
   return (
     <div id={anchorId} className="flex gap-4 select-text">
       {/* Left sticky mini-nav */}
@@ -260,7 +361,7 @@ export function ScanResultsPanel({
               </>
             ) : entities ? (
               <>
-                <PluginResultView entities={entities} />
+                <PluginResultView entities={entities} hideFavorite={hideFavorite} />
                 <PluginLogsView logs={envelope.logs ?? []} />
               </>
             ) : (
@@ -275,5 +376,3 @@ export function ScanResultsPanel({
     </div>
   );
 }
-
-

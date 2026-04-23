@@ -8,6 +8,8 @@ import { RiskTopicGroupCard } from "./RiskTopicGroupCard";
 
 interface PluginResultViewProps {
     entities: DataModelResult;
+    flat?: boolean;
+    hideFavorite?: boolean;
 }
 
 type RenderItem =
@@ -56,7 +58,7 @@ function buildRenderItems(entities: DataModelResult): RenderItem[] {
     return items;
 }
 
-export function PluginResultView({ entities }: PluginResultViewProps) {
+export function PluginResultView({ entities, flat = false, hideFavorite = false }: PluginResultViewProps) {
     if (!entities.length) {
         return (
             <p className="text-muted-foreground text-center py-8">No entities in result</p>
@@ -85,6 +87,8 @@ export function PluginResultView({ entities }: PluginResultViewProps) {
                             entities={item.entities}
                             columns={PERSON_TABLE_COLUMNS}
                             renderExpanded={(entity) => <PersonEntityCard entity={entity} />}
+                            flat={flat}
+                            hideFavorite={hideFavorite}
                         />
                     );
                 }
@@ -97,6 +101,8 @@ export function PluginResultView({ entities }: PluginResultViewProps) {
                             entities={item.entities}
                             columns={ORGANIZATION_TABLE_COLUMNS}
                             renderExpanded={(entity) => <OrganizationCard entity={entity} />}
+                            flat={flat}
+                            hideFavorite={hideFavorite}
                         />
                     );
                 }

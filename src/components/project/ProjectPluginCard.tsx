@@ -7,7 +7,7 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import type { PluginRecord } from "@/core/backend/bindings";
-import { Puzzle } from "lucide-react";
+import { Info, Puzzle } from "lucide-react";
 
 interface ProjectPluginCardProps {
     plugin: PluginRecord;
@@ -58,6 +58,12 @@ export function ProjectPluginCard({
                     {plugin.manifest.description}
                 </p>
 
+                {plugin.status && !/used/i.test(plugin.status) ? (
+                    <div className="flex items-center gap-1.5 rounded-md bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 px-2.5 py-1.5">
+                        <Info className="h-3.5 w-3.5 shrink-0 text-sky-500" />
+                        <span className="text-xs font-medium text-sky-700 dark:text-sky-300 truncate">{plugin.status}</span>
+                    </div>
+                ) : null}
 
                 <Badge className="mt-1" variant={selected ? "default" : "outline"}>
                     {selected ? "Selected" : "Select"}
@@ -66,4 +72,3 @@ export function ProjectPluginCard({
         </Card>
     );
 }
-
