@@ -6,6 +6,7 @@ import { PluginRunCard } from "@/components/project/PluginRunCard";
 import { ScanResultsPanel } from "@/components/project/ScanResultsPanel";
 import { ExportPdfButton } from "@/components/project/ExportPdfButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { formatScanPerformedAt } from "@/hooks/useProjectWorkspace";
 import type {
     PluginRecord,
@@ -178,9 +179,9 @@ export function ProjectScanPanel({
                         {/* Results — below the form, scrolled into view on completion */}
                         {showResults ? (
                             <div ref={resultsRef}>
-                                <Card className="rounded-[16px] border-border/60">
+                                <Card className="rounded-[16px] border-border/60 overflow-hidden">
                                     <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                                        <CardTitle className="text-sm">Search Criteria</CardTitle>
+                                        <CardTitle className="text-lg font-semibold">Search Criteria</CardTitle>
                                         <ExportPdfButton
                                             scanDetail={scanDetail}
                                             scanTitle={selectedScan?.preview?.trim() || `Scan ${selectedScan?.id.slice(0, 8) ?? ""}`}
@@ -190,14 +191,9 @@ export function ProjectScanPanel({
                                             size="sm"
                                         />
                                     </CardHeader>
-                                    <CardContent className="space-y-4">
+                                    <CardContent className="space-y-4 px-6 pb-0">
                                         {(() => {
                                             const nonNull = scanDetail!.inputs.filter((inp) => inp.value.type !== "null");
-                                            if (!nonNull.length) {
-                                                return (
-                                                    <p className="text-xs text-muted-foreground">No input values were used for this scan.</p>
-                                                );
-                                            }
                                             const seen = new Set<string>();
                                             const unique = nonNull.filter((inp) => {
                                                 const key = `${inp.fieldName}::${"value" in inp.value ? String(inp.value.value) : ""}`;
@@ -205,36 +201,63 @@ export function ProjectScanPanel({
                                                 seen.add(key);
                                                 return true;
                                             });
+                                            // Collect unique plugin names from selected plugins
+                                            const pluginNames = Array.from(
+                                                new Set(
+                                                    scanDetail!.selectedPlugins.map((sp) => pluginNameById[sp.pluginId] ?? sp.pluginId)
+                                                )
+                                            );
                                             return (
-                                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                                                <div className="flex flex-wrap gap-x-6 gap-y-2">
+                                                    {pluginNames.map((name) => (
+                                                        <span key={`plugin::${name}`} className="text-sm">
+                                                            <span className="text-muted-foreground">Plugin: </span>
+                                                            <span className="font-semibold">{name}</span>
+                                                        </span>
+                                                    ))}
                                                     {unique.map((inp, i) => (
-                                                        <span key={i}>
+                                                        <span key={i} className="text-sm">
                                                             <span className="text-muted-foreground">
                                                                 {inp.fieldName.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}:
                                                             </span>{" "}
-                                                            <span className="font-medium">
+                                                            <span className="font-semibold">
                                                                 {"value" in inp.value ? String(inp.value.value) : "—"}
                                                             </span>
                                                         </span>
                                                     ))}
+                                                    {pluginNames.length === 0 && unique.length === 0 && (
+                                                        <p className="text-sm text-muted-foreground">No input values were used for this scan.</p>
+                                                    )}
                                                 </div>
                                             );
                                         })()}
 
-                                        <div className="border-t border-border/50 my-4" />
+                                        <div className="border-t border-border/50" />
 
-                                        <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                                        <p className="text-base font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
                                             Results
-                                            <span className="ml-2 normal-case font-normal">
+                                            <span className="normal-case font-normal text-sm">
                                                 ({scanDetail!.status})
                                             </span>
+                                            {scanDetail!.results.length > 0 && (() => {
+                                                const rows = scanDetail!.results.reduce((sum, r) => {
+                                                    if (!r.output.ok || !r.output.dataJson) return sum;
+                                                    try { const d = JSON.parse(r.output.dataJson); return sum + (Array.isArray(d) ? d.length : 0); } catch { return sum; }
+                                                }, 0);
+                                                return rows > 0 ? <Badge variant="secondary">{rows} rows</Badge> : null;
+                                            })()}
                                         </p>
+                                    </CardContent>
+
+                                    {/* Results rendered at full card width — no inner padding */}
+                                    <div className="pt-8 pb-8">
                                         <ScanResultsPanel
                                             anchorId="project-results-section"
                                             scanDetail={scanDetail!}
                                             pluginNameById={pluginNameById}
+                                            showInputsPerResult={false}
                                         />
-                                    </CardContent>
+                                    </div>
                                 </Card>
                             </div>
                         ) : null}
