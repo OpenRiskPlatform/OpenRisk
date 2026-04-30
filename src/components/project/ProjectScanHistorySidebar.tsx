@@ -268,10 +268,16 @@ export function ProjectScanHistorySidebar({
                                             {entries.map((entry) => {
                                                 const isActive = entry.id === activeId;
                                                 return (
-                                                    <li key={entry.id} className={`group relative ${isActive ? "bg-muted" : (entry.status === "Failed" || entry.errorResultCount > 0) ? "bg-red-50 dark:bg-red-950/30" : ""}`}>
+                                                    <li key={entry.id} className="group relative">
                                                         <button
                                                             type="button"
-                                                            className="w-full text-left px-4 py-3 hover:bg-muted/60 transition-colors pr-12"
+                                                            className={`w-full text-left px-4 py-3 hover:bg-muted/60 transition-colors pr-12 border-l-2 ${
+                                                                isActive
+                                                                    ? "bg-primary/5 border-l-primary/60"
+                                                                    : (entry.status === "Failed" || entry.errorResultCount > 0)
+                                                                        ? "border-l-destructive/70 bg-transparent"
+                                                                        : "border-l-transparent"
+                                                            }`}
                                                             onClick={() => {
                                                                 if (isActive) {
                                                                     onStartRename(entry.id);
@@ -317,7 +323,7 @@ export function ProjectScanHistorySidebar({
 
                                                                     <div className="flex flex-wrap items-center gap-1.5">
                                                                         {entry.status === "Failed" || entry.errorResultCount > 0 ? (
-                                                                            <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                                                                            <Badge className="text-[10px] px-1.5 py-0 bg-destructive/15 text-destructive border-destructive/25 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700/50 hover:bg-destructive/20 dark:hover:bg-red-900/50">
                                                                                 {entry.status === "Failed" ? "Failed" : `${entry.errorResultCount} error${entry.errorResultCount === 1 ? "" : "s"}`}
                                                                             </Badge>
                                                                         ) : null}
@@ -355,7 +361,7 @@ function FavoriteEntityItem({ entity, onRemove, onPrint }: { entity: DataModelEn
         ?? entity.$props?.fullName?.[0]?.value as string | undefined
         ?? entity.$id;
     return (
-        <li className="flex items-center gap-2 px-4 py-2 bg-amber-50/40 dark:bg-amber-900/10 group">
+        <li className="flex items-center gap-2 px-4 py-2 group">
             <Star className="h-3.5 w-3.5 shrink-0 text-amber-500 fill-amber-400" />
             <span className="min-w-0 flex-1 text-xs font-medium truncate" title={label}>{label}</span>
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">

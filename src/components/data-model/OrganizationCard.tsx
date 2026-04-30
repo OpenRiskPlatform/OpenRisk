@@ -67,7 +67,7 @@ export function OrganizationCard({ entity }: { entity: DataModelEntity }) {
                             </Badge>
                         )}
                         {isPep && (
-                            <Badge variant="destructive" className="text-xs font-semibold bg-orange-600 hover:bg-orange-700">
+                            <Badge variant="destructive" className="text-xs font-semibold bg-orange-500/80 hover:bg-orange-500/90">
                                 ⚠️ PEP
                             </Badge>
                         )}

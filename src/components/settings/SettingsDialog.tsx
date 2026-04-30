@@ -27,7 +27,7 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
     useState<SettingsCategory>("info");
   const [metricsRefreshToken, setMetricsRefreshToken] = useState(0);
   const backendClient = useBackendClient();
-  const { updateGlobalSettings } = useSettings();
+  const { updateGlobalSettings, globalSettings } = useSettings();
   const [settingsData, setSettingsData] = useState<ProjectSettingsPayload | null>(
     null
   );
@@ -58,10 +58,17 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
 
     unwrap(backendClient.loadSettings())
       .then((payload) => {
-        if (!cancelled) {
-          setSettingsData(payload);
-          updateGlobalSettings({ theme: (payload.projectSettings?.theme ?? "system") as "light" | "dark" | "system", advancedMode: payload.projectSettings?.advancedMode ?? false });
-        }
+          if (!cancelled) {
+            setSettingsData(payload);
+            // Only sync theme from backend if no custom profile is active.
+            // Custom profiles (ocean/forest/midnight) live in the frontend store only.
+            const CUSTOM_THEMES = ["ocean", "forest", "midnight"];
+            const themeUpdate: Record<string, unknown> = { advancedMode: payload.projectSettings?.advancedMode ?? false };
+            if (!CUSTOM_THEMES.includes(globalSettings.theme)) {
+              themeUpdate.theme = payload.projectSettings?.theme ?? "system";
+            }
+            updateGlobalSettings(themeUpdate as Parameters<typeof updateGlobalSettings>[0]);
+          }
       })
       .catch((err) => {
         if (!cancelled) {
@@ -78,7 +85,7 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
     return () => {
       cancelled = true;
     };
-  }, [open, projectDir, backendClient, updateGlobalSettings]);
+  }, [open, projectDir, backendClient, updateGlobalSettings, globalSettings.theme]);
 
   const handleProjectSettingsUpdated = useCallback((
     settings: ProjectSettingsPayload["projectSettings"]

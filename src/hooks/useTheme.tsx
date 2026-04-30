@@ -12,19 +12,20 @@ export function useTheme() {
   useEffect(() => {
     const root = window.document.documentElement;
 
-    // Remove existing theme classes
-    root.classList.remove("light", "dark");
+    // Remove all theme classes
+    root.classList.remove("light", "dark", "theme-ocean", "theme-forest", "theme-midnight");
 
-    if (globalSettings.theme === "system") {
-      // Use system preference
-      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
-        .matches
-        ? "dark"
-        : "light";
+    const theme = globalSettings.theme;
+
+    if (theme === "system") {
+      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
       root.classList.add(systemTheme);
+    } else if (theme === "light" || theme === "dark") {
+      root.classList.add(theme);
     } else {
-      // Use user-selected theme
-      root.classList.add(globalSettings.theme);
+      // Custom color profile — still needs a base (light) plus the profile class
+      root.classList.add("light");
+      root.classList.add(`theme-${theme}`);
     }
   }, [globalSettings.theme]);
 
@@ -36,7 +37,7 @@ export function useTheme() {
 
     const handleChange = (e: MediaQueryListEvent) => {
       const root = window.document.documentElement;
-      root.classList.remove("light", "dark");
+      root.classList.remove("light", "dark", "theme-ocean", "theme-forest", "theme-midnight");
       root.classList.add(e.matches ? "dark" : "light");
     };
 

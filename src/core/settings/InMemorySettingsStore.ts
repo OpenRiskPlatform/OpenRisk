@@ -3,7 +3,9 @@
  * Stores settings in memory (lost on refresh)
  */
 
-import type { GlobalSettings, PluginSettings, SettingsStore } from "./types";
+import type { GlobalSettings, PluginSettings, SettingsStore, ThemeValue } from "./types";
+
+const VALID_THEMES: ThemeValue[] = ["light", "dark", "system", "ocean", "forest", "midnight"];
 
 const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   theme: "system",
@@ -16,14 +18,10 @@ export class InMemorySettingsStore implements SettingsStore {
 
   constructor() {
     // Try to load theme from localStorage
-    let theme: "light" | "dark" | "system" = DEFAULT_GLOBAL_SETTINGS.theme;
+    let theme: ThemeValue = DEFAULT_GLOBAL_SETTINGS.theme;
     try {
-      const savedTheme = localStorage.getItem("theme");
-      if (
-        savedTheme === "light" ||
-        savedTheme === "dark" ||
-        savedTheme === "system"
-      ) {
+      const savedTheme = localStorage.getItem("theme") as ThemeValue | null;
+      if (savedTheme && VALID_THEMES.includes(savedTheme)) {
         theme = savedTheme;
       }
     } catch (e) {

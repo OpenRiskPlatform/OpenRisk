@@ -110,9 +110,9 @@ export function ScanResultsPanel({
     const failedResults = scanDetail.results.filter((r) => !r.output.ok);
     return (
       <div className="space-y-3">
-        <div className="rounded-[20px] border border-red-200 bg-red-50 dark:bg-red-950/40 dark:border-red-800 px-5 py-4">
-          <p className="text-sm font-semibold text-red-700 dark:text-red-400 mb-1">Scan failed</p>
-          <p className="text-sm text-red-600 dark:text-red-400">
+        <div className="rounded-[20px] border border-destructive/20 bg-destructive/8 dark:bg-destructive/10 dark:border-destructive/15 px-5 py-4">
+          <p className="text-sm font-semibold text-destructive/90 mb-1">Scan failed</p>
+          <p className="text-sm text-muted-foreground">
             {failedResults.length > 0
               ? `${failedResults.length} plugin run(s) encountered an error. Check the details below.`
               : "The scan could not be completed. Check plugin settings and inputs."}
@@ -264,7 +264,7 @@ export function ScanResultsPanel({
                 document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
               }}
             >
-              <span className={cn("mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full", isError ? "bg-red-500" : "bg-primary/60")} />
+              <span className={cn("mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full", isError ? "bg-destructive/70" : "bg-primary/60")} />
               <span className="truncate">{cardTitle}</span>
             </a>
           ))}
@@ -332,7 +332,7 @@ export function ScanResultsPanel({
               document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
             }}
           >
-            <span className={cn("mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full", isError ? "bg-red-500" : "bg-primary/60")} />
+            <span className={cn("mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full", isError ? "bg-destructive/70" : "bg-primary/60")} />
             <span className="truncate">{cardTitle}</span>
           </a>
         ))}

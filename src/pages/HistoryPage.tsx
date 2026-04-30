@@ -159,9 +159,9 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
                                 <p className="text-sm text-red-600">{workspace.scansError}</p>
                             ) : null}
 
-                            <div className="grid gap-6 xl:grid-cols-[0.7fr_1.3fr]">
-                                {/* Left column: search card + scan list */}
-                                <div className="flex flex-col gap-4">
+                            <div className="flex gap-6 items-start">
+                                {/* Left column: search card + scan list — fixed width */}
+                                <div className="flex flex-col gap-4 w-80 shrink-0">
                                     {/* Search & filter card */}
                                     <Card className="rounded-[24px] border-border/70">
                                         <CardContent className="p-4 space-y-3">
@@ -254,13 +254,16 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
                                                     const isActive =
                                                         entry.id === workspace.selectedScanId;
                                                     return (
-                                                        <li key={entry.id} className={isActive ? "ring-2 ring-emerald-500 ring-inset" : ""}>
+                                                        <li key={entry.id} className={isActive ? "ring-1 ring-ring/50 ring-inset" : ""}>
                                                             <button
                                                                 type="button"
                                                                 onClick={() => openScan(entry.id)}
-                                                                className={`w-full text-left px-4 py-3 hover:bg-muted/60 transition-colors ${
-                                                                    isActive ? "bg-emerald-50/60 dark:bg-emerald-950/30" :
-                                                                    (entry.status === "Failed" || entry.errorResultCount > 0) ? "bg-red-50 dark:bg-red-950/30" : ""
+                                                                className={`w-full text-left px-4 py-3 hover:bg-muted/60 transition-colors border-l-2 ${
+                                                                    isActive
+                                                                        ? "bg-primary/5 border-l-primary/60"
+                                                                        : (entry.status === "Failed" || entry.errorResultCount > 0)
+                                                                            ? "border-l-destructive/70 bg-transparent"
+                                                                            : "border-l-transparent"
                                                                 }`}
                                                             >
                                                                 <div className="flex items-start gap-3">
@@ -269,11 +272,11 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
                                                                     </div>
                                                                     <div className="min-w-0 flex-1">
                                                                         <div className="flex items-center gap-2">
-                                                                            <p className={`truncate text-sm font-medium ${(entry.status === "Failed" || entry.errorResultCount > 0) ? "text-red-700 dark:text-red-400" : ""}`}>
+                                                                            <p className="truncate text-sm font-medium">
                                                                                 {entry.title}
                                                                             </p>
                                                                             {entry.status === "Failed" || entry.errorResultCount > 0 ? (
-                                                                                <Badge variant="destructive" className="text-[9px] px-1.5 py-0 shrink-0">
+                                                                                <Badge className="text-[9px] px-1.5 py-0 shrink-0 bg-destructive/15 text-destructive border-destructive/25 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700/50 hover:bg-destructive/20">
                                                                                     {entry.status === "Failed" ? "Failed" : `${entry.errorResultCount} error${entry.errorResultCount === 1 ? "" : "s"}`}
                                                                                 </Badge>
                                                                             ) : null}
@@ -319,13 +322,14 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
                                     </div>
                                 </div>
 
-                                {/* Right column: detail */}
-                                <Card className={`rounded-[24px] border-border/70 self-start ${selectedEntry?.status === "Failed" ? "border-red-300 dark:border-red-800" : ""}`}>
+                                {/* Right column: detail — takes remaining space */}
+                                <div className="flex-1 min-w-0">
+                                <Card className={`rounded-[24px] self-start ${selectedEntry?.status === "Failed" ? "border-destructive/25" : "border-border/70"}`}>
                                     <CardHeader className="pb-2">
-                                        <CardTitle className={`text-base flex items-center gap-2 ${selectedEntry?.status === "Failed" ? "text-red-700 dark:text-red-400" : ""}`}>
+                                        <CardTitle className="text-base flex items-center gap-2">
                                             {selectedEntry?.title ?? "Select a scan"}
                                             {selectedEntry?.status === "Failed" ? (
-                                                <Badge variant="destructive" className="text-[10px]">Failed</Badge>
+                                                                <Badge className="text-[10px] bg-destructive/15 text-destructive border-destructive/25 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700/50 hover:bg-destructive/20">Failed</Badge>
                                             ) : null}
                                         </CardTitle>
                                     </CardHeader>
@@ -333,7 +337,7 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
                                         {workspace.selectedScanId && selectedEntry ? (
                                             <>
                                                 {selectedEntry.status === "Failed" ? (
-                                                    <div className="rounded-md border border-red-200 bg-red-50 dark:bg-red-950/40 dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-400">
+                                                    <div className="rounded-md border border-destructive/20 bg-destructive/8 px-3 py-2 text-sm text-muted-foreground">
                                                         This scan ended in an error. Check the logs by opening it in Scans.
                                                     </div>
                                                 ) : null}
@@ -447,6 +451,7 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
                                         )}
                                     </CardContent>
                                 </Card>
+                                </div>
                             </div>
                         </>
                     )}

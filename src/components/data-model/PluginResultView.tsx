@@ -2,9 +2,8 @@ import type { DataModelEntity, DataModelResult } from "@/core/data-model/types";
 import { EntityCard } from "./EntityCard";
 import { EntityTableSection } from "./EntityTableSection";
 import { ORGANIZATION_TABLE_COLUMNS, PERSON_TABLE_COLUMNS } from "./entityTableConfigs";
-import { OrganizationCard } from "./OrganizationCard";
-import { PersonEntityCard } from "./PersonEntityCard";
 import { RiskTopicGroupCard } from "./RiskTopicGroupCard";
+import { PersonEntityInline, OrganizationInline } from "./EntityInlineDetail";
 
 interface PluginResultViewProps {
     entities: DataModelResult;
@@ -86,7 +85,7 @@ export function PluginResultView({ entities, flat = false, hideFavorite = false 
                             title="Person"
                             entities={item.entities}
                             columns={PERSON_TABLE_COLUMNS}
-                            renderExpanded={(entity) => <PersonEntityCard entity={entity} />}
+                            renderExpanded={(entity) => <PersonEntityInline entity={entity} />}
                             flat={flat}
                             hideFavorite={hideFavorite}
                         />
@@ -100,7 +99,7 @@ export function PluginResultView({ entities, flat = false, hideFavorite = false 
                             title="Organization"
                             entities={item.entities}
                             columns={ORGANIZATION_TABLE_COLUMNS}
-                            renderExpanded={(entity) => <OrganizationCard entity={entity} />}
+                            renderExpanded={(entity) => <OrganizationInline entity={entity} />}
                             flat={flat}
                             hideFavorite={hideFavorite}
                         />

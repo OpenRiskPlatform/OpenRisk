@@ -53,7 +53,9 @@ export function GeneralSettings({
   const [renamingProject, setRenamingProject] = useState(false);
   const [renameError, setRenameError] = useState<string | null>(null);
 
-  const theme = projectSettings?.theme ?? "system";
+  // Read from globalSettings first — it persists custom profiles (ocean/forest/midnight).
+  // Fall back to backend project record only when globalSettings has no value yet.
+  const theme = globalSettings.theme ?? projectSettings?.theme ?? "system";
 
   const handleAdvancedModeChange = async (checked: boolean) => {
     await updateGlobalSettings({ advancedMode: checked });
@@ -65,16 +67,21 @@ export function GeneralSettings({
     }
   };
 
-  const handleThemeChange = async (value: "light" | "dark" | "system") => {
+  const handleThemeChange = async (value: "light" | "dark" | "system" | "ocean" | "forest" | "midnight") => {
     if (!projectDir) {
       return;
     }
 
     setSavingTheme(true);
     try {
-      const updated = await unwrap(backendClient.updateProjectSettings(null, value, null));
-      onProjectSettingsUpdated(updated);
-      await updateGlobalSettings({ theme: updated.theme as "light" | "dark" | "system" });
+      // Custom color profiles are frontend-only — only persist to global settings store.
+      // Standard modes (light/dark/system) are also stored in the backend project record.
+      const isStandardTheme = value === "light" || value === "dark" || value === "system";
+      if (isStandardTheme) {
+        const updated = await unwrap(backendClient.updateProjectSettings(null, value, null));
+        onProjectSettingsUpdated(updated);
+      }
+      await updateGlobalSettings({ theme: value });
     } finally {
       setSavingTheme(false);
     }
@@ -262,10 +269,13 @@ export function GeneralSettings({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="light">Light</SelectItem>
-                <SelectItem value="dark">Dark</SelectItem>
-                <SelectItem value="system">System</SelectItem>
-              </SelectContent>
+                  <SelectItem value="light">Light</SelectItem>
+                  <SelectItem value="dark">Dark</SelectItem>
+                  <SelectItem value="system">System</SelectItem>
+                  <SelectItem value="ocean">Ocean</SelectItem>
+                  <SelectItem value="forest">Forest</SelectItem>
+                  <SelectItem value="midnight">Midnight</SelectItem>
+                </SelectContent>
             </Select>
           </div>
 

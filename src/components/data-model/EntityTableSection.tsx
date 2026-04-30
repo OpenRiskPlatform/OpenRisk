@@ -14,6 +14,8 @@ import type { DataModelEntity, TypedValue } from "@/core/data-model/types";
 import { useFavorites } from "@/core/favorites-context";
 import { typedValueToCompactText } from "./entityProps";
 
+const DEFAULT_VISIBLE_ROWS = 5;
+
 export interface EntityTableColumnConfig {
     id: string;
     header: string;
@@ -29,15 +31,13 @@ interface EntityTableSectionProps {
     entities: DataModelEntity[];
     columns: EntityTableColumnConfig[];
     renderExpanded: (entity: DataModelEntity) => ReactNode;
-    /** When true, renders without card wrapper (no border/shadow/rounded) to sit flush inside a parent card */
     flat?: boolean;
-    /** When true, hides the favourite star button */
     hideFavorite?: boolean;
 }
 
 export function EntityTableSection({
     entityType: _entityType,
-    title,
+    title: _title,
     entities: initialEntities,
     columns,
     renderExpanded,
@@ -46,15 +46,19 @@ export function EntityTableSection({
 }: EntityTableSectionProps) {
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [entities, setEntities] = useState(initialEntities);
+    const [showAll, setShowAll] = useState(false);
     const { isFavorite, toggleFavorite: ctxToggle } = useFavorites();
 
-    // Sync entities when the incoming data changes (e.g. user selects a different scan)
     useEffect(() => {
         setEntities(initialEntities);
         setExpandedId(null);
+        setShowAll(false);
     }, [initialEntities]);
 
     if (!entities.length) return null;
+
+    const visibleEntities = showAll ? entities : entities.slice(0, DEFAULT_VISIBLE_ROWS);
+    const hiddenCount = entities.length - DEFAULT_VISIBLE_ROWS;
 
     const move = (index: number, delta: -1 | 1) => {
         const next = [...entities];
@@ -64,116 +68,133 @@ export function EntityTableSection({
         setEntities(next);
     };
 
-
     return (
         <div className={flat ? "overflow-x-auto" : "overflow-hidden rounded-[24px] border border-border/70 bg-card shadow-[0_18px_40px_-28px_rgba(15,23,42,0.14)]"}>
             <div className="overflow-x-auto">
-                    <Table className="border-separate border-spacing-0">
-                        <TableHeader className="[&_tr]:border-b-0">
-                            <TableRow className="!border-b-0 hover:!bg-transparent">
-                                {/* expand chevron col */}
+                <Table className="border-separate border-spacing-0">
+                    <TableHeader className="[&_tr]:border-b-0">
+                        <TableRow className="!border-b-0 hover:!bg-transparent">
+                            <TableHead
+                                className="sticky top-0 z-10 w-10 bg-card"
+                                style={{ boxShadow: flat ? "inset 0 1px 0 hsl(var(--border)), inset 0 -1px 0 hsl(var(--border))" : "inset 0 -1px 0 hsl(var(--border))" }}
+                            />
+                            {columns.map((column) => (
                                 <TableHead
-                                    className="sticky top-0 z-10 w-10 bg-card"
+                                    key={column.id}
+                                    className={`sticky top-0 z-10 bg-card ${column.className ?? ""}`}
                                     style={{ boxShadow: flat ? "inset 0 1px 0 hsl(var(--border)), inset 0 -1px 0 hsl(var(--border))" : "inset 0 -1px 0 hsl(var(--border))" }}
-                                />
-                                {columns.map((column) => (
-                                    <TableHead
-                                        key={column.id}
-                                        className={`sticky top-0 z-10 bg-card ${column.className ?? ""}`}
-                                        style={{ boxShadow: flat ? "inset 0 1px 0 hsl(var(--border)), inset 0 -1px 0 hsl(var(--border))" : "inset 0 -1px 0 hsl(var(--border))" }}
+                                >
+                                    {column.header}
+                                </TableHead>
+                            ))}
+                            <TableHead
+                                className="sticky top-0 z-10 w-24 bg-card"
+                                style={{ boxShadow: flat ? "inset 0 1px 0 hsl(var(--border)), inset 0 -1px 0 hsl(var(--border))" : "inset 0 -1px 0 hsl(var(--border))" }}
+                            />
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {visibleEntities.map((entity, index) => {
+                            const isExpanded = expandedId === entity.$id;
+                            const bg = isExpanded ? "bg-accent/40" : "";
+                            return (
+                                <Fragment key={`${entity.$entity}-${entity.$id}`}>
+                                    <TableRow
+                                        className={
+                                            isExpanded
+                                                ? "bg-accent/40 hover:bg-accent/40"
+                                                : "cursor-pointer"
+                                        }
+                                        onClick={() =>
+                                            setExpandedId((current) =>
+                                                current === entity.$id ? null : entity.$id,
+                                            )
+                                        }
                                     >
-                                        {column.header}
-                                    </TableHead>
-                                ))}
-                                {/* reorder col */}
-                                <TableHead
-                                    className="sticky top-0 z-10 w-24 bg-card"
-                                    style={{ boxShadow: flat ? "inset 0 1px 0 hsl(var(--border)), inset 0 -1px 0 hsl(var(--border))" : "inset 0 -1px 0 hsl(var(--border))" }}
-                                />
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {entities.map((entity, index) => {
-                                const isExpanded = expandedId === entity.$id;
-                                const bg = isExpanded ? "bg-muted" : "";
-                                return (
-                                    <Fragment key={`${entity.$entity}-${entity.$id}`}>
-                                        <TableRow
-                                            className={isExpanded ? "bg-muted hover:bg-muted" : isFavorite(entity.$id) ? "bg-amber-50/60 dark:bg-amber-900/10 cursor-pointer" : "cursor-pointer"}
-                                            onClick={() =>
-                                                setExpandedId((current) =>
-                                                    current === entity.$id ? null : entity.$id,
-                                                )
-                                            }
-                                        >
-                                            <TableCell className={`w-10 pr-0 ${bg}`}>
-                                                {isExpanded
-                                                    ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                                                    : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                                        <TableCell className={`w-10 pr-0 ${bg}`}>
+                                            {isExpanded
+                                                ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                                : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                                        </TableCell>
+                                        {columns.map((column) => (
+                                            <TableCell key={column.id} className={bg}>
+                                                <CompactEntityCell
+                                                    values={column.getValues(entity)}
+                                                    variant={column.variant ?? "text"}
+                                                    secondaryText={column.secondaryText?.(entity) ?? null}
+                                                />
                                             </TableCell>
-                                            {columns.map((column) => (
-                                                <TableCell key={column.id} className={bg}>
-                                                    <CompactEntityCell
-                                                        values={column.getValues(entity)}
-                                                        variant={column.variant ?? "text"}
-                                                        secondaryText={column.secondaryText?.(entity) ?? null}
-                                                    />
-                                                </TableCell>
-                                            ))}
-                                            <TableCell
-                                                className={`w-24 ${bg}`}
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                <div className="flex gap-0.5 items-center">
-                                                    {!hideFavorite && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className={`h-6 w-6 ${isFavorite(entity.$id) ? "text-amber-500" : "text-muted-foreground"}`}
-                                                            onClick={() => ctxToggle(entity)}
-                                                            title={isFavorite(entity.$id) ? "Remove favourite" : "Mark as favourite"}
-                                                        >
-                                                            <Star className={`h-3.5 w-3.5 ${isFavorite(entity.$id) ? "fill-amber-400" : ""}`} />
-                                                        </Button>
-                                                    )}
+                                        ))}
+                                        <TableCell
+                                            className={`w-24 ${bg}`}
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            <div className="flex gap-0.5 items-center">
+                                                {!hideFavorite && (
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-6 w-6 text-muted-foreground"
-                                                        disabled={index === 0}
-                                                        onClick={() => move(index, -1)}
-                                                        title="Move up"
+                                                        className={`h-6 w-6 ${isFavorite(entity.$id) ? "text-amber-500" : "text-muted-foreground"}`}
+                                                        onClick={() => ctxToggle(entity)}
+                                                        title={isFavorite(entity.$id) ? "Remove favourite" : "Mark as favourite"}
                                                     >
-                                                        <ArrowUp className="h-3 w-3" />
+                                                        <Star className={`h-3.5 w-3.5 ${isFavorite(entity.$id) ? "fill-amber-400" : ""}`} />
                                                     </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-6 w-6 text-muted-foreground"
-                                                        disabled={index === entities.length - 1}
-                                                        onClick={() => move(index, 1)}
-                                                        title="Move down"
-                                                    >
-                                                        <ArrowDown className="h-3 w-3" />
-                                                    </Button>
+                                                )}
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6 text-muted-foreground"
+                                                    disabled={index === 0}
+                                                    onClick={() => move(index, -1)}
+                                                    title="Move up"
+                                                >
+                                                    <ArrowUp className="h-3 w-3" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6 text-muted-foreground"
+                                                    disabled={showAll ? index === entities.length - 1 : index === visibleEntities.length - 1}
+                                                    onClick={() => move(index, 1)}
+                                                    title="Move down"
+                                                >
+                                                    <ArrowDown className="h-3 w-3" />
+                                                </Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                    {isExpanded && (
+                                        <TableRow className="bg-accent/30 hover:bg-accent/30">
+                                            <TableCell className="w-10 bg-accent/30" />
+                                            <TableCell colSpan={columns.length} className="bg-accent/30 p-4 lg:p-5">
+                                                <div className="rounded-xl border border-border/50 bg-card/90 shadow-sm p-4">
+                                                    {renderExpanded(entity)}
                                                 </div>
                                             </TableCell>
+                                            <TableCell className="w-24 bg-accent/30" />
                                         </TableRow>
-                                        {isExpanded && (
-                                            <TableRow className="bg-muted hover:bg-muted">
-                                                <TableCell className="w-10 bg-muted" />
-                                                <TableCell colSpan={columns.length} className="bg-muted p-5 lg:p-6">
-                                                    {renderExpanded(entity)}
-                                                </TableCell>
-                                                <TableCell className="w-24 bg-muted" />
-                                            </TableRow>
-                                        )}
-                                    </Fragment>
-                                );
-                            })}
-                        </TableBody>
-                    </Table>
+                                    )}
+                                </Fragment>
+                            );
+                        })}
+                    </TableBody>
+                </Table>
             </div>
+            {entities.length > DEFAULT_VISIBLE_ROWS && (
+                <div className="flex items-center justify-center border-t border-border/50 py-2 px-4">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs text-muted-foreground h-7"
+                        onClick={() => setShowAll((v) => !v)}
+                    >
+                        {showAll
+                            ? "Show less"
+                            : `Show all ${entities.length} rows (+${hiddenCount} hidden)`}
+                    </Button>
+                </div>
+            )}
         </div>
     );
 }
