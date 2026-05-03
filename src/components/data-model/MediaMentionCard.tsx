@@ -1,4 +1,7 @@
+import { useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
     Card,
     CardContent,
@@ -37,6 +40,8 @@ function isKeyValue(item: TypedValue): item is {
 }
 
 export function MediaMentionCard({ entity }: { entity: DataModelEntity }) {
+    const [open, setOpen] = useState(false);
+
     const targetName = firstProp(entity, "name");
     const title = firstProp(entity, "title");
     const url = firstProp(entity, "url");
@@ -58,10 +63,13 @@ export function MediaMentionCard({ entity }: { entity: DataModelEntity }) {
 
     return (
         <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-3 cursor-pointer select-none" onClick={() => setOpen((v) => !v)}>
                 <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1 flex-1 min-w-0">
                         <CardTitle className="text-base leading-snug flex items-center gap-2">
+                            <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 p-0 text-muted-foreground" tabIndex={-1}>
+                                {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            </Button>
                             <EntityTypeBadge entityType="entity.mediaMention" />
                             {displayTitle}
                         </CardTitle>
@@ -69,7 +77,7 @@ export function MediaMentionCard({ entity }: { entity: DataModelEntity }) {
                             <CardDescription>Target: {String(targetName.value)}</CardDescription>
                         )}
                     </div>
-                    <div className="shrink-0">
+                    <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                         <TooltipProvider>
                             <Tooltip delayDuration={200}>
                                 <TooltipTrigger asChild>
@@ -92,36 +100,38 @@ export function MediaMentionCard({ entity }: { entity: DataModelEntity }) {
                         </TooltipProvider>
                     </div>
                 </div>
-                {url && (
-                    <div className="pt-1">
+                {open && url && (
+                    <div className="pt-1" onClick={(e) => e.stopPropagation()}>
                         <TypedValueView item={url} />
                     </div>
                 )}
             </CardHeader>
 
-            <CardContent className="space-y-4 pt-0">
-                {analysis && (
-                    <p className="text-sm text-foreground leading-relaxed">
-                        {String(analysis.value)}
-                    </p>
-                )}
+            {open && (
+                <CardContent className="space-y-4 pt-0">
+                    {analysis && (
+                        <p className="text-sm text-foreground leading-relaxed">
+                            {String(analysis.value)}
+                        </p>
+                    )}
 
-                {claims.length > 0 && (
-                    <div className="space-y-2">
-                        <p className="text-xs uppercase text-muted-foreground">Claims</p>
-                        <ul className="space-y-1">
-                            {claims.map((claim, i) => (
-                                <li key={i} className="text-sm flex gap-2">
-                                    <span className="text-muted-foreground shrink-0">·</span>
-                                    <span>{claim}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                )}
+                    {claims.length > 0 && (
+                        <div className="space-y-2">
+                            <p className="text-xs uppercase text-muted-foreground">Claims</p>
+                            <ul className="space-y-1">
+                                {claims.map((claim, i) => (
+                                    <li key={i} className="text-sm flex gap-2">
+                                        <span className="text-muted-foreground shrink-0">·</span>
+                                        <span>{claim}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
 
-                <EntityCardFooter entity={entity} excludeExtraKeys={["claim"]} />
-            </CardContent>
+                    <EntityCardFooter entity={entity} excludeExtraKeys={["claim"]} />
+                </CardContent>
+            )}
         </Card>
     );
 }

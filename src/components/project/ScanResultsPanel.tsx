@@ -188,7 +188,7 @@ export function ScanResultsPanel({
     // Flat/inline mode — already inside outer card (Search Criteria card)
     if (!showInputsPerResult) {
       return (
-        <div id={anchorId} className="space-y-4 select-text">
+        <div id={anchorId} className="space-y-4 select-text px-6 pb-2">
           {isError ? (
             <>
               <PluginErrorView message={envelope.error ?? "Unknown error"} />
@@ -245,9 +245,9 @@ export function ScanResultsPanel({
   // Flat/inline mode — sticky left TOC + main content
   if (!showInputsPerResult) {
     return (
-      <div id={anchorId} className="flex gap-6 select-text">
+      <div id={anchorId} className="flex gap-6 select-text items-start px-6 pb-2">
         {/* Left sticky Summary nav */}
-        <aside className="hidden lg:flex flex-col gap-1 shrink-0 w-40 sticky top-4 self-start pt-0.5">
+        <aside className="hidden lg:flex flex-col gap-1 shrink-0 w-40 sticky top-0 self-start max-h-[calc(100vh-8rem)] overflow-y-auto">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-2 pb-1">
             Summary
           </p>
@@ -271,20 +271,19 @@ export function ScanResultsPanel({
         </aside>
 
         {/* Main content */}
-        <div className="flex-1 min-w-0 space-y-6">
+        <div className="flex-1 min-w-0 space-y-3">
           {!scanDetail.results.length ? (
             <p className="text-sm text-muted-foreground">Scan finished without any plugin results.</p>
           ) : null}
           {resultSections.map(({ result, envelope, isError, entities, usedInputs, sectionId, cardTitle }) => (
-            <div key={`${result.pluginId}::${result.entrypointId}`} id={sectionId} className="space-y-4">
-              {/* Section label with left border */}
-              <div className={`border-l-2 pl-3 ${isError ? "border-red-400" : "border-primary/40"}`}>
-                <p className={`text-sm font-semibold ${isError ? "text-red-600 dark:text-red-400" : "text-foreground"}`}>
-                  {cardTitle}
-                  {isError && <span className="ml-2 font-normal text-xs text-red-500">error</span>}
-                </p>
-              </div>
-              <InputsInline inputs={usedInputs} />
+            <CollapsibleEndpointSection
+              key={`${result.pluginId}::${result.entrypointId}`}
+              id={sectionId}
+              title={cardTitle}
+              isError={isError}
+              usedInputs={usedInputs}
+              defaultOpen
+            >
               {isError ? (
                 <>
                   <PluginErrorView message={envelope.error ?? "Unknown error"} />
@@ -301,7 +300,7 @@ export function ScanResultsPanel({
                   <PluginLogsView logs={envelope.logs ?? []} />
                 </>
               )}
-            </div>
+            </CollapsibleEndpointSection>
           ))}
         </div>
       </div>
@@ -310,11 +309,11 @@ export function ScanResultsPanel({
 
   // Multiple endpoints: sidebar TOC + collapsible sections (standalone mode)
   return (
-    <div id={anchorId} className="flex gap-4 select-text">
+    <div id={anchorId} className="flex gap-4 select-text items-start">
       {/* Left sticky mini-nav */}
       <aside
         ref={sidebarRef}
-        className="hidden lg:flex flex-col gap-1 shrink-0 w-44 sticky top-4 self-start"
+        className="hidden lg:flex flex-col gap-1 shrink-0 w-44 sticky top-0 self-start max-h-[calc(100vh-8rem)] overflow-y-auto"
       >
         <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-2 pb-1">
           Endpoints

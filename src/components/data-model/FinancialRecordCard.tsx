@@ -1,4 +1,7 @@
+import { useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
     Card,
     CardContent,
@@ -31,6 +34,8 @@ function firstProp(entity: DataModelEntity, key: string): TypedValue | undefined
 }
 
 export function FinancialRecordCard({ entity }: { entity: DataModelEntity }) {
+    const [open, setOpen] = useState(false);
+
     const name = firstProp(entity, "name");
     const amountOwed = firstProp(entity, "amountOwed");
     const location = firstProp(entity, "location");
@@ -39,10 +44,13 @@ export function FinancialRecordCard({ entity }: { entity: DataModelEntity }) {
 
     return (
         <Card className="border-amber-200 dark:border-amber-900">
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-3 cursor-pointer select-none" onClick={() => setOpen((v) => !v)}>
                 <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1">
                         <CardTitle className="text-base flex items-center gap-2">
+                            <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 p-0 text-muted-foreground" tabIndex={-1}>
+                                {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            </Button>
                             <EntityTypeBadge entityType="entity.financialRecord" />
                             {name ? String(name.value) : "Unknown Debtor"}
                         </CardTitle>
@@ -60,18 +68,20 @@ export function FinancialRecordCard({ entity }: { entity: DataModelEntity }) {
                 </div>
             </CardHeader>
 
-            <CardContent className="space-y-3 pt-0">
-                {location && (
-                    <div className="space-y-0.5">
-                        <p className="text-xs uppercase text-muted-foreground">Address</p>
-                        <div className="text-sm">
-                            <TypedValueView item={location} />
+            {open && (
+                <CardContent className="space-y-3 pt-0">
+                    {location && (
+                        <div className="space-y-0.5">
+                            <p className="text-xs uppercase text-muted-foreground">Address</p>
+                            <div className="text-sm">
+                                <TypedValueView item={location} />
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                <EntityCardFooter entity={entity} />
-            </CardContent>
+                    <EntityCardFooter entity={entity} />
+                </CardContent>
+            )}
         </Card>
     );
 }

@@ -1,4 +1,7 @@
+import { useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
     Card,
     CardContent,
@@ -27,6 +30,8 @@ function firstProp(entity: DataModelEntity, key: string): TypedValue | undefined
 }
 
 export function SocialProfileCard({ entity }: { entity: DataModelEntity }) {
+    const [open, setOpen] = useState(false);
+
     const targetName = firstProp(entity, "name");
     const platform = firstProp(entity, "platform");
     const profileTitle = firstProp(entity, "profileTitle");
@@ -45,7 +50,7 @@ export function SocialProfileCard({ entity }: { entity: DataModelEntity }) {
 
     return (
         <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-3 cursor-pointer select-none" onClick={() => setOpen((v) => !v)}>
                 <div className="flex items-start gap-3">
                     {platformIcon && (
                         <span className="text-xl font-bold text-muted-foreground shrink-0 w-8 text-center">
@@ -54,6 +59,9 @@ export function SocialProfileCard({ entity }: { entity: DataModelEntity }) {
                     )}
                     <div className="space-y-1 flex-1 min-w-0">
                         <CardTitle className="text-base flex items-center gap-2">
+                            <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 p-0 text-muted-foreground" tabIndex={-1}>
+                                {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            </Button>
                             <EntityTypeBadge entityType="entity.socialProfile" />
                             {displayTitle}
                         </CardTitle>
@@ -71,21 +79,23 @@ export function SocialProfileCard({ entity }: { entity: DataModelEntity }) {
                 </div>
             </CardHeader>
 
-            <CardContent className="space-y-3 pt-0">
-                {profileUrl && (
-                    <div>
-                        <TypedValueView item={profileUrl} />
-                    </div>
-                )}
-                {userId && (
-                    <div className="space-y-0.5">
-                        <p className="text-xs uppercase text-muted-foreground">User ID</p>
-                        <p className="text-sm font-mono">{String(userId.value)}</p>
-                    </div>
-                )}
+            {open && (
+                <CardContent className="space-y-3 pt-0">
+                    {profileUrl && (
+                        <div>
+                            <TypedValueView item={profileUrl} />
+                        </div>
+                    )}
+                    {userId && (
+                        <div className="space-y-0.5">
+                            <p className="text-xs uppercase text-muted-foreground">User ID</p>
+                            <p className="text-sm font-mono">{String(userId.value)}</p>
+                        </div>
+                    )}
 
-                <EntityCardFooter entity={entity} />
-            </CardContent>
+                    <EntityCardFooter entity={entity} />
+                </CardContent>
+            )}
         </Card>
     );
 }

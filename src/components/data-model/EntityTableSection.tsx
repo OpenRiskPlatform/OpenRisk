@@ -69,7 +69,7 @@ export function EntityTableSection({
     };
 
     return (
-        <div className={flat ? "overflow-x-auto" : "overflow-hidden rounded-[24px] border border-border/70 bg-card shadow-[0_18px_40px_-28px_rgba(15,23,42,0.14)]"}>
+        <div className={flat ? "overflow-x-auto" : "rounded-[24px] border border-border/70 bg-card shadow-[0_18px_40px_-28px_rgba(15,23,42,0.14)]"} style={flat ? undefined : { contain: "paint" }}>
             <div className="overflow-x-auto">
                 <Table className="border-separate border-spacing-0">
                     <TableHeader className="[&_tr]:border-b-0">
@@ -165,14 +165,12 @@ export function EntityTableSection({
                                         </TableCell>
                                     </TableRow>
                                     {isExpanded && (
-                                        <TableRow className="bg-accent/30 hover:bg-accent/30">
-                                            <TableCell className="w-10 bg-accent/30" />
-                                            <TableCell colSpan={columns.length} className="bg-accent/30 p-4 lg:p-5">
-                                                <div className="rounded-xl border border-border/50 bg-card/90 shadow-sm p-4">
-                                                    {renderExpanded(entity)}
-                                                </div>
+                                        <TableRow className="bg-accent/20 hover:bg-accent/20">
+                                            <TableCell className="w-10 bg-accent/20" />
+                                            <TableCell colSpan={columns.length} className="bg-accent/20 px-5 py-5">
+                                                {renderExpanded(entity)}
                                             </TableCell>
-                                            <TableCell className="w-24 bg-accent/30" />
+                                            <TableCell className="w-24 bg-accent/20" />
                                         </TableRow>
                                     )}
                                 </Fragment>
