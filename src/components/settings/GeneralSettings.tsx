@@ -67,20 +67,16 @@ export function GeneralSettings({
     }
   };
 
-  const handleThemeChange = async (value: "light" | "dark" | "system" | "ocean" | "forest" | "midnight") => {
+  const handleThemeChange = async (value: "light" | "dark" | "system" | "ocean" | "forest" | "midnight" | "monokai" | "angine") => {
     if (!projectDir) {
       return;
     }
 
     setSavingTheme(true);
     try {
-      // Custom color profiles are frontend-only — only persist to global settings store.
-      // Standard modes (light/dark/system) are also stored in the backend project record.
-      const isStandardTheme = value === "light" || value === "dark" || value === "system";
-      if (isStandardTheme) {
-        const updated = await unwrap(backendClient.updateProjectSettings(null, value, null));
-        onProjectSettingsUpdated(updated);
-      }
+      // All themes are now persisted in both backend and global settings store.
+      const updated = await unwrap(backendClient.updateProjectSettings(null, value, null));
+      onProjectSettingsUpdated(updated);
       await updateGlobalSettings({ theme: value });
     } finally {
       setSavingTheme(false);
@@ -269,13 +265,13 @@ export function GeneralSettings({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                  <SelectItem value="light">Light</SelectItem>
-                  <SelectItem value="dark">Dark</SelectItem>
-                  <SelectItem value="system">System</SelectItem>
-                  <SelectItem value="ocean">Ocean</SelectItem>
-                  <SelectItem value="forest">Forest</SelectItem>
-                  <SelectItem value="midnight">Midnight</SelectItem>
-                </SelectContent>
+                <SelectItem value="light">Light</SelectItem>
+                <SelectItem value="dark">Dark</SelectItem>
+                <SelectItem value="system">System</SelectItem>
+                <SelectItem value="ocean">Ocean</SelectItem>
+                <SelectItem value="forest">Forest</SelectItem>
+                <SelectItem value="midnight">Midnight</SelectItem>
+                <SelectItem value="monokai">One Monokai</SelectItem>                  <SelectItem value="angine">Angine de Poitrine</SelectItem>              </SelectContent>
             </Select>
           </div>
 

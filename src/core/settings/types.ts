@@ -2,7 +2,7 @@
  * Settings System Type Definitions
  */
 
-export type ThemeValue = "light" | "dark" | "system" | "ocean" | "forest" | "midnight";
+export type ThemeValue = "light" | "dark" | "system" | "ocean" | "forest" | "midnight" | "monokai" | "angine";
 
 export interface GlobalSettings {
   theme: ThemeValue;

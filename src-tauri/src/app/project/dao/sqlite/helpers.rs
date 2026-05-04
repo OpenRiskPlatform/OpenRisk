@@ -13,8 +13,10 @@ pub(super) fn conn_unavailable() -> PersistenceError {
 
 pub(super) fn normalize_theme(value: Option<String>) -> String {
     match value.as_deref() {
-        Some("light") => "light".to_string(),
-        Some("dark") => "dark".to_string(),
+        Some(
+            t @ ("light" | "dark" | "system" | "ocean" | "forest" | "midnight" | "monokai"
+            | "angine"),
+        ) => t.to_string(),
         _ => "system".to_string(),
     }
 }

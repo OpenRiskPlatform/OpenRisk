@@ -1,0 +1,1 @@
+ALTER TABLE ProjectSettings ADD COLUMN is_preview INTEGER NOT NULL DEFAULT 0;

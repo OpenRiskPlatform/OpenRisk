@@ -5,7 +5,7 @@
 
 import type { GlobalSettings, PluginSettings, SettingsStore, ThemeValue } from "./types";
 
-const VALID_THEMES: ThemeValue[] = ["light", "dark", "system", "ocean", "forest", "midnight"];
+const VALID_THEMES: ThemeValue[] = ["light", "dark", "system", "ocean", "forest", "midnight", "monokai", "angine"];
 
 const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   theme: "system",

@@ -3,16 +3,20 @@
  */
 
 import { useState } from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Eye, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ProjectSummary } from "@/core/backend/bindings";
 
 interface InfoSettingsProps {
     projectDir?: string;
     project: ProjectSummary | null;
+    isPreview?: boolean;
+    exportingPreview?: boolean;
+    exportPreviewError?: string | null;
+    onExportAsPreview?: () => void;
 }
 
-export function InfoSettings({ projectDir, project }: InfoSettingsProps) {
+export function InfoSettings({ projectDir, project, isPreview, exportingPreview, exportPreviewError, onExportAsPreview }: InfoSettingsProps) {
     return (
         <div className="space-y-6">
             <div>
@@ -38,6 +42,30 @@ export function InfoSettings({ projectDir, project }: InfoSettingsProps) {
                     <InfoItem label="Project ID" value={project.id} />
                     <InfoItem label="Directory" value={project.directory} full />
                     <InfoItem label="Audit" value={project.audit ?? "Not configured"} />
+                </div>
+            )}
+
+            {projectDir && !isPreview && (
+                <div className="space-y-2">
+                    <h3 className="text-base font-medium">Export as Preview</h3>
+                    <p className="text-sm text-muted-foreground">
+                        Creates a copy of this project that can be shared safely. The recipient
+                        can run all plugins but cannot view or change any credentials or settings.
+                    </p>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={onExportAsPreview}
+                        disabled={exportingPreview}
+                    >
+                        {exportingPreview
+                            ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            : <Eye className="mr-2 h-4 w-4" />}
+                        Export as Preview
+                    </Button>
+                    {exportPreviewError && (
+                        <p className="text-sm text-destructive">{exportPreviewError}</p>
+                    )}
                 </div>
             )}
         </div>

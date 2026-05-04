@@ -9,9 +9,10 @@ import type { SettingsCategory } from "./SettingsDialog";
 interface SettingsSidebarProps {
   activeCategory: SettingsCategory;
   onCategoryChange: (category: SettingsCategory) => void;
+  isPreview?: boolean;
 }
 
-const categories = [
+const allCategories = [
   { id: "info" as const, label: "Info", icon: Info },
   { id: "general" as const, label: "General", icon: Settings },
   { id: "plugins" as const, label: "Plugins", icon: Puzzle },
@@ -21,7 +22,11 @@ const categories = [
 export function SettingsSidebar({
   activeCategory,
   onCategoryChange,
+  isPreview,
 }: SettingsSidebarProps) {
+  const categories = isPreview
+    ? allCategories.filter((c) => c.id === "info")
+    : allCategories;
   return (
     <div className="w-56 border-r-2 bg-muted/20 p-4">
       <div className="space-y-1">

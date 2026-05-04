@@ -12,7 +12,9 @@ import { InfoSettings } from "./InfoSettings";
 import { useBackendClient } from "@/hooks/useBackendClient";
 import { unwrap } from "@/lib/utils";
 import type { ProjectSettingsPayload } from "@/core/backend/bindings";
+import type { ThemeValue } from "@/core/settings/types";
 import { useSettings } from "@/core/settings/SettingsContext";
+import { save } from "@tauri-apps/plugin-dialog";
 
 export type SettingsCategory = "info" | "general" | "plugins" | "manage-plugins";
 
@@ -33,6 +35,15 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
   );
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [exportingPreview, setExportingPreview] = useState(false);
+  const [exportPreviewError, setExportPreviewError] = useState<string | null>(null);
+
+  const isPreview = settingsData?.project?.is_preview ?? false;
+
+  // In preview mode, only the Info tab is accessible.
+  useEffect(() => {
+    if (isPreview) setActiveCategory("info");
+  }, [isPreview]);
 
   useEffect(() => {
     if (open) {
@@ -58,17 +69,14 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
 
     unwrap(backendClient.loadSettings())
       .then((payload) => {
-          if (!cancelled) {
-            setSettingsData(payload);
-            // Only sync theme from backend if no custom profile is active.
-            // Custom profiles (ocean/forest/midnight) live in the frontend store only.
-            const CUSTOM_THEMES = ["ocean", "forest", "midnight"];
-            const themeUpdate: Record<string, unknown> = { advancedMode: payload.projectSettings?.advancedMode ?? false };
-            if (!CUSTOM_THEMES.includes(globalSettings.theme)) {
-              themeUpdate.theme = payload.projectSettings?.theme ?? "system";
-            }
-            updateGlobalSettings(themeUpdate as Parameters<typeof updateGlobalSettings>[0]);
-          }
+        if (!cancelled) {
+          setSettingsData(payload);
+          // Sync theme and settings from backend.
+          updateGlobalSettings({
+            advancedMode: payload.projectSettings?.advancedMode ?? false,
+            theme: (payload.projectSettings?.theme ?? "system") as ThemeValue,
+          });
+        }
       })
       .catch((err) => {
         if (!cancelled) {
@@ -139,6 +147,24 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
     );
   }, []);
 
+  const handleExportAsPreview = useCallback(async () => {
+    setExportPreviewError(null);
+    const destPath = await save({
+      title: "Save Preview Project",
+      defaultPath: "preview.orproj",
+      filters: [{ name: "OpenRisk Project", extensions: ["orproj"] }],
+    });
+    if (!destPath) return;
+    setExportingPreview(true);
+    try {
+      await unwrap(backendClient.createPreviewProject(destPath));
+    } catch (err) {
+      setExportPreviewError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setExportingPreview(false);
+    }
+  }, [backendClient]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl h-[80vh] p-0 select-text">
@@ -147,17 +173,27 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
           <SettingsSidebar
             activeCategory={activeCategory}
             onCategoryChange={setActiveCategory}
+            isPreview={isPreview}
           />
 
           {/* Content Area */}
           <div className="flex-1 flex flex-col min-h-0 p-6">
+            {isPreview && (
+              <div className="mb-4 rounded-md border border-yellow-400 bg-yellow-50 dark:bg-yellow-950/30 px-4 py-2 text-sm text-yellow-800 dark:text-yellow-300">
+                This is a <strong>read-only preview</strong> project. Settings and credentials cannot be viewed or modified.
+              </div>
+            )}
             {activeCategory === "info" && (
               <InfoSettings
                 projectDir={projectDir}
                 project={settingsData?.project ?? null}
+                isPreview={isPreview}
+                exportingPreview={exportingPreview}
+                exportPreviewError={exportPreviewError}
+                onExportAsPreview={handleExportAsPreview}
               />
             )}
-            {activeCategory === "general" && (
+            {!isPreview && activeCategory === "general" && (
               <GeneralSettings
                 projectDir={projectDir}
                 projectName={settingsData?.project?.name ?? ""}
@@ -172,7 +208,7 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
                 onProjectNameUpdated={handleProjectNameUpdated}
               />
             )}
-            {activeCategory === "plugins" && (
+            {!isPreview && activeCategory === "plugins" && (
               <PluginSettings
                 projectDir={projectDir}
                 projectSettings={settingsData?.projectSettings ?? null}
@@ -187,7 +223,7 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
                 onPluginUpdated={handlePluginUpdated}
               />
             )}
-            {activeCategory === "manage-plugins" && (
+            {!isPreview && activeCategory === "manage-plugins" && (
               <ManagePlugins
                 projectDir={projectDir}
                 plugins={settingsData?.plugins ?? []}

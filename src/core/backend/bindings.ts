@@ -107,6 +107,14 @@ export const commands = {
 	 */
 	getPluginRegistry: () => typedError<PluginRegistryRecord, AppError>(__TAURI_INVOKE("get_plugin_registry")),
 	/**
+	 *  Export the currently open project as a read-only preview copy at `dest_path`.
+	 * 
+	 *  The copy retains all plugin code and credentials so plugins can run, but the
+	 *  backend will permanently refuse all settings writes and will never expose
+	 *  credential values to the frontend.
+	 */
+	createPreviewProject: (destPath: string) => typedError<null, AppError>(__TAURI_INVOKE("create_preview_project", { destPath })),
+	/**
 	 *  Probe the lock status of a project file *without* opening it.
 	 * 
 	 *  Call this before `open_project` to determine whether a password prompt is needed.
@@ -279,6 +287,7 @@ export type ProjectSettingsRecord = {
 	locale: string,
 	theme: string,
 	advancedMode: boolean,
+	isPreview: boolean,
 };
 
 // Lightweight project summary returned after open/create.
@@ -287,6 +296,11 @@ export type ProjectSummary = {
 	name: string,
 	audit: string | null,
 	directory: string,
+	/**
+	 *  When true this is a read-only copy: the backend refuses all settings writes
+	 *  and never sends credential values to the frontend.
+	 */
+	is_preview: boolean,
 };
 
 export type RegistryAuthorRecord = {

@@ -346,3 +346,21 @@ pub async fn get_plugin_registry() -> Result<PluginRegistryRecord, AppError> {
         .await
         .map_err(|e| AppError::Internal(format!("Invalid plugin registry payload: {}", e)))
 }
+
+/// Export the currently open project as a read-only preview copy at `dest_path`.
+///
+/// The copy retains all plugin code and credentials so plugins can run, but the
+/// backend will permanently refuse all settings writes and will never expose
+/// credential values to the frontend.
+#[tauri::command]
+#[specta::specta]
+pub async fn create_preview_project(
+    dest_path: String,
+    state: tauri::State<'_, ProjectState>,
+) -> Result<(), AppError> {
+    let project = get_open_project(&state).await?;
+    project
+        .export_as_preview(&std::path::PathBuf::from(dest_path))
+        .await
+        .map_err(AppError::from)
+}

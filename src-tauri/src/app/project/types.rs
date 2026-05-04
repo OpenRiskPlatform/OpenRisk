@@ -29,6 +29,9 @@ pub struct ProjectSummary {
     pub name: String,
     pub audit: Option<String>,
     pub directory: PathBuf,
+    /// When true this is a read-only copy: the backend refuses all settings writes
+    /// and never sends credential values to the frontend.
+    pub is_preview: bool,
 }
 
 /// Project-wide settings record persisted in the `ProjectSettings` table.
@@ -40,6 +43,7 @@ pub struct ProjectSettingsRecord {
     pub locale: String,
     pub theme: String,
     pub advanced_mode: bool,
+    pub is_preview: bool,
 }
 
 // ---------------------------------------------------------------------------

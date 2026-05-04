@@ -126,6 +126,53 @@
     --input: 240 18% 18%;
     --ring: 249 80% 68%;
   }
+
+  /* ── Angine de Poitrine: ivory cream with crimson accents ── */
+  .theme-angine {
+    --background: 350 40% 97%;
+    --foreground: 345 55% 12%;
+    --card: 350 30% 99%;
+    --card-foreground: 345 55% 12%;
+    --popover: 350 30% 99%;
+    --popover-foreground: 345 55% 12%;
+    --primary: 350 78% 42%;
+    --primary-foreground: 350 40% 97%;
+    --secondary: 350 25% 91%;
+    --secondary-foreground: 345 55% 12%;
+    --muted: 350 20% 93%;
+    --muted-foreground: 345 20% 45%;
+    --accent: 340 55% 62%;
+    --accent-foreground: 350 40% 97%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 350 25% 85%;
+    --input: 350 25% 85%;
+    --ring: 350 78% 42%;
+  }
+
+  /* ── One Monokai (azemoh): One Dark UI + Monokai syntax ── */
+  /* bg #282c34  fg #abb2bf  blue #528bff  red #e06c75  green #98c379 */
+  .theme-monokai {
+    --background: 220 13% 18%;
+    --foreground: 219 14% 71%;
+    --card: 216 13% 15%;
+    --card-foreground: 219 14% 71%;
+    --popover: 216 13% 15%;
+    --popover-foreground: 219 14% 71%;
+    --primary: 220 100% 66%;
+    --primary-foreground: 220 13% 18%;
+    --secondary: 223 13% 21%;
+    --secondary-foreground: 219 14% 71%;
+    --muted: 216 13% 15%;
+    --muted-foreground: 218 10% 45%;
+    --accent: 220 14% 25%;
+    --accent-foreground: 219 14% 71%;
+    --destructive: 4 55% 49%;
+    --destructive-foreground: 219 14% 71%;
+    --border: 223 13% 21%;
+    --input: 220 9% 13%;
+    --ring: 220 100% 66%;
+  }
 }
 
 @layer base {
@@ -136,6 +183,19 @@
   body {
     @apply bg-background text-foreground;
     font-family: system-ui, -apple-system, sans-serif;
+  }
+
+  /* Polka-dot overlay for angine de poitrine theme */
+  html.theme-angine::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    background-image: radial-gradient(circle,
+        hsl(345 55% 8% / 0.65) 2.5px,
+        transparent 2.5px);
+    background-size: 18px 18px;
   }
 }
 
