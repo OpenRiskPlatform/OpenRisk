@@ -13,7 +13,7 @@ export function useTheme() {
     const root = window.document.documentElement;
 
     // Remove all theme classes
-    root.classList.remove("light", "dark", "theme-ocean", "theme-forest", "theme-midnight");
+    root.classList.remove("light", "dark", "theme-ocean", "theme-forest", "theme-midnight", "theme-monokai", "theme-angine");
 
     const theme = globalSettings.theme;
 
@@ -23,8 +23,9 @@ export function useTheme() {
     } else if (theme === "light" || theme === "dark") {
       root.classList.add(theme);
     } else {
-      // Custom color profile — still needs a base (light) plus the profile class
-      root.classList.add("light");
+      // Custom color profile — dark themes need "dark" as base, light themes need "light"
+      const DARK_CUSTOM_THEMES = ["midnight", "monokai"];
+      root.classList.add(DARK_CUSTOM_THEMES.includes(theme) ? "dark" : "light");
       root.classList.add(`theme-${theme}`);
     }
   }, [globalSettings.theme]);
@@ -37,7 +38,7 @@ export function useTheme() {
 
     const handleChange = (e: MediaQueryListEvent) => {
       const root = window.document.documentElement;
-      root.classList.remove("light", "dark", "theme-ocean", "theme-forest", "theme-midnight");
+      root.classList.remove("light", "dark", "theme-ocean", "theme-forest", "theme-midnight", "theme-monokai", "theme-angine");
       root.classList.add(e.matches ? "dark" : "light");
     };
 

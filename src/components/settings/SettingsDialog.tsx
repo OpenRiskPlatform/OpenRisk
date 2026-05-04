@@ -12,6 +12,7 @@ import { InfoSettings } from "./InfoSettings";
 import { useBackendClient } from "@/hooks/useBackendClient";
 import { unwrap } from "@/lib/utils";
 import type { ProjectSettingsPayload } from "@/core/backend/bindings";
+import type { ThemeValue } from "@/core/settings/types";
 import { useSettings } from "@/core/settings/SettingsContext";
 
 export type SettingsCategory = "info" | "general" | "plugins" | "manage-plugins";
@@ -58,17 +59,14 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
 
     unwrap(backendClient.loadSettings())
       .then((payload) => {
-          if (!cancelled) {
-            setSettingsData(payload);
-            // Only sync theme from backend if no custom profile is active.
-            // Custom profiles (ocean/forest/midnight) live in the frontend store only.
-            const CUSTOM_THEMES = ["ocean", "forest", "midnight"];
-            const themeUpdate: Record<string, unknown> = { advancedMode: payload.projectSettings?.advancedMode ?? false };
-            if (!CUSTOM_THEMES.includes(globalSettings.theme)) {
-              themeUpdate.theme = payload.projectSettings?.theme ?? "system";
-            }
-            updateGlobalSettings(themeUpdate as Parameters<typeof updateGlobalSettings>[0]);
-          }
+        if (!cancelled) {
+          setSettingsData(payload);
+          // Sync theme and settings from backend.
+          updateGlobalSettings({
+            advancedMode: payload.projectSettings?.advancedMode ?? false,
+            theme: (payload.projectSettings?.theme ?? "system") as ThemeValue,
+          });
+        }
       })
       .catch((err) => {
         if (!cancelled) {

@@ -49,13 +49,7 @@ export function MainLayout({
       .then((payload) => {
         if (!cancelled) {
           const backendTheme = (payload.projectSettings?.theme ?? "system") as ThemeValue;
-          // Only apply the backend theme if the user hasn't already chosen a custom
-          // color profile (ocean/forest/midnight). Custom profiles are stored in the
-          // frontend settings store only, so the backend can't know about them.
-          const CUSTOM_THEMES: ThemeValue[] = ["ocean", "forest", "midnight"];
-          if (!CUSTOM_THEMES.includes(globalSettings.theme)) {
-            updateGlobalSettings({ theme: backendTheme });
-          }
+          updateGlobalSettings({ theme: backendTheme });
         }
       })
       .catch(() => {
