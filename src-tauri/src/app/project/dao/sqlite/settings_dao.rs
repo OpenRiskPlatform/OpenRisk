@@ -6,6 +6,24 @@ use super::helpers::{
 use crate::app::project::plugins::LocalPluginBundle;
 use crate::app::project::session::SqliteProjectPersistence;
 use crate::app::project::types::*;
+use sqlx::SqliteConnection;
+
+/// Returns an error if the current project is marked as a preview (read-only copy).
+/// Called before every write operation to enforce the backend-level read-only lock.
+async fn ensure_not_preview(conn: &mut SqliteConnection) -> Result<(), PersistenceError> {
+    let is_preview: i64 = sqlx::query_scalar!(
+        r#"SELECT ps.is_preview as "is_preview!" FROM ProjectSettings ps
+           INNER JOIN Project p ON p.project_settings_id = ps.id LIMIT 1"#
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+    if is_preview != 0 {
+        return Err(PersistenceError::Validation(
+            "This is a read-only preview project. Settings cannot be modified.".into(),
+        ));
+    }
+    Ok(())
+}
 
 async fn ensure_project_plugin_link(
     conn: &mut sqlx::SqliteConnection,
@@ -34,7 +52,8 @@ pub(super) async fn load_settings(
     let proj = sqlx::query!(
         r#"SELECT p.id as "id!", p.name as "name!", p.audit,
                   p.project_settings_id as "project_settings_id!",
-                  ps.description, ps.locale, ps.theme, ps.advanced_mode as "advanced_mode!"
+                  ps.description, ps.locale, ps.theme, ps.advanced_mode as "advanced_mode!",
+                  ps.is_preview as "is_preview!"
            FROM Project p
            INNER JOIN ProjectSettings ps ON ps.id = p.project_settings_id
            LIMIT 1"#
@@ -43,6 +62,7 @@ pub(super) async fn load_settings(
     .await?;
 
     let psid = proj.project_settings_id.clone();
+    let is_preview = proj.is_preview != 0;
 
     let plugin_ids = sqlx::query!(
         r#"SELECT plugin_id as "plugin_id!" FROM ProjectPlugin WHERE project_id = ?1"#,
@@ -53,7 +73,13 @@ pub(super) async fn load_settings(
 
     let mut plugins = Vec::new();
     for row in &plugin_ids {
-        plugins.push(load_plugin_record(conn, &row.plugin_id, &proj.id, &psid).await?);
+        let mut rec = load_plugin_record(conn, &row.plugin_id, &proj.id, &psid).await?;
+        // In preview mode: redact all credential values — plugins can still run
+        // (the raw DB values are intact) but the frontend never sees them.
+        if is_preview {
+            rec.setting_values.clear();
+        }
+        plugins.push(rec);
     }
 
     Ok(ProjectSettingsPayload {
@@ -62,6 +88,7 @@ pub(super) async fn load_settings(
             name: proj.name,
             audit: proj.audit,
             directory: this.db_path.clone(),
+            is_preview,
         },
         project_settings: ProjectSettingsRecord {
             id: psid,
@@ -69,6 +96,7 @@ pub(super) async fn load_settings(
             locale: proj.locale.unwrap_or_else(|| "en-US".to_string()),
             theme: normalize_theme(proj.theme),
             advanced_mode: proj.advanced_mode != 0,
+            is_preview,
         },
         plugins,
     })
@@ -88,6 +116,8 @@ pub(super) async fn update_project_settings(
 
     let mut guard = this.conn.lock().await;
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
+
+    ensure_not_preview(&mut *conn).await?;
 
     if let Some(ref n) = name {
         let trimmed = n.trim().to_string();
@@ -133,6 +163,7 @@ pub(super) async fn update_project_settings(
         locale: row.locale.unwrap_or_else(|| "en-US".to_string()),
         theme: normalize_theme(row.theme),
         advanced_mode: row.advanced_mode != 0,
+        is_preview: false,
     })
 }
 
@@ -144,6 +175,8 @@ pub(super) async fn set_plugin_setting(
 ) -> Result<PluginRecord, PersistenceError> {
     let mut guard = this.conn.lock().await;
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
+
+    ensure_not_preview(&mut *conn).await?;
 
     let psid = project_settings_id(&mut *conn).await?;
     let project_id = project_id(&mut *conn).await?;
@@ -174,6 +207,7 @@ pub(super) async fn save_plugin(
 ) -> Result<(), PersistenceError> {
     let mut guard = this.conn.lock().await;
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
+    ensure_not_preview(&mut *conn).await?;
     SqliteProjectPersistence::insert_plugin(conn, bundle).await
 }
 
@@ -401,6 +435,8 @@ pub(super) async fn set_plugin_enabled(
 ) -> Result<PluginRecord, PersistenceError> {
     let mut guard = this.conn.lock().await;
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
+
+    ensure_not_preview(&mut *conn).await?;
 
     let psid = project_settings_id(&mut *conn).await?;
     let project_id = project_id(&mut *conn).await?;

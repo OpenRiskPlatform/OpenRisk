@@ -121,6 +121,7 @@ impl SqliteProjectPersistence {
             name: trimmed_name.to_owned(),
             audit: None,
             directory: db_path.clone(),
+            is_preview: false,
         };
         let instance = Self {
             db_path,
@@ -195,7 +196,11 @@ impl SqliteProjectPersistence {
         migrations::apply_schema(&mut conn).await?;
 
         let project_row = sqlx::query!(
-            r#"SELECT id as "id!: String", name as "name!: String", audit FROM Project LIMIT 1"#
+            r#"SELECT p.id as "id!: String", p.name as "name!: String", p.audit,
+                      ps.is_preview as "is_preview!"
+               FROM Project p
+               INNER JOIN ProjectSettings ps ON ps.id = p.project_settings_id
+               LIMIT 1"#
         )
         .fetch_one(&mut conn)
         .await?;
@@ -209,6 +214,7 @@ impl SqliteProjectPersistence {
             name: project_row.name,
             audit: project_row.audit,
             directory: db_path.clone(),
+            is_preview: project_row.is_preview != 0,
         };
         let instance = Self {
             db_path,
@@ -262,6 +268,70 @@ impl SqliteProjectPersistence {
             }
             _ => false,
         }
+    }
+
+    /// Copy this project to `dest` and stamp the copy as a read-only preview.
+    ///
+    /// The copy keeps all plugin code and credentials so plugins can still run,
+    /// but `load_settings` will redact credential values and all write operations
+    /// will be rejected at the backend level — no frontend enforcement needed.
+    pub async fn export_as_preview(&self, dest: &Path) -> Result<(), PersistenceError> {
+        if dest.exists() {
+            return Err(PersistenceError::Validation(format!(
+                "File {:?} already exists. Choose a different path.",
+                dest
+            )));
+        }
+
+        // Checkpoint the WAL so all pending writes (including migrations) are flushed
+        // into the main DB file before we copy it. Without this, ALTER TABLE from
+        // migration 4 may still live in the -wal sidecar and the copy would be missing
+        // the is_preview column.
+        {
+            let mut guard = self.conn.lock().await;
+            if let Some(ref mut c) = *guard {
+                let _ = sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+                    .execute(&mut *c)
+                    .await;
+            }
+        }
+
+        // Copy the main DB file (WAL is now fully merged).
+        fs::copy(&self.db_path, dest)?;
+
+        // Open the copy (plain first, then try cached key for encrypted projects).
+        let mut conn = match Self::connect(dest, false, None).await {
+            Ok(c) => c,
+            Err(e) if Self::is_encrypted_error(&e) => {
+                if let Some(pw) = get_cached_key(&self.db_path) {
+                    Self::connect(dest, false, Some(pw.as_str()))
+                        .await
+                        .inspect_err(|_err| {
+                            let _ = fs::remove_file(dest);
+                        })?
+                } else {
+                    let _ = fs::remove_file(dest);
+                    return Err(PersistenceError::Validation(
+                        "Cannot export a locked project as preview. Unlock it first.".into(),
+                    ));
+                }
+            }
+            Err(e) => {
+                let _ = fs::remove_file(dest);
+                return Err(e);
+            }
+        };
+
+        // Stamp the copy as preview — irreversible from within the app.
+        sqlx::query("UPDATE ProjectSettings SET is_preview = 1")
+            .execute(&mut conn)
+            .await
+            .map_err(|e| {
+                let _ = fs::remove_file(dest);
+                PersistenceError::Database(e)
+            })?;
+
+        Ok(())
     }
 
     /// Validate that `project_path` points to an existing project file.

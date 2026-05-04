@@ -35,7 +35,7 @@ export function MainLayout({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exitOpen, setExitOpen] = useState(false);
   const backendClient = useBackendClient();
-  const { updateGlobalSettings, globalSettings } = useSettings();
+  const { updateGlobalSettings } = useSettings();
 
   useEffect(() => {
     let cancelled = false;
