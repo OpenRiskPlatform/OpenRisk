@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useBackendClient } from "@/hooks/useBackendClient";
 import { unwrap } from "@/lib/utils";
@@ -238,6 +239,7 @@ export function useProjectWorkspace(
           performedAt: formatScanPerformedAt(scan.createdAt),
           pluginName,
           resultCount: scan.resultCount,
+          errorResultCount: scan.errorResultCount,
           isArchived: scan.isArchived,
           canMoveUp: siblingIndex > 0,
           canMoveDown:
@@ -293,15 +295,32 @@ export function useProjectWorkspace(
         }
 
         setSettingsData(settings);
+        console.log(
+          "[useProjectWorkspace] plugins & inputDefs:",
+          settings.plugins.map((p) => ({
+            id: p.id,
+            name: p.name,
+            inputDefs: p.inputDefs,
+          })),
+        );
+        console.group("[useProjectWorkspace] Plugin statuses on load");
+        console.table(settings.plugins.map((p) => ({
+          id: p.id,
+          name: p.name,
+          enabled: p.enabled,
+          status: p.status,
+          metricValues: JSON.stringify(p.metricValues),
+        })));
+        console.log("[useProjectWorkspace] Full plugin objects on load:", settings.plugins);
+        console.groupEnd();
         setProjectName(settings.project?.name ?? "");
         setScans(sortScans(scansList));
         setSelectedScanId((prev) => {
-          const preferred =
-            selectedScanIdFromRoute ??
-            prev ??
-            scansList.find((scan) => !scan.isArchived)?.id ??
-            scansList[0]?.id ??
-            null;
+          // Only restore a scan if the user explicitly navigated to one via the
+          // route, or if they had already selected one in this session (prev).
+          // Never auto-select the "latest" scan — the page should always open
+          // in "new scan" mode unless the user clicks a history entry.
+          const preferred = selectedScanIdFromRoute ?? prev ?? null;
 
           if (!preferred) {
             return null;
@@ -309,9 +328,7 @@ export function useProjectWorkspace(
 
           return scansList.some((scan) => scan.id === preferred)
             ? preferred
-            : scansList.find((scan) => !scan.isArchived)?.id ??
-                scansList[0]?.id ??
-                null;
+            : null;
         });
         setSettingsError(null);
         setScansError(null);
@@ -414,9 +431,14 @@ export function useProjectWorkspace(
   useEffect(() => {
     const selected = scans.find((scan) => scan.id === selectedScanId);
     if (selected?.isArchived) {
-      setSelectedScanId(scans.find((scan) => !scan.isArchived)?.id ?? null);
+      setSelectedScanId(null);
     }
   }, [scans, selectedScanId]);
+
+  const settingsDataRef = useRef(settingsData);
+  useEffect(() => {
+    settingsDataRef.current = settingsData;
+  }, [settingsData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -434,26 +456,38 @@ export function useProjectWorkspace(
         setScanDetailRecord(detail);
         setDetailError(null);
 
-        const enabledMap: Record<string, boolean> = {};
-        for (const sel of detail.selectedPlugins) {
-          enabledMap[`${sel.pluginId}::${sel.entrypointId}`] = true;
-        }
-        setEnabledPlugins(enabledMap);
-        setSelectedPluginId((prev) =>
-          detail.selectedPlugins[0]?.pluginId ??
-          prev ??
-          settingsData?.plugins.find((plugin) => plugin.enabled)?.id ??
-          null,
-        );
+        // Only restore entrypoint selections and inputs from a scan that has
+        // persisted data (i.e. was previously run). For a fresh empty Draft
+        // (auto-created during runScan) keep whatever the user already has set.
+        if (detail.selectedPlugins.length > 0) {
+          const enabledMap: Record<string, boolean> = {};
+          for (const sel of detail.selectedPlugins) {
+            enabledMap[`${sel.pluginId}::${sel.entrypointId}`] = true;
+          }
+          setEnabledPlugins(enabledMap);
+          setSelectedPluginId((prev) =>
+            detail.selectedPlugins[0]?.pluginId ??
+            prev ??
+            settingsDataRef.current?.plugins.find((plugin) => plugin.enabled)?.id ??
+            null,
+          );
 
-        const incomingInputs: Record<string, Record<string, unknown>> = {};
-        for (const input of detail.inputs) {
-          const key = `${input.pluginId}::${input.entrypointId}`;
-          incomingInputs[key] ??= {};
-          incomingInputs[key][input.fieldName] =
-            input.value.type === "null" ? null : input.value.value;
+          const incomingInputs: Record<string, Record<string, unknown>> = {};
+          for (const input of detail.inputs) {
+            const key = `${input.pluginId}::${input.entrypointId}`;
+            incomingInputs[key] ??= {};
+            incomingInputs[key][input.fieldName] =
+              input.value.type === "null" ? null : input.value.value;
+          }
+          setPluginInputs(incomingInputs);
+        } else {
+          // Fresh Draft — just keep the current plugin selection
+          setSelectedPluginId((prev) =>
+            prev ??
+            settingsDataRef.current?.plugins.find((plugin) => plugin.enabled)?.id ??
+            null,
+          );
         }
-        setPluginInputs(incomingInputs);
       })
       .catch((err) => {
         if (cancelled) {
@@ -471,7 +505,8 @@ export function useProjectWorkspace(
     projectDir,
     projectSessionReady,
     selectedScanId,
-    settingsData?.plugins,
+    // intentionally omitting settingsData?.plugins — we use settingsDataRef
+    // to avoid resetting user's checkbox selections when settings reload
   ]);
 
   useEffect(() => {
@@ -553,21 +588,19 @@ export function useProjectWorkspace(
         [fieldName]: value,
       },
     }));
+    // Clear stale results whenever the user edits an input
+    setSelectedScanId(null);
+    setScanDetailRecord(null);
+    setDetailError(null);
   };
 
   const runScan = async () => {
-    if (
-      !projectDir ||
-      !projectSessionReady ||
-      !selectedScanId ||
-      !scanDetail ||
-      scanDetail.status !== "Draft"
-    ) {
+    if (!projectDir || !projectSessionReady) {
       return;
     }
 
     if (!selectedPluginId) {
-      setDetailError("Select one plugin before run.");
+      setDetailError("Select a plugin before running.");
       return;
     }
 
@@ -584,7 +617,7 @@ export function useProjectWorkspace(
       .filter((sel) => sel.entrypointId.length > 0);
 
     if (!selectedPlugins.length) {
-      setDetailError("Enable at least one plugin before run.");
+      setDetailError("Enable at least one entrypoint before running.");
       return;
     }
 
@@ -592,6 +625,17 @@ export function useProjectWorkspace(
     setDetailError(null);
 
     try {
+      // Auto-create a fresh Draft scan if the current one is not a Draft
+      // (e.g. the user is viewing results and wants to run another scan)
+      let scanId = selectedScanId;
+      if (!scanId || (scanDetail && scanDetail.status !== "Draft")) {
+        const created = await unwrap(backendClient.createScan(null));
+        scanId = created.id;
+        const scansList = await unwrap(backendClient.listScans());
+        setScans(sortScans(scansList));
+        setSelectedScanId(scanId);
+      }
+
       const inputs: ScanEntrypointInput[] = [];
       for (const sel of selectedPlugins) {
         const key = `${sel.pluginId}::${sel.entrypointId}`;
@@ -617,7 +661,7 @@ export function useProjectWorkspace(
       if (smartPreview) {
         try {
           const renamed = await unwrap(
-            backendClient.updateScanPreview(selectedScanId, smartPreview),
+            backendClient.updateScanPreview(scanId, smartPreview),
           );
           setScans((prev) =>
             prev.map((scan) =>
@@ -632,7 +676,7 @@ export function useProjectWorkspace(
       }
 
       const updatedScan = await unwrap(
-        backendClient.runScan(selectedScanId, selectedPlugins, inputs),
+        backendClient.runScan(scanId, selectedPlugins, inputs),
       );
 
       setScans((prev) =>
@@ -640,15 +684,49 @@ export function useProjectWorkspace(
           prev.map((scan) => (scan.id === updatedScan.id ? updatedScan : scan)),
         ),
       );
-      const freshDetail = await unwrap(backendClient.getScan(selectedScanId));
+      const freshDetail = await unwrap(backendClient.getScan(scanId));
       setScanDetailRecord(freshDetail);
+      setSelectedScanId(scanId);
+
+      // Reload settings to pick up updated plugin statuses (e.g. credit spent)
+      try {
+        const freshSettings = await unwrap(backendClient.loadSettings());
+        setSettingsData(freshSettings);
+
+        // DEBUG: log each plugin's status after scan so it's visible in devtools
+        console.group("[useProjectWorkspace] Plugin statuses after scan");
+        console.table(freshSettings.plugins.map((p) => ({
+          id: p.id,
+          name: p.name,
+          enabled: p.enabled,
+          status: p.status,
+          metricValues: JSON.stringify(p.metricValues),
+        })));
+        console.log("[useProjectWorkspace] Full plugin objects after scan:", freshSettings.plugins);
+        console.groupEnd();
+
+        // Show a dismissable toast for any plugin that reports a "used" status
+        for (const plugin of freshSettings.plugins) {
+          if (plugin.status && /used/i.test(plugin.status)) {
+            toast.info(`${plugin.name}: ${plugin.status}`, {
+              duration: Infinity,
+              dismissible: true,
+              description: "This charge was incurred during the last scan.",
+            });
+          }
+        }
+      } catch {
+        // Non-critical — ignore settings refresh errors after scan
+      }
     } catch (err) {
       setDetailError(err instanceof Error ? err.message : String(err));
-      setScans((prev) =>
-        prev.map((scan) =>
-          scan.id === selectedScanId ? { ...scan, status: "Failed" } : scan,
-        ),
-      );
+      if (selectedScanId) {
+        setScans((prev) =>
+          prev.map((scan) =>
+            scan.id === selectedScanId ? { ...scan, status: "Failed" } : scan,
+          ),
+        );
+      }
     } finally {
       setRunning(false);
     }
@@ -717,7 +795,17 @@ export function useProjectWorkspace(
     commitRename,
     cancelRename,
     selectedPluginId,
-    setSelectedPluginId,
+    setSelectedPluginId: (pluginId: string | null) => {
+      // Clear current scan results and form state when switching to a different plugin
+      if (pluginId !== selectedPluginId) {
+        setSelectedScanId(null);
+        setScanDetailRecord(null);
+        setDetailError(null);
+        setEnabledPlugins({});
+        setPluginInputs({});
+      }
+      setSelectedPluginId(pluginId);
+    },
     enabledPlugins,
     setPluginEnabled,
     pluginInputs,

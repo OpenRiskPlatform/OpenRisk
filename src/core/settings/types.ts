@@ -2,8 +2,10 @@
  * Settings System Type Definitions
  */
 
+export type ThemeValue = "light" | "dark" | "system" | "ocean" | "forest" | "midnight";
+
 export interface GlobalSettings {
-  theme: "light" | "dark" | "system";
+  theme: ThemeValue;
   /** Show technical details (entity IDs, raw keys) in the UI. */
   advancedMode?: boolean;
 }

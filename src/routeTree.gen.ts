@@ -13,6 +13,7 @@ import { Route as ScansRouteImport } from './routes/scans'
 import { Route as ReportRouteImport } from './routes/report'
 import { Route as ProjectRouteImport } from './routes/project'
 import { Route as PrintRouteImport } from './routes/print'
+import { Route as HistoryRouteImport } from './routes/history'
 import { Route as IndexRouteImport } from './routes/index'
 
 const ScansRoute = ScansRouteImport.update({
@@ -35,6 +36,11 @@ const PrintRoute = PrintRouteImport.update({
   path: '/print',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HistoryRoute = HistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -43,6 +49,7 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/history': typeof HistoryRoute
   '/print': typeof PrintRoute
   '/project': typeof ProjectRoute
   '/report': typeof ReportRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/history': typeof HistoryRoute
   '/print': typeof PrintRoute
   '/project': typeof ProjectRoute
   '/report': typeof ReportRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/history': typeof HistoryRoute
   '/print': typeof PrintRoute
   '/project': typeof ProjectRoute
   '/report': typeof ReportRoute
@@ -65,14 +74,22 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/print' | '/project' | '/report' | '/scans'
+  fullPaths: '/' | '/history' | '/print' | '/project' | '/report' | '/scans'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/print' | '/project' | '/report' | '/scans'
-  id: '__root__' | '/' | '/print' | '/project' | '/report' | '/scans'
+  to: '/' | '/history' | '/print' | '/project' | '/report' | '/scans'
+  id:
+    | '__root__'
+    | '/'
+    | '/history'
+    | '/print'
+    | '/project'
+    | '/report'
+    | '/scans'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  HistoryRoute: typeof HistoryRoute
   PrintRoute: typeof PrintRoute
   ProjectRoute: typeof ProjectRoute
   ReportRoute: typeof ReportRoute
@@ -109,6 +126,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PrintRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/history': {
+      id: '/history'
+      path: '/history'
+      fullPath: '/history'
+      preLoaderRoute: typeof HistoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -121,6 +145,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  HistoryRoute: HistoryRoute,
   PrintRoute: PrintRoute,
   ProjectRoute: ProjectRoute,
   ReportRoute: ReportRoute,

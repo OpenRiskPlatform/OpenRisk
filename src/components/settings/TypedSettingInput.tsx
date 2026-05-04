@@ -14,6 +14,8 @@ interface TypedSettingInputProps {
     value: unknown;
     onChange: (value: unknown) => void;
     emptyAsNull?: boolean;
+    placeholder?: string;
+    disabled?: boolean;
 }
 
 export function TypedSettingInput({
@@ -22,13 +24,15 @@ export function TypedSettingInput({
     value,
     onChange,
     emptyAsNull = false,
+    placeholder,
+    disabled = false,
 }: TypedSettingInputProps) {
     if (options && options.length > 0) {
         const strValue = value === null || value === undefined ? "" : String(value);
         return (
-            <Select value={strValue || options[0]} onValueChange={(v) => onChange(v)}>
+            <Select value={strValue || options[0]} onValueChange={(v) => onChange(v)} disabled={disabled}>
                 <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder={placeholder} />
                 </SelectTrigger>
                 <SelectContent>
                     {options.map((opt) => (
@@ -47,6 +51,7 @@ export function TypedSettingInput({
                 <Switch
                     checked={Boolean(value)}
                     onCheckedChange={(checked) => onChange(checked)}
+                    disabled={disabled}
                 />
             </div>
         );
@@ -56,6 +61,8 @@ export function TypedSettingInput({
         return (
             <Input
                 type="number"
+                placeholder={placeholder}
+                disabled={disabled}
                 value={typeof value === "number" ? String(value) : ""}
                 onChange={(event) => {
                     const raw = event.target.value;
@@ -74,6 +81,8 @@ export function TypedSettingInput({
         return (
             <Input
                 type="date"
+                placeholder={placeholder}
+                disabled={disabled}
                 value={value === null || value === undefined ? "" : String(value)}
                 onChange={(event) => onChange(event.target.value)}
             />
@@ -84,6 +93,8 @@ export function TypedSettingInput({
         return (
             <Input
                 type="url"
+                placeholder={placeholder}
+                disabled={disabled}
                 value={value === null || value === undefined ? "" : String(value)}
                 onChange={(event) => onChange(event.target.value)}
             />
@@ -93,6 +104,8 @@ export function TypedSettingInput({
     return (
         <Input
             type="text"
+            placeholder={placeholder}
+            disabled={disabled}
             value={value === null || value === undefined ? "" : String(value)}
             onChange={(event) => onChange(event.target.value)}
         />

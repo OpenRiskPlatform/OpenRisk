@@ -91,9 +91,10 @@ export function PrintPage({ projectDir, routeScanId }: PrintPageProps) {
       projectDir={projectDir}
       selectedScanId={workspace.selectedScanId}
       onGoBack={() => void goBack()}
+      hasPlugins={workspace.settingsData === null ? true : workspace.settingsData.plugins.length > 0}
     >
-      <div className="min-h-full bg-muted/[0.18] px-6 py-6 lg:px-8 xl:px-10">
-        <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-6">
+      <div className="min-h-full bg-muted/[0.18] px-16 py-10 lg:px-24 xl:px-32">
+        <div className="flex w-full flex-col gap-6">
           <div className="rounded-[28px] border border-border/70 bg-card px-6 py-6 shadow-[0_20px_46px_-34px_rgba(15,23,42,0.18)]">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div className="space-y-3">

@@ -49,56 +49,44 @@ export function EntityCardFooter({
     const propertiesCount = props.length + groupedExtra.length;
 
     return (
-        <div className="mt-2 space-y-4 border-t pt-4">
+        <div className="mt-2 space-y-3 border-t border-border/40 pt-4">
             {advancedMode && (
                 <p className="text-xs text-muted-foreground font-mono break-all">ID: {entity.$id}</p>
             )}
 
             {propertiesCount > 0 && (
-                <div className="rounded-2xl border border-border/70 bg-muted/[0.12] px-5 py-5">
-                    <div className="mb-5 space-y-1">
-                        <p className="text-sm font-medium">Properties</p>
-                        <p className="text-xs text-muted-foreground">
-                            {propertiesCount} grouped field{propertiesCount === 1 ? "" : "s"}
-                        </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        {props.map(([key, values]) => (
-                            <PropertyGroupCard
-                                key={`prop-${key}`}
-                                label={key}
-                                values={values as TypedValue[]}
-                            />
-                        ))}
-
-                        {groupedExtra.map((group) => (
-                            <PropertyGroupCard
-                                key={`extra-${group.key}`}
-                                label={group.label}
-                                values={group.values}
-                            />
-                        ))}
-                    </div>
+                <div className="space-y-2">
+                    {props.map(([key, values]) => (
+                        <FlatPropertyRow
+                            key={`prop-${key}`}
+                            label={key}
+                            values={values as TypedValue[]}
+                        />
+                    ))}
+                    {groupedExtra.map((group) => (
+                        <FlatPropertyRow
+                            key={`extra-${group.key}`}
+                            label={group.label}
+                            values={group.values}
+                        />
+                    ))}
                 </div>
             )}
 
             {entity.$sources && entity.$sources.length > 0 && (
-                <div className="space-y-1.5">
-                    <p className="text-xs uppercase text-muted-foreground">Sources</p>
-                    <div className="space-y-1">
-                        {entity.$sources.map((source) => (
-                            <a
-                                key={source.source}
-                                href={source.source}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="block text-sm text-primary underline underline-offset-4 break-all"
-                            >
-                                {source.name}
-                            </a>
-                        ))}
-                    </div>
+                <div className="space-y-1">
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Sources</p>
+                    {entity.$sources.map((source) => (
+                        <a
+                            key={source.source}
+                            href={source.source}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block text-xs text-primary underline underline-offset-4 break-all"
+                        >
+                            {source.name}
+                        </a>
+                    ))}
                 </div>
             )}
         </div>
@@ -141,21 +129,27 @@ function groupExtraValues(items: TypedValue[]) {
     return Array.from(groups.values());
 }
 
-function PropertyGroupCard({
+function FlatPropertyRow({
     label,
     values,
 }: {
     label: string;
     values: TypedValue[];
 }) {
+    const nonEmpty = values.filter((v) => {
+        if (v.value === null || v.value === undefined) return false;
+        if (typeof v.value === "string" && v.value.trim() === "") return false;
+        return true;
+    });
+    if (!nonEmpty.length) return null;
     return (
-        <div className="rounded-xl border border-border/70 bg-background/80 p-4">
-            <p className="text-xs uppercase text-muted-foreground">{label}</p>
-            <div className="mt-3 space-y-2 text-sm">
-                {values.map((value, idx) => (
-                    <div key={`${label}-${idx}`} className="rounded-lg bg-muted/[0.16] px-3 py-2">
+        <div className="flex items-start gap-3 py-1 border-b border-border/30 last:border-0">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground w-32 shrink-0 pt-0.5">{label}</p>
+            <div className="flex flex-wrap gap-1 flex-1 min-w-0">
+                {nonEmpty.map((value, idx) => (
+                    <span key={`${label}-${idx}`} className="text-xs text-foreground">
                         <TypedValueView item={value} />
-                    </div>
+                    </span>
                 ))}
             </div>
         </div>

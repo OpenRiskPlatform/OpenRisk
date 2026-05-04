@@ -7,6 +7,7 @@ import { useBackendClient } from "@/hooks/useBackendClient";
 import { unwrap } from "@/lib/utils";
 import { useSettings } from "@/core/settings/SettingsContext";
 import { Sidebar } from "@/components/ui/Sidebar";
+import type { ThemeValue } from "@/core/settings/types";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +22,7 @@ interface MainLayoutProps {
   projectDir?: string;
   selectedScanId?: string | null;
   onGoBack?: () => void;
+  hasPlugins?: boolean;
 }
 
 export function MainLayout({
@@ -28,11 +30,12 @@ export function MainLayout({
   projectDir,
   selectedScanId,
   onGoBack,
+  hasPlugins = true,
 }: MainLayoutProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exitOpen, setExitOpen] = useState(false);
   const backendClient = useBackendClient();
-  const { updateGlobalSettings } = useSettings();
+  const { updateGlobalSettings, globalSettings } = useSettings();
 
   useEffect(() => {
     let cancelled = false;
@@ -45,7 +48,14 @@ export function MainLayout({
     unwrap(backendClient.loadSettings())
       .then((payload) => {
         if (!cancelled) {
-          updateGlobalSettings({ theme: (payload.projectSettings?.theme ?? "system") as "light" | "dark" | "system" });
+          const backendTheme = (payload.projectSettings?.theme ?? "system") as ThemeValue;
+          // Only apply the backend theme if the user hasn't already chosen a custom
+          // color profile (ocean/forest/midnight). Custom profiles are stored in the
+          // frontend settings store only, so the backend can't know about them.
+          const CUSTOM_THEMES: ThemeValue[] = ["ocean", "forest", "midnight"];
+          if (!CUSTOM_THEMES.includes(globalSettings.theme)) {
+            updateGlobalSettings({ theme: backendTheme });
+          }
         }
       })
       .catch(() => {
@@ -55,7 +65,7 @@ export function MainLayout({
     return () => {
       cancelled = true;
     };
-  }, [projectDir, backendClient, updateGlobalSettings]);
+  }, [projectDir, backendClient]); // intentionally omit globalSettings/updateGlobalSettings to avoid re-running on every theme change
 
   useEffect(() => {
     const handler = () => setSettingsOpen(true);
@@ -103,7 +113,7 @@ export function MainLayout({
       </header>
 
       <div className="flex flex-1 min-h-0">
-        <Sidebar projectDir={projectDir} selectedScanId={selectedScanId} />
+        <Sidebar projectDir={projectDir} selectedScanId={selectedScanId} onQuitClick={() => setExitOpen(true)} hasPlugins={hasPlugins} />
         <main className="flex-1 min-h-0 overflow-auto overscroll-none">{children}</main>
       </div>
 

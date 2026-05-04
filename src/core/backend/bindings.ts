@@ -341,6 +341,7 @@ export type ScanSummaryRecord = {
 	createdAt: string,
 	pluginName: string | null,
 	resultCount: number,
+	errorResultCount: number,
 	isArchived: boolean,
 	sortOrder: number,
 };

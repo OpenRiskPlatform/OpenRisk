@@ -34,7 +34,7 @@ async fn load_scan_result_count(
             let Some(entity_type) = item.get("$entity").and_then(Value::as_str) else {
                 continue;
             };
-            let Some(id) = item.get("id").and_then(Value::as_str) else {
+            let Some(id) = item.get("$id").and_then(Value::as_str) else {
                 continue;
             };
             unique_entities.insert(format!("{}:{}", entity_type, id));
@@ -42,6 +42,19 @@ async fn load_scan_result_count(
     }
 
     Ok(unique_entities.len() as i64)
+}
+
+async fn load_scan_error_result_count(
+    conn: &mut sqlx::SqliteConnection,
+    scan_id: &str,
+) -> Result<i64, PersistenceError> {
+    let count = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!: i64" FROM ScanPluginResult WHERE scan_id = ?1 AND ok = 0"#,
+        scan_id
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+    Ok(count)
 }
 
 struct ScanSummaryRow {
@@ -54,7 +67,11 @@ struct ScanSummaryRow {
     sort_order: i64,
 }
 
-fn map_scan_summary(row: ScanSummaryRow, result_count: i64) -> ScanSummaryRecord {
+fn map_scan_summary(
+    row: ScanSummaryRow,
+    result_count: i64,
+    error_result_count: i64,
+) -> ScanSummaryRecord {
     ScanSummaryRecord {
         id: row.id,
         status: row.status,
@@ -62,6 +79,7 @@ fn map_scan_summary(row: ScanSummaryRow, result_count: i64) -> ScanSummaryRecord
         created_at: row.created_at,
         plugin_name: row.plugin_name,
         result_count,
+        error_result_count,
         is_archived: row.is_archived != 0,
         sort_order: row.sort_order,
     }
@@ -88,6 +106,7 @@ async fn fetch_scan_summary_by_id(
     .await?;
 
     let result_count = load_scan_result_count(conn, scan_id).await?;
+    let error_result_count = load_scan_error_result_count(conn, scan_id).await?;
 
     Ok(map_scan_summary(
         ScanSummaryRow {
@@ -100,6 +119,7 @@ async fn fetch_scan_summary_by_id(
             sort_order: row.sort_order,
         },
         result_count,
+        error_result_count,
     ))
 }
 
@@ -127,6 +147,7 @@ async fn list_scan_summaries_by_project(
     let mut summaries = Vec::new();
     for row in rows {
         let result_count = load_scan_result_count(conn, &row.id).await?;
+        let error_result_count = load_scan_error_result_count(conn, &row.id).await?;
         summaries.push(map_scan_summary(
             ScanSummaryRow {
                 id: row.id.clone(),
@@ -138,6 +159,7 @@ async fn list_scan_summaries_by_project(
                 sort_order: row.sort_order,
             },
             result_count,
+            error_result_count,
         ));
     }
 
@@ -532,6 +554,7 @@ pub(super) async fn create_scan(
         created_at,
         plugin_name: None,
         result_count: 0,
+        error_result_count: 0,
         is_archived: false,
         sort_order: 0,
     })

@@ -14,14 +14,14 @@ export function PluginErrorView({ message }: { message: string }) {
     const stack = stackStart !== -1 ? message.slice(stackStart).trim() : null;
 
     return (
-        <div className="rounded-md border border-red-200 bg-red-50 p-3 space-y-2">
+        <div className="rounded-md border border-destructive/20 bg-destructive/8 dark:bg-destructive/10 p-3 space-y-2">
             <div className="flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
-                <p className="text-sm font-medium text-red-700 leading-snug">{summary}</p>
+                <AlertTriangle className="h-4 w-4 text-red-500 dark:text-red-400 mt-0.5 shrink-0" />
+                <p className="text-sm font-medium text-foreground leading-snug">{summary}</p>
             </div>
             {stack ? (
                 <button
-                    className="flex items-center gap-1 text-xs text-red-400 hover:text-red-600"
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                     onClick={() => setExpanded((v) => !v)}
                 >
                     {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
@@ -29,7 +29,7 @@ export function PluginErrorView({ message }: { message: string }) {
                 </button>
             ) : null}
             {expanded && stack ? (
-                <pre className="text-xs text-red-500 whitespace-pre-wrap break-all bg-red-100 rounded p-2 overflow-auto max-h-48">
+                <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-all bg-muted/40 rounded p-2 overflow-auto max-h-48">
                     {stack}
                 </pre>
             ) : null}
@@ -52,9 +52,9 @@ export function PluginLogsView({ logs }: { logs: PluginLogEntry[] }) {
 
     const levelColor = (level: string) =>
         level === "error"
-            ? "text-red-500"
+            ? "text-destructive/80"
             : level === "warn"
-                ? "text-yellow-600"
+                ? "text-yellow-600 dark:text-yellow-500"
                 : "text-muted-foreground";
 
     return (

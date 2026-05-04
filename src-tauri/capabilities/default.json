@@ -9,6 +9,21 @@
     "dialog:default",
     "fs:default",
     "fs:write-files",
+    "opener:default",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        { "path": "**" },
+        { "path": "$APPDATA/**" },
+        { "path": "$APPCONFIG/**" },
+        { "path": "$APPLOCALDATA/**" },
+        { "path": "$HOME/**" },
+        { "path": "$TEMP/**" },
+        { "path": "/Users/**" },
+        { "path": "/tmp/**" },
+        { "path": "/var/**" }
+      ]
+    },
     {
       "identifier": "fs:scope",
       "allow": [

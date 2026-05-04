@@ -18,8 +18,8 @@
     --muted-foreground: 220 8.9% 46.1%;
     --accent: 220 14.3% 95.9%;
     --accent-foreground: 220.9 39.3% 11%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 20% 98%;
+    --destructive: 0 50% 42%;
+    --destructive-foreground: 0 0% 98%;
     --border: 220 13% 91%;
     --input: 220 13% 91%;
     --ring: 224 71.4% 4.1%;
@@ -46,8 +46,8 @@
     --muted-foreground: 217.9 10.6% 64.9%;
     --accent: 215 27.9% 16.9%;
     --accent-foreground: 210 20% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 20% 98%;
+    --destructive: 0 40% 24%;
+    --destructive-foreground: 0 20% 88%;
     --border: 215 27.9% 16.9%;
     --input: 215 27.9% 16.9%;
     --ring: 216 12.2% 83.9%;
@@ -56,6 +56,75 @@
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
+  }
+
+  /* ── Ocean: cool blue tones ── */
+  .theme-ocean {
+    --background: 210 40% 97%;
+    --foreground: 213 60% 13%;
+    --card: 210 40% 99%;
+    --card-foreground: 213 60% 13%;
+    --popover: 210 40% 99%;
+    --popover-foreground: 213 60% 13%;
+    --primary: 213 80% 30%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 35% 91%;
+    --secondary-foreground: 213 60% 13%;
+    --muted: 210 35% 93%;
+    --muted-foreground: 213 25% 45%;
+    --accent: 210 35% 91%;
+    --accent-foreground: 213 60% 13%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 20% 98%;
+    --border: 210 30% 86%;
+    --input: 210 30% 86%;
+    --ring: 213 80% 30%;
+  }
+
+  /* ── Forest: warm green tones ── */
+  .theme-forest {
+    --background: 120 20% 96%;
+    --foreground: 140 40% 10%;
+    --card: 120 20% 98%;
+    --card-foreground: 140 40% 10%;
+    --popover: 120 20% 98%;
+    --popover-foreground: 140 40% 10%;
+    --primary: 145 55% 22%;
+    --primary-foreground: 120 20% 98%;
+    --secondary: 120 18% 90%;
+    --secondary-foreground: 140 40% 10%;
+    --muted: 120 18% 92%;
+    --muted-foreground: 140 18% 42%;
+    --accent: 120 18% 90%;
+    --accent-foreground: 140 40% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 120 20% 98%;
+    --border: 120 16% 84%;
+    --input: 120 16% 84%;
+    --ring: 145 55% 22%;
+  }
+
+  /* ── Midnight: deep dark with indigo accent ── */
+  .theme-midnight {
+    --background: 240 25% 6%;
+    --foreground: 240 15% 90%;
+    --card: 240 22% 9%;
+    --card-foreground: 240 15% 90%;
+    --popover: 240 22% 9%;
+    --popover-foreground: 240 15% 90%;
+    --primary: 249 80% 68%;
+    --primary-foreground: 240 25% 6%;
+    --secondary: 240 18% 16%;
+    --secondary-foreground: 240 15% 90%;
+    --muted: 240 18% 14%;
+    --muted-foreground: 240 12% 58%;
+    --accent: 240 18% 16%;
+    --accent-foreground: 240 15% 90%;
+    --destructive: 0 40% 28%;
+    --destructive-foreground: 0 20% 88%;
+    --border: 240 18% 18%;
+    --input: 240 18% 18%;
+    --ring: 249 80% 68%;
   }
 }
 

@@ -25,6 +25,7 @@ tauri = { version = "2.10", features = [] }
 tauri-plugin-shell = "2.3.1"
 tauri-plugin-store = "2"
 tauri-plugin-fs = "2"
+tauri-plugin-opener = "2"
 tauri-plugin-mcp-bridge = "0.10"
 rustyscript = { version = "0.12.3", features = [
   "safe_extensions",
@@ -54,6 +55,7 @@ tokio = { version = "1", features = ["sync"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 reqwest = { version = "0.12", default-features = false, features = [
   "rustls-tls",
+  "rustls-tls-native-roots",
   "json",
 ] }
 specta = { version = "=2.0.0-rc.24", features = ["derive", "serde_json"] }

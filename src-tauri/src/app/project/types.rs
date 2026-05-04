@@ -238,6 +238,7 @@ pub struct ScanSummaryRecord {
     pub created_at: String,
     pub plugin_name: Option<String>,
     pub result_count: i64,
+    pub error_result_count: i64,
     pub is_archived: bool,
     pub sort_order: i64,
 }
