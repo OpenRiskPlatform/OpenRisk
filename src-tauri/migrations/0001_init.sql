@@ -5,12 +5,8 @@ CREATE TABLE IF NOT EXISTS ProjectSettings (
     description TEXT,
     locale TEXT,
     theme TEXT,
-    advanced_mode INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS SchemaVersion (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    version INTEGER NOT NULL
+    advanced_mode INTEGER NOT NULL DEFAULT 0,
+    is_preview INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS Project (
@@ -69,6 +65,7 @@ CREATE TABLE IF NOT EXISTS Scan (
     project_id TEXT NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('Draft','Running','Completed','Failed')),
     preview TEXT,
+    created_at TEXT,
     is_archived INTEGER NOT NULL DEFAULT 0,
     sort_order INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (project_id) REFERENCES Project(id) ON DELETE CASCADE
@@ -178,5 +175,3 @@ CREATE TABLE IF NOT EXISTS PluginMetric (
     PRIMARY KEY (plugin_id, metric_name),
     FOREIGN KEY (plugin_id) REFERENCES Plugin(id) ON DELETE CASCADE
 );
-
-INSERT OR IGNORE INTO SchemaVersion (id, version) VALUES (1, 19);
