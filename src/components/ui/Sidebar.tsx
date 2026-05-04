@@ -1,5 +1,5 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { BarChart2, Clock, FileText, Lock, Printer, Search, LogOut } from "lucide-react";
+import { Clock, FileText, Lock, Search, LogOut } from "lucide-react";
 import { Button } from "./button";
 
 interface SidebarProps {
@@ -17,8 +17,6 @@ export function Sidebar({ projectDir, selectedScanId, onQuitClick, hasPlugins = 
     { icon: FileText, label: "Project", route: "/project" as const },
     { icon: Search, label: "Search", route: "/scans" as const },
     { icon: Clock, label: "Scan History", route: "/history" as const },
-    { icon: BarChart2, label: "Stats", route: "/report" as const },
-    { icon: Printer, label: "Print", route: "/print" as const },
   ];
 
   const buildSearch = (route: (typeof navItems)[number]["route"]) => {
