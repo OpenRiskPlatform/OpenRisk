@@ -8,6 +8,8 @@ import {
     XCircle,
     Loader2,
     FileEdit,
+    Printer,
+    Copy,
     Filter,
     X,
 } from "lucide-react";
@@ -15,11 +17,19 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ExportPdfButton } from "@/components/project/ExportPdfButton";
 import { ScanResultsPanel } from "@/components/project/ScanResultsPanel";
 import { useBackendClient } from "@/hooks/useBackendClient";
-import { useProjectWorkspace } from "@/hooks/useProjectWorkspace";
+import { useProjectWorkspace, formatScanPerformedAt } from "@/hooks/useProjectWorkspace";
 import { unwrap } from "@/lib/utils";
+import { buildAllScansPdfDoc } from "@/utils/exportPdf";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeFile } from "@tauri-apps/plugin-fs";
+import { openPath } from "@tauri-apps/plugin-opener";
+import { toast } from "sonner";
+
+const DRAFT_STORAGE_KEY = "openrisk:scan-draft";
 
 interface HistoryPageProps {
     projectDir?: string;
@@ -113,6 +123,70 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
             to: "/history",
             search: { dir: projectDir, scan: scanId },
             replace: true,
+        });
+    };
+
+    const handlePrintAll = async () => {
+        if (!projectDir) return;
+        const completedScans = workspace.scans.filter(
+            (s) => (s.status === "Completed" || s.status === "Failed") && !s.isArchived,
+        );
+        if (!completedScans.length) return;
+
+        const entries = [];
+        for (const scan of completedScans) {
+            try {
+                const detail = await unwrap(backendClient.getScan(scan.id));
+                entries.push({
+                    scanTitle: scan.preview?.trim() || `Scan ${scan.id.slice(0, 8)}`,
+                    performedAt: formatScanPerformedAt(scan.createdAt),
+                    detail,
+                    pluginNameById: workspace.pluginNameById,
+                });
+            } catch {
+                // skip unloadable scans
+            }
+        }
+        if (!entries.length) return;
+
+        const doc = buildAllScansPdfDoc(entries);
+        const path = await save({
+            defaultPath: "openrisk-all-scans.pdf",
+            filters: [{ name: "PDF", extensions: ["pdf"] }],
+        });
+        if (!path) return;
+        const bytes = new Uint8Array(doc.output("arraybuffer"));
+        await writeFile(path, bytes);
+        toast.success("All history of scans successfully saved to: ", {
+            description: path,
+            action: {
+                label: "Open file",
+                onClick: () => void openPath(path),
+            },
+        });
+    };
+
+    const handleEditDraft = async () => {
+        if (!projectDir || !workspace.selectedScanId) return;
+        let detail = selectedScanDetail;
+        if (!detail) {
+            try {
+                detail = await unwrap(backendClient.getScan(workspace.selectedScanId));
+            } catch {
+                return;
+            }
+        }
+        sessionStorage.setItem(
+            DRAFT_STORAGE_KEY,
+            JSON.stringify({
+                projectDir,
+                selectedPlugins: detail.selectedPlugins,
+                inputs: detail.inputs,
+            }),
+        );
+        await navigate({
+            to: "/scans",
+            search: { dir: projectDir, scan: undefined },
         });
     };
 
@@ -243,6 +317,18 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
                                             <Badge variant="secondary" className="ml-1 text-[10px]">
                                                 {filtered.length === allEntries.length ? allEntries.length : `${filtered.length}/${allEntries.length}`}
                                             </Badge>
+                                            <div className="ml-auto">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-7 w-7 text-muted-foreground"
+                                                    title="Export all scans as PDF"
+                                                    onClick={() => void handlePrintAll()}
+                                                    disabled={!allEntries.length}
+                                                >
+                                                    <Printer className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </div>
                                         </div>
                                         {filtered.length === 0 ? (
                                             <p className="p-4 text-sm text-muted-foreground">
@@ -326,12 +412,24 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
                                 <div className="flex-1 min-w-0">
                                 <Card className={`rounded-[24px] self-start ${selectedEntry?.status === "Failed" ? "border-destructive/25" : "border-border/70"}`}>
                                     <CardHeader className="pb-2">
-                                        <CardTitle className="text-base flex items-center gap-2">
-                                            {selectedEntry?.title ?? "Select a scan"}
-                                            {selectedEntry?.status === "Failed" ? (
-                                                                <Badge className="text-[10px] bg-destructive/15 text-destructive border-destructive/25 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700/50 hover:bg-destructive/20">Failed</Badge>
-                                            ) : null}
-                                        </CardTitle>
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <CardTitle className="text-base flex items-center gap-2">
+                                                {selectedEntry?.title ?? "Select a scan"}
+                                                {selectedEntry?.status === "Failed" ? (
+                                                    <Badge className="text-[10px] bg-destructive/15 text-destructive border-destructive/25 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700/50 hover:bg-destructive/20">Failed</Badge>
+                                                ) : null}
+                                            </CardTitle>
+                                            <Button
+                                                variant="secondary"
+                                                size="sm"
+                                                className="gap-2"
+                                                onClick={() => void handleEditDraft()}
+                                                disabled={!selectedEntry}
+                                            >
+                                                <Copy className="h-4 w-4" />
+                                                Edit as draft
+                                            </Button>
+                                        </div>
                                     </CardHeader>
                                     <CardContent className="space-y-3">
                                         {workspace.selectedScanId && selectedEntry ? (
