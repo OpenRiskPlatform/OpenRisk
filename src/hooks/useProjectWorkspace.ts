@@ -162,16 +162,8 @@ interface UseProjectWorkspaceResult {
   projectName: string;
   createScan: () => Promise<void>;
   runScan: () => Promise<void>;
-  applyDraftFromScan: (draft: DraftScanPayload) => void;
   moveScan: (scan: ScanSummaryRecord, delta: -1 | 1) => Promise<void>;
   archiveScan: (scan: ScanSummaryRecord) => Promise<void>;
-}
-
-export interface DraftScanPayload {
-  projectDir: string;
-  selectedPlugins: PluginEntrypointSelection[];
-  inputs: ScanEntrypointInput[];
-  selectedPluginId?: string | null;
 }
 
 export function useProjectWorkspace(
@@ -602,33 +594,6 @@ export function useProjectWorkspace(
     setDetailError(null);
   };
 
-  const applyDraftFromScan = (draft: DraftScanPayload) => {
-    const enabledMap: Record<string, boolean> = {};
-    for (const sel of draft.selectedPlugins) {
-      enabledMap[`${sel.pluginId}::${sel.entrypointId}`] = true;
-    }
-    setEnabledPlugins(enabledMap);
-
-    const incomingInputs: Record<string, Record<string, unknown>> = {};
-    for (const input of draft.inputs) {
-      const key = `${input.pluginId}::${input.entrypointId}`;
-      incomingInputs[key] ??= {};
-      incomingInputs[key][input.fieldName] =
-        input.value.type === "null" ? null : input.value.value;
-    }
-    setPluginInputs(incomingInputs);
-
-    setSelectedPluginId(
-      draft.selectedPluginId ??
-        draft.selectedPlugins[0]?.pluginId ??
-        settingsDataRef.current?.plugins.find((plugin) => plugin.enabled)?.id ??
-        null,
-    );
-    setSelectedScanId(null);
-    setScanDetailRecord(null);
-    setDetailError(null);
-  };
-
   const runScan = async () => {
     if (!projectDir || !projectSessionReady) {
       return;
@@ -851,7 +816,6 @@ export function useProjectWorkspace(
     projectName,
     createScan,
     runScan,
-    applyDraftFromScan,
     moveScan,
     archiveScan,
   };
