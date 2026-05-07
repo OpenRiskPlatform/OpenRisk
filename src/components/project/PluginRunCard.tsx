@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { type FormEvent, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -104,7 +104,15 @@ export function PluginRunCard({
             return v !== undefined && v !== null && String(v).trim() !== "";
         });
 
+    const handleSubmit = (e: FormEvent) => {
+        e.preventDefault();
+        if (!running && canRun && allRequiredFilled) {
+            onRunScan();
+        }
+    };
+
     return (
+        <form onSubmit={handleSubmit}>
         <Card>
             <CardHeader className="pb-2">
                 <CardTitle className="text-base">Search</CardTitle>
@@ -170,7 +178,7 @@ export function PluginRunCard({
             </CardContent>
             <CardFooter className="flex flex-col items-center gap-2 pt-2">
                 <Button
-                    onClick={onRunScan}
+                    type="submit"
                     disabled={running || !canRun || !allRequiredFilled}
                     className="w-full"
                 >
@@ -198,5 +206,6 @@ export function PluginRunCard({
                 )}
             </CardFooter>
         </Card>
+        </form>
     );
 }
