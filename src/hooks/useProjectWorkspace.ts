@@ -705,9 +705,10 @@ export function useProjectWorkspace(
         console.log("[useProjectWorkspace] Full plugin objects after scan:", freshSettings.plugins);
         console.groupEnd();
 
-        // Show a dismissable toast for any plugin that reports a "used" status
+        // Show a dismissable toast for plugins that ran and report a status
+        const ranPluginIds = new Set(selectedPlugins.map((sel) => sel.pluginId));
         for (const plugin of freshSettings.plugins) {
-          if (plugin.status && /used/i.test(plugin.status)) {
+          if (plugin.status && ranPluginIds.has(plugin.id) && /used/i.test(plugin.status)) {
             toast.info(`${plugin.name}: ${plugin.status}`, {
               duration: Infinity,
               dismissible: true,
