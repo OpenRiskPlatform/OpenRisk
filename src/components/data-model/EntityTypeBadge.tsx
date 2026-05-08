@@ -8,7 +8,7 @@ import {
     User,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const ENTITY_META: Record<string, { icon: LucideIcon; label: string; color: string }> = {
     "entity.person": { icon: User, label: "Person", color: "text-blue-500" },
@@ -27,18 +27,16 @@ export function EntityTypeBadge({ entityType }: { entityType: string }) {
     const color = meta?.color ?? "text-muted-foreground";
 
     return (
-        <TooltipProvider delayDuration={300}>
-            <Tooltip>
-                <TooltipTrigger asChild>
-                    <span className={`shrink-0 cursor-default ${color}`}>
-                        <Icon size={16} />
-                    </span>
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                    <span className="font-mono text-xs">{entityType}</span>
-                    <span className="ml-1 text-primary-foreground/70">· {label}</span>
-                </TooltipContent>
-            </Tooltip>
-        </TooltipProvider>
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <span className={`shrink-0 cursor-default ${color}`}>
+                    <Icon size={16} />
+                </span>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+                <span className="font-mono text-xs">{entityType}</span>
+                <span className="ml-1 text-primary-foreground/70">· {label}</span>
+            </TooltipContent>
+        </Tooltip>
     );
 }

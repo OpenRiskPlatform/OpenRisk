@@ -12,7 +12,6 @@ import {
 import {
     Tooltip,
     TooltipContent,
-    TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { DataModelEntity, TypedValue } from "@/core/data-model/types";
@@ -78,26 +77,24 @@ export function MediaMentionCard({ entity }: { entity: DataModelEntity }) {
                         )}
                     </div>
                     <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <TooltipProvider>
-                            <Tooltip delayDuration={200}>
-                                <TooltipTrigger asChild>
-                                    <span>
-                                        {isAdverse ? (
-                                            <Badge variant="destructive" className="text-xs cursor-help">⚠ Adverse</Badge>
-                                        ) : isClean ? (
-                                            <Badge variant="secondary" className="text-xs text-green-700 dark:text-green-400 cursor-help">✓ Clean</Badge>
-                                        ) : null}
-                                    </span>
-                                </TooltipTrigger>
-                                {(isAdverse || isClean) && (
-                                    <TooltipContent side="left" className="max-w-60 text-xs">
-                                        {isAdverse
-                                            ? "Adversea AI detected signs of adverse activity in this article — e.g. criminal charges, sanctions, fraud, corruption, or other red flags related to the target."
-                                            : "No adverse activity detected. The article does not indicate red flags related to the target."}
-                                    </TooltipContent>
-                                )}
-                            </Tooltip>
-                        </TooltipProvider>
+                        <Tooltip delayDuration={200}>
+                            <TooltipTrigger asChild>
+                                <span>
+                                    {isAdverse ? (
+                                        <Badge variant="destructive" className="text-xs cursor-help">⚠ Adverse</Badge>
+                                    ) : isClean ? (
+                                        <Badge variant="secondary" className="text-xs text-green-700 dark:text-green-400 cursor-help">✓ Clean</Badge>
+                                    ) : null}
+                                </span>
+                            </TooltipTrigger>
+                            {(isAdverse || isClean) && (
+                                <TooltipContent side="left" className="max-w-60 text-xs">
+                                    {isAdverse
+                                        ? "Adversea AI detected signs of adverse activity in this article — e.g. criminal charges, sanctions, fraud, corruption, or other red flags related to the target."
+                                        : "No adverse activity detected. The article does not indicate red flags related to the target."}
+                                </TooltipContent>
+                            )}
+                        </Tooltip>
                     </div>
                 </div>
                 {open && url && (
