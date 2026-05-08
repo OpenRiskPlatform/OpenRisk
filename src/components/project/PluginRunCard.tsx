@@ -112,7 +112,7 @@ export function PluginRunCard({
     };
 
     return (
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="contents">
         <Card>
             <CardHeader className="pb-2">
                 <CardTitle className="text-base">Search</CardTitle>
