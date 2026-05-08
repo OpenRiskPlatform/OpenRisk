@@ -37,6 +37,7 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
     const aliases = propList(entity, "aliases");
     const birthDate = firstProp(entity, "birthDate");
     const birthPlace = firstProp(entity, "birthPlace");
+    const jurisdiction = firstProp(entity, "jurisdiction");
     const nationalities = propList(entity, "nationalities");
     const addresses = propList(entity, "addresses");
     const emails = propList(entity, "emails");
@@ -91,6 +92,7 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
                 <div className="grid gap-3 sm:grid-cols-2">
                     <Field label="Birth Date" value={birthDate} />
                     <Field label="Birth Place" value={birthPlace} />
+                    <Field label="Jurisdiction" value={jurisdiction} />
                 </div>
 
                 <TagField label="Nationalities" values={nationalities} />
@@ -112,6 +114,7 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
                         "aliases",
                         "birthDate",
                         "birthPlace",
+                        "jurisdiction",
                         "nationalities",
                         "addresses",
                         "emails",

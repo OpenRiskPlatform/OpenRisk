@@ -32,6 +32,7 @@ export function OrganizationCard({ entity }: { entity: DataModelEntity }) {
     const aliases = propList(entity, "aliases");
     const registrationId = firstProp(entity, "registrationId");
     const country = firstProp(entity, "country");
+    const jurisdiction = firstProp(entity, "jurisdiction");
     const address = firstProp(entity, "address");
     const status = firstProp(entity, "status");
     const involvedPersons = propList(entity, "involvedPersons");
@@ -91,6 +92,7 @@ export function OrganizationCard({ entity }: { entity: DataModelEntity }) {
                 <div className="grid gap-3 sm:grid-cols-2">
                     <Field label="Registration ID" value={registrationId} />
                     <Field label="Country" value={country} />
+                    <Field label="Jurisdiction" value={jurisdiction} />
                     <Field label="Address" value={address} />
                     {sourceRegister && <Field label="Register" value={sourceRegister} />}
                     {effectiveTo && <Field label="Active Until" value={effectiveTo} />}
@@ -148,6 +150,7 @@ export function OrganizationCard({ entity }: { entity: DataModelEntity }) {
                         "registrationId",
                         "organizationId",
                         "country",
+                        "jurisdiction",
                         "address",
                         "residenceAddress",
                         "status",
