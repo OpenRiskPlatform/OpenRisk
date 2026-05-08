@@ -1,4 +1,5 @@
 import { Input } from "@/components/ui/input";
+import { RegistryJurisdictionInput } from "@/components/settings/RegistryJurisdictionInput";
 import { Switch } from "@/components/ui/switch";
 import {
     Select,
@@ -27,6 +28,19 @@ export function TypedSettingInput({
     placeholder,
     disabled = false,
 }: TypedSettingInputProps) {
+    if (typeName === "registry-jurisdiction-code") {
+        return (
+            <RegistryJurisdictionInput
+                value={value}
+                onChange={onChange}
+                options={options}
+                emptyAsNull={emptyAsNull}
+                placeholder={placeholder}
+                disabled={disabled}
+            />
+        );
+    }
+
     if (options && options.length > 0) {
         const strValue = value === null || value === undefined ? "" : String(value);
         return (

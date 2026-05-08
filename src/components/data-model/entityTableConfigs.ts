@@ -36,6 +36,12 @@ export const PERSON_TABLE_COLUMNS: EntityTableColumnConfig[] = [
         getValues: (entity) => collectPropValues(entity, ["nationality", "nationalities"]),
         variant: "badges",
     },
+    {
+        id: "jurisdiction",
+        header: "jurisdiction",
+        getValues: (entity) => collectPropValues(entity, ["jurisdiction"]),
+        variant: "badges",
+    },
 ];
 
 export const ORGANIZATION_TABLE_COLUMNS: EntityTableColumnConfig[] = [
@@ -49,6 +55,12 @@ export const ORGANIZATION_TABLE_COLUMNS: EntityTableColumnConfig[] = [
         id: "registrationId",
         header: "registrationId",
         getValues: (entity) => collectPropValues(entity, ["registrationId", "organizationId"]),
+    },
+    {
+        id: "jurisdiction",
+        header: "jurisdiction",
+        getValues: (entity) => collectPropValues(entity, ["jurisdiction"]),
+        variant: "badges",
     },
     {
         id: "status",
@@ -78,6 +90,7 @@ const PROP_LABELS: Record<string, string> = {
     nationality: "Nationality",
     nationalities: "Nationality",
     country: "Country",
+    jurisdiction: "Jurisdiction",
     address: "Address",
     residenceAddress: "Address",
     registrationId: "Reg. ID",
@@ -162,5 +175,4 @@ export function buildDynamicColumns(
 
     return [nameCol, ...extraCols];
 }
-
 
