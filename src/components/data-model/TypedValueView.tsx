@@ -1,4 +1,5 @@
 import type { TypedValue } from "@/core/data-model/types";
+import { RegistryJurisdictionValue } from "./RegistryJurisdictionValue";
 
 interface TypedValueViewProps {
     item: TypedValue | undefined;
@@ -38,6 +39,10 @@ export function TypedValueView({ item }: TypedValueViewProps) {
                 {item.value}
             </a>
         );
+    }
+
+    if (item.$type === "registry-jurisdiction-code" && typeof item.value === "string") {
+        return <RegistryJurisdictionValue code={item.value} />;
     }
 
     if (typeof item.value === "object") {

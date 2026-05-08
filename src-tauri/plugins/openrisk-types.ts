@@ -1,5 +1,5 @@
 // =============================================================================
-// openrisk-types.ts  ·  OpenRisk Canonical Entity Types  ·  v1
+// openrisk-types.ts  ·  OpenRisk Canonical Entity Types  ·  v0.0.2
 //
 // Paste this block verbatim at the top of each plugin file.
 // All shared identifiers use _or_ / _tv prefixes to avoid collisions.
@@ -21,12 +21,15 @@ interface _OR_KV {
 }
 
 interface DataModelEntity {
+    $modelVersion: "0.0.2";
     $entity: string;
     $id: string;
     $sources?: Array<{ name: string; source: string }>;
     $props?: Record<string, TypedValue[]>;
     $extra?: _OR_KV[];
 }
+
+const OPENRISK_DATA_MODEL_VERSION = "0.0.2" as const;
 
 // ---------------------------------------------------------------------------
 // Sub-types used inside canonical payloads
@@ -50,6 +53,27 @@ interface BusinessSubject {
     effectiveTo?: string;
 }
 
+const OPENRISK_REGISTRY_JURISDICTION_CODES = [
+    "al", "by", "be", "bg", "hr", "cy", "cz", "dk", "fi", "fr", "de", "gi",
+    "gr", "gg", "gl", "is", "ie", "im", "je", "lv", "li", "lu", "mt", "md",
+    "me", "nl", "no", "pl", "ro", "sk", "si", "es", "se", "ch", "ua", "gb",
+    "ca", "ca_bc", "ca_nb", "ca_nl", "ca_nu", "ca_ns", "ca_on", "ca_pe",
+    "ca_qc", "pr", "us_ak", "us_al", "us_ar", "us_az", "us_ca", "us_co",
+    "us_ct", "us_dc", "us_de", "us_fl", "us_ga", "us_hi", "us_ia", "us_id",
+    "us_il", "us_in", "us_ks", "us_ky", "us_la", "us_ma", "us_md", "us_me",
+    "us_mi", "us_mn", "us_mo", "us_ms", "us_mt", "us_nc", "us_nd", "us_ne",
+    "us_nh", "us_nj", "us_nm", "us_nv", "us_ny", "us_oh", "us_ok", "us_or",
+    "us_pa", "us_ri", "us_sc", "us_sd", "us_tn", "us_tx", "us_ut", "us_va",
+    "us_vt", "us_wa", "us_wi", "us_wv", "us_wy", "ae_az", "ae_du", "au", "aw",
+    "bb", "bd", "bh", "bl", "bm", "bo", "br", "bs", "bz", "cw", "do", "gf",
+    "gp", "hk", "il", "in", "ir", "jm", "jp", "kh", "mf", "mm", "mq", "mu",
+    "mx", "my", "nz", "pa", "pk", "pm", "re", "rw", "sg", "th", "tj", "tn",
+    "to", "tz", "ug", "vn", "vu", "yt", "za", "pf", "nc", "wf",
+] as const;
+
+type RegistryJurisdictionCode =
+    typeof OPENRISK_REGISTRY_JURISDICTION_CODES[number];
+
 // ---------------------------------------------------------------------------
 // Canonical payload types — what plugin authors construct
 // ---------------------------------------------------------------------------
@@ -62,6 +86,7 @@ interface PersonPayload {
     birthPlace?: string;
     /** ISO alpha-2 codes or full country names. */
     nationalities?: string[];
+    jurisdiction?: RegistryJurisdictionCode;
     addresses?: string[];
     emails?: string[];
     phones?: string[];
@@ -87,6 +112,7 @@ interface OrganizationPayload {
     /** Registration number (ICO, EIN, company number, etc.). */
     registrationId?: string;
     country?: string;
+    jurisdiction?: RegistryJurisdictionCode;
     address?: string;
     status?: "active" | "inactive" | "unknown";
     involvedPersons?: string[];
@@ -172,6 +198,10 @@ const _tv = {
     str: (v: string): TypedValue<string> => ({ $type: "string", value: v }),
     num: (v: number): TypedValue<number> => ({ $type: "number", value: v }),
     bool: (v: boolean): TypedValue<boolean> => ({ $type: "boolean", value: v }),
+    jurisdiction: (v: RegistryJurisdictionCode): TypedValue<RegistryJurisdictionCode> => ({
+        $type: "registry-jurisdiction-code",
+        value: v,
+    }),
     url: (v: string): TypedValue<string> => ({ $type: "url", value: v }),
     addr: (v: string): TypedValue<string> => ({ $type: "address", value: v }),
     date: (v: string): TypedValue<string> => ({
@@ -223,6 +253,7 @@ function buildPerson(opts: _OR_Opts<PersonPayload>): DataModelEntity {
     _or_set(props, "birthDate", p.birthDate ? _tv.date(p.birthDate) : undefined);
     _or_set(props, "birthPlace", p.birthPlace ? _tv.str(p.birthPlace) : undefined);
     _or_many(props, "nationalities", (p.nationalities ?? []).map(_tv.str));
+    _or_set(props, "jurisdiction", p.jurisdiction ? _tv.jurisdiction(p.jurisdiction) : undefined);
     _or_many(props, "addresses", (p.addresses ?? []).map(_tv.addr));
     _or_many(props, "emails", (p.emails ?? []).map(_tv.str));
     _or_many(props, "phones", (p.phones ?? []).map(_tv.str));
@@ -247,7 +278,7 @@ function buildPerson(opts: _OR_Opts<PersonPayload>): DataModelEntity {
         if (pos.effectiveTo) extra.push(_or_kv(`state_position_${n}_to`, _tv.date(pos.effectiveTo)));
     }
 
-    return { $entity: "entity.person", $id: opts.id, $props: props, $extra: extra.length ? extra : undefined, $sources: opts.sources };
+    return { $modelVersion: OPENRISK_DATA_MODEL_VERSION, $entity: "entity.person", $id: opts.id, $props: props, $extra: extra.length ? extra : undefined, $sources: opts.sources };
 }
 
 function buildOrganization(opts: _OR_Opts<OrganizationPayload>): DataModelEntity {
@@ -258,6 +289,7 @@ function buildOrganization(opts: _OR_Opts<OrganizationPayload>): DataModelEntity
     _or_many(props, "aliases", (p.aliases ?? []).map(_tv.str));
     _or_set(props, "registrationId", p.registrationId ? _tv.str(p.registrationId) : undefined);
     _or_set(props, "country", p.country ? _tv.str(p.country) : undefined);
+    _or_set(props, "jurisdiction", p.jurisdiction ? _tv.jurisdiction(p.jurisdiction) : undefined);
     _or_set(props, "address", p.address ? _tv.addr(p.address) : undefined);
     _or_set(props, "status", p.status ? _tv.str(p.status) : undefined);
     _or_many(props, "involvedPersons", (p.involvedPersons ?? []).map(_tv.str));
@@ -281,7 +313,7 @@ function buildOrganization(opts: _OR_Opts<OrganizationPayload>): DataModelEntity
         if (bs.effectiveTo) extra.push(_or_kv(`business_subject_${n}_to`, _tv.date(bs.effectiveTo)));
     }
 
-    return { $entity: "entity.organization", $id: opts.id, $props: props, $extra: extra.length ? extra : undefined, $sources: opts.sources };
+    return { $modelVersion: OPENRISK_DATA_MODEL_VERSION, $entity: "entity.organization", $id: opts.id, $props: props, $extra: extra.length ? extra : undefined, $sources: opts.sources };
 }
 
 function buildMediaMention(opts: _OR_Opts<MediaMentionPayload>): DataModelEntity {
@@ -297,7 +329,7 @@ function buildMediaMention(opts: _OR_Opts<MediaMentionPayload>): DataModelEntity
     const extra = _or_extra(opts.extra);
     for (const claim of p.claims ?? []) extra.push(_or_kv("claim", _tv.str(claim)));
 
-    return { $entity: "entity.mediaMention", $id: opts.id, $props: props, $extra: extra.length ? extra : undefined, $sources: opts.sources };
+    return { $modelVersion: OPENRISK_DATA_MODEL_VERSION, $entity: "entity.mediaMention", $id: opts.id, $props: props, $extra: extra.length ? extra : undefined, $sources: opts.sources };
 }
 
 function buildRiskTopic(opts: _OR_Opts<RiskTopicPayload>): DataModelEntity {
@@ -310,7 +342,7 @@ function buildRiskTopic(opts: _OR_Opts<RiskTopicPayload>): DataModelEntity {
     _or_set(props, "summary", p.summary ? _tv.str(p.summary) : undefined);
 
     const extra = _or_extra(opts.extra);
-    return { $entity: "entity.riskTopic", $id: opts.id, $props: props, $extra: extra.length ? extra : undefined, $sources: opts.sources };
+    return { $modelVersion: OPENRISK_DATA_MODEL_VERSION, $entity: "entity.riskTopic", $id: opts.id, $props: props, $extra: extra.length ? extra : undefined, $sources: opts.sources };
 }
 
 function buildSocialProfile(opts: _OR_Opts<SocialProfilePayload>): DataModelEntity {
@@ -324,7 +356,7 @@ function buildSocialProfile(opts: _OR_Opts<SocialProfilePayload>): DataModelEnti
     _or_set(props, "userId", p.userId ? _tv.str(p.userId) : undefined);
 
     const extra = _or_extra(opts.extra);
-    return { $entity: "entity.socialProfile", $id: opts.id, $props: props, $extra: extra.length ? extra : undefined, $sources: opts.sources };
+    return { $modelVersion: OPENRISK_DATA_MODEL_VERSION, $entity: "entity.socialProfile", $id: opts.id, $props: props, $extra: extra.length ? extra : undefined, $sources: opts.sources };
 }
 
 function buildFinancialRecord(opts: _OR_Opts<FinancialRecordPayload>): DataModelEntity {
@@ -338,7 +370,7 @@ function buildFinancialRecord(opts: _OR_Opts<FinancialRecordPayload>): DataModel
     _or_set(props, "debtSource", p.debtSource ? _tv.str(p.debtSource) : undefined);
 
     const extra = _or_extra(opts.extra);
-    return { $entity: "entity.financialRecord", $id: opts.id, $props: props, $extra: extra.length ? extra : undefined, $sources: opts.sources };
+    return { $modelVersion: OPENRISK_DATA_MODEL_VERSION, $entity: "entity.financialRecord", $id: opts.id, $props: props, $extra: extra.length ? extra : undefined, $sources: opts.sources };
 }
 
 function buildDetectedEntity(opts: _OR_Opts<DetectedEntityPayload>): DataModelEntity {
@@ -349,7 +381,7 @@ function buildDetectedEntity(opts: _OR_Opts<DetectedEntityPayload>): DataModelEn
     _or_set(props, "description", p.description ? _tv.str(p.description) : undefined);
 
     const extra = _or_extra(opts.extra);
-    return { $entity: "entity.detectedEntity", $id: opts.id, $props: props, $extra: extra.length ? extra : undefined, $sources: opts.sources };
+    return { $modelVersion: OPENRISK_DATA_MODEL_VERSION, $entity: "entity.detectedEntity", $id: opts.id, $props: props, $extra: extra.length ? extra : undefined, $sources: opts.sources };
 }
 
 /** Slugify parts and join with ':' to form a human-readable, guaranteed-unique entity ID. */

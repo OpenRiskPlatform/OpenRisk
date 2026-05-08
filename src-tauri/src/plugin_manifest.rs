@@ -19,6 +19,9 @@ impl PluginFieldType {
             PluginFieldType::String(FieldTypeString::Integer) => "integer",
             PluginFieldType::String(FieldTypeString::Date) => "date",
             PluginFieldType::String(FieldTypeString::Url) => "url",
+            PluginFieldType::String(FieldTypeString::RegistryJurisdictionCode) => {
+                crate::registry_jurisdiction::REGISTRY_JURISDICTION_CODE_TYPE_NAME
+            }
             PluginFieldType::Object {
                 name: FieldTypeObjectName::String,
                 ..
@@ -43,6 +46,10 @@ impl PluginFieldType {
                 name: FieldTypeObjectName::Url,
                 ..
             } => "url",
+            PluginFieldType::Object {
+                name: FieldTypeObjectName::RegistryJurisdictionCode,
+                ..
+            } => crate::registry_jurisdiction::REGISTRY_JURISDICTION_CODE_TYPE_NAME,
             PluginFieldType::Object {
                 name: FieldTypeObjectName::Enum,
                 ..

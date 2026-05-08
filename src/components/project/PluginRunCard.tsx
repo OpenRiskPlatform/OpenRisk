@@ -143,20 +143,20 @@ export function PluginRunCard({
                                             <span className="text-destructive ml-0.5">*</span>
                                         )}
                                     </p>
-                                                <TypedSettingInput
-                                                    typeName={input.type.name}
-                                                    value={value}
-                                                    options={options}
-                                                    placeholder={
-                                                        input.type.name !== "boolean"
-                                                            ? input.title
-                                                            : undefined
-                                                    }
-                                                    disabled={running}
-                                                    onChange={(v) =>
-                                                        handleSharedFieldChange(input.name, v)
-                                                    }
-                                                />
+                                    <TypedSettingInput
+                                        typeName={input.type.name}
+                                        value={value}
+                                        options={options}
+                                        placeholder={
+                                            input.type.name !== "boolean"
+                                                ? input.title
+                                                : undefined
+                                        }
+                                        disabled={running}
+                                        onChange={(v) =>
+                                            handleSharedFieldChange(input.name, v)
+                                        }
+                                    />
                                     {input.type.name === "boolean" && (
                                         <Label className="text-sm font-medium">
                                             {input.title}

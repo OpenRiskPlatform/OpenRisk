@@ -101,7 +101,7 @@ export function PluginSettingsCard({
                                 ) : null}
                                 <TypedSettingInput
                                     typeName={setting.type.name}
-                                    options={setting.type.name === "enum" ? setting.type.values ?? undefined : undefined}
+                                    options={setting.type.values ?? undefined}
                                     value={currentValue}
                                     onChange={(value) => setField(setting.name, value)}
                                     emptyAsNull
