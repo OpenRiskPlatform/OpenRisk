@@ -8,7 +8,7 @@ import {
   type ProjectScanHistoryEntry,
 } from "@/components/project/ProjectScanHistorySidebar";
 import { useBackendClient } from "@/hooks/useBackendClient";
-import { useProjectWorkspace, formatScanPerformedAt } from "@/hooks/useProjectWorkspace";
+import { useProjectWorkspace } from "@/hooks/useProjectWorkspace";
 import { unwrap } from "@/lib/utils";
 import { buildAllScansPdfDoc } from "@/utils/exportPdf";
 import { save } from "@tauri-apps/plugin-dialog";
@@ -67,18 +67,19 @@ export function SearchPage({ projectDir, routeScanId }: SearchPageProps) {
   };
 
   const handlePrintAll = async () => {
-    const completedScans = workspace.scans.filter(
-      (s) => (s.status === "Completed" || s.status === "Failed") && !s.isArchived,
+    const orderedEntries = workspace.scanHistoryEntries.filter(
+      (entry) =>
+        (entry.status === "Completed" || entry.status === "Failed") && !entry.isArchived,
     );
-    if (!completedScans.length) return;
+    if (!orderedEntries.length) return;
 
     const entries = [];
-    for (const scan of completedScans) {
+    for (const entry of orderedEntries) {
       try {
-        const detail = await unwrap(backendClient.getScan(scan.id));
+        const detail = await unwrap(backendClient.getScan(entry.id));
         entries.push({
-          scanTitle: scan.preview?.trim() || `Scan ${scan.id.slice(0, 8)}`,
-          performedAt: formatScanPerformedAt(scan.createdAt),
+          scanTitle: entry.title.trim() || `Scan ${entry.id.slice(0, 8)}`,
+          performedAt: entry.performedAt,
           detail,
           pluginNameById: workspace.pluginNameById,
         });

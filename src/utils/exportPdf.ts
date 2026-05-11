@@ -284,6 +284,22 @@ function parseResultData(result: ScanPluginResultRecord): DataModelResult | stri
   }
 }
 
+function orderedResults(detail: ScanDetailRecord): ScanPluginResultRecord[] {
+  const order = new Map<string, number>();
+  detail.selectedPlugins.forEach((selection, index) => {
+    order.set(`${selection.pluginId}::${selection.entrypointId}`, index);
+  });
+
+  return [...detail.results].sort((left, right) => {
+    const leftIndex = order.get(`${left.pluginId}::${left.entrypointId}`);
+    const rightIndex = order.get(`${right.pluginId}::${right.entrypointId}`);
+    if (leftIndex === undefined && rightIndex === undefined) return 0;
+    if (leftIndex === undefined) return 1;
+    if (rightIndex === undefined) return -1;
+    return leftIndex - rightIndex;
+  });
+}
+
 export function buildScanPdfDoc({
   scanTitle,
   performedAt,
@@ -364,7 +380,8 @@ function _appendScanToDoc(
   { scanTitle, performedAt, detail, pluginNameById }: ExportScanPdfOptions,
   _isFirstPage: boolean,
 ) {
-  const resultCount = detail.results.length;
+  const results = orderedResults(detail);
+  const resultCount = results.length;
 
   addHeader(
     doc,
@@ -390,7 +407,7 @@ function _appendScanToDoc(
 
   let y = (doc as unknown as LastTable).lastAutoTable.finalY + 22;
 
-  for (const result of detail.results) {
+  for (const result of results) {
     if (y > doc.internal.pageSize.height - 100) {
       doc.addPage();
       y = 40;
