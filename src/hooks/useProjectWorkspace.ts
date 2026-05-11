@@ -710,7 +710,7 @@ export function useProjectWorkspace(
         for (const plugin of freshSettings.plugins) {
           if (plugin.status && ranPluginIds.has(plugin.id) && /used/i.test(plugin.status)) {
             toast.info(`${plugin.name}: ${plugin.status}`, {
-              duration: Infinity,
+              duration: 1 * 60 * 1000, // 1 minute
               dismissible: true,
               description: "This charge was incurred during the last scan.",
             });
