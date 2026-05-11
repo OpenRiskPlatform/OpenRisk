@@ -144,7 +144,9 @@ function FlatPropertyRow({
     if (!nonEmpty.length) return null;
     return (
         <div className="flex items-start gap-3 py-1 border-b border-border/30 last:border-0">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground w-32 shrink-0 pt-0.5">{label}</p>
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground w-32 shrink-0 pt-0.5 whitespace-normal break-all">
+                {label}
+            </p>
             <div className="flex flex-wrap gap-1 flex-1 min-w-0">
                 {nonEmpty.map((value, idx) => (
                     <span key={`${label}-${idx}`} className="text-xs text-foreground">
