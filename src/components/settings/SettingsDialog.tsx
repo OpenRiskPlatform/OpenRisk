@@ -6,9 +6,9 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useCallback, useEffect, useState } from "react";
 import { SettingsSidebar } from "./SettingsSidebar";
 import { GeneralSettings } from "./GeneralSettings";
-import { PluginSettings } from "./PluginSettings";
 import { ManagePlugins } from "./ManagePlugins";
 import { InfoSettings } from "./InfoSettings";
+import { PluginSettingsCard } from "./PluginSettingsCard";
 import { useBackendClient } from "@/hooks/useBackendClient";
 import { unwrap } from "@/lib/utils";
 import type { ProjectSettingsPayload } from "@/core/backend/bindings";
@@ -16,7 +16,11 @@ import type { ThemeValue } from "@/core/settings/types";
 import { useSettings } from "@/core/settings/SettingsContext";
 import { save } from "@tauri-apps/plugin-dialog";
 
-export type SettingsCategory = "info" | "general" | "plugins" | "manage-plugins";
+export type SettingsCategory =
+  | "info"
+  | "general"
+  | "manage-plugins"
+  | `plugin:${string}`;
 
 interface SettingsDialogProps {
   open: boolean;
@@ -165,6 +169,14 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
     }
   }, [backendClient]);
 
+  const enabledPlugins = settingsData?.plugins.filter((plugin) => plugin.enabled) ?? [];
+  const activePluginId = activeCategory.startsWith("plugin:")
+    ? activeCategory.slice("plugin:".length)
+    : null;
+  const activePlugin = activePluginId
+    ? enabledPlugins.find((plugin) => plugin.id === activePluginId)
+    : null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl h-[80vh] p-0 select-text">
@@ -174,6 +186,7 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
             activeCategory={activeCategory}
             onCategoryChange={setActiveCategory}
             isPreview={isPreview}
+            plugins={enabledPlugins}
           />
 
           {/* Content Area */}
@@ -208,20 +221,54 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
                 onProjectNameUpdated={handleProjectNameUpdated}
               />
             )}
-            {!isPreview && activeCategory === "plugins" && (
-              <PluginSettings
-                projectDir={projectDir}
-                projectSettings={settingsData?.projectSettings ?? null}
-                plugins={settingsData?.plugins ?? []}
-                metricsRefreshToken={metricsRefreshToken}
-                loading={settingsLoading}
-                error={
-                  projectDir
-                    ? settingsError
-                    : "Open or create a project to view plugin settings."
-                }
-                onPluginUpdated={handlePluginUpdated}
-              />
+            {!isPreview && activeCategory.startsWith("plugin:") && (
+              <div className="flex flex-col h-full min-h-0 gap-6">
+                <div className="flex-shrink-0">
+                  <h2 className="text-2xl font-semibold mb-1">
+                    {activePlugin?.name ?? "Plugin"}
+                  </h2>
+                  {activePlugin ? (
+                    <p className="text-sm text-muted-foreground">
+                      {activePlugin.id} · v{activePlugin.version}
+                    </p>
+                  ) : null}
+                </div>
+
+                {!projectDir && (
+                  <div className="text-center py-12 text-muted-foreground">
+                    Open or create a project to configure plugins.
+                  </div>
+                )}
+
+                {projectDir && settingsLoading && (
+                  <div className="text-center py-12 text-muted-foreground">
+                    Loading plugin settings...
+                  </div>
+                )}
+
+                {projectDir && !settingsLoading && settingsError && (
+                  <div className="text-center py-12 text-red-600 text-sm">
+                    {settingsError}
+                  </div>
+                )}
+
+                {projectDir && !settingsLoading && !settingsError && !activePlugin && (
+                  <div className="text-center py-12 text-muted-foreground">
+                    This plugin is not enabled or no longer exists.
+                  </div>
+                )}
+
+                {projectDir && !settingsLoading && !settingsError && activePlugin && (
+                  <div className="flex-1 min-h-0 overflow-y-auto pr-2">
+                    <PluginSettingsCard
+                      plugin={activePlugin}
+                      metricsRefreshToken={metricsRefreshToken}
+                      onPluginUpdated={handlePluginUpdated}
+                      backendClient={backendClient}
+                    />
+                  </div>
+                )}
+              </div>
             )}
             {!isPreview && activeCategory === "manage-plugins" && (
               <ManagePlugins
