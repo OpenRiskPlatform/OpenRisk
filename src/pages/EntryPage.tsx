@@ -18,6 +18,7 @@ import {
 import { useBackendClient } from "@/hooks/useBackendClient";
 import { unwrap } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { OpenRiskLogo } from "@/components/ui/OpenRiskLogo";
 
 const LAST_PROJECT_DIR_KEY = "openrisk:last-project-dir";
 const RECENT_PROJECTS_KEY = "openrisk:recent-projects";
@@ -224,8 +225,12 @@ export function EntryPage({}: EntryPageProps) {
     return (
         <div className="min-h-screen bg-background flex items-center justify-center px-6 py-10">
             <div className="w-full max-w-xl space-y-7">
-                <div className="h-48 rounded-[44px] bg-[#11131d] flex items-center justify-center text-white text-6xl font-bold tracking-tight">
-                    LOGO
+                <div className="flex items-center justify-center">
+                    <OpenRiskLogo
+                        size={120}
+                        textSizeClassName="text-5xl sm:text-6xl"
+                        className="text-foreground"
+                    />
                 </div>
 
                 <div className="space-y-2">
