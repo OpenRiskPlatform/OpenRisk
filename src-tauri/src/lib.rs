@@ -1,6 +1,7 @@
 mod app;
 mod commands;
 mod plugin_manifest;
+mod registry_jurisdiction;
 
 use std::sync::Arc;
 

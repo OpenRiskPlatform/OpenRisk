@@ -195,7 +195,8 @@
                         "boolean",
                         "integer",
                         "date",
-                        "url"
+                        "url",
+                        "registry-jurisdiction-code"
                     ]
                 },
                 {
@@ -213,7 +214,8 @@
                                 "integer",
                                 "date",
                                 "url",
-                                "enum"
+                                "enum",
+                                "registry-jurisdiction-code"
                             ]
                         },
                         "values": {

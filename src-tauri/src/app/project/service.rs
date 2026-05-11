@@ -14,6 +14,8 @@ use super::types::{
 use serde_json::{Map, Value};
 use std::path::Path;
 
+const DATA_MODEL_V1_VERSION: &str = "0.0.1";
+
 // ---------------------------------------------------------------------------
 // Scan execution
 // ---------------------------------------------------------------------------
@@ -89,7 +91,8 @@ pub async fn run_scan(
 
                 match result {
                     Ok((output_val, logs_val, metrics_val)) => {
-                        let data_json = serde_json::to_string(&output_val)
+                        let migrated_output_val = migrate_data_model_output(output_val);
+                        let data_json = serde_json::to_string(&migrated_output_val)
                             .ok()
                             .filter(|s| s != "null");
                         let mut logs = parse_logs(&logs_val);
@@ -257,6 +260,34 @@ fn parse_logs(logs_val: &Value) -> Vec<LogEntry> {
     }
 }
 
+fn migrate_data_model_output(mut output_val: Value) -> Value {
+    let Some(items) = output_val.as_array_mut() else {
+        return output_val;
+    };
+
+    if !items.iter().all(is_data_model_entity) {
+        return output_val;
+    }
+
+    for item in items {
+        if let Some(obj) = item.as_object_mut() {
+            obj.entry("$modelVersion".to_string())
+                .or_insert_with(|| Value::String(DATA_MODEL_V1_VERSION.to_string()));
+        }
+    }
+
+    output_val
+}
+
+fn is_data_model_entity(value: &Value) -> bool {
+    let Some(obj) = value.as_object() else {
+        return false;
+    };
+
+    obj.get("$entity").and_then(Value::as_str).is_some()
+        && obj.get("$id").and_then(Value::as_str).is_some()
+}
+
 fn parse_metrics(
     metrics_val: &Value,
     defs: &[PluginMetricDef],
@@ -343,6 +374,10 @@ fn metric_value_matches_type(
 ) -> bool {
     match type_name {
         "string" | "date" | "url" => raw_value.is_string(),
+        crate::registry_jurisdiction::REGISTRY_JURISDICTION_CODE_TYPE_NAME => raw_value
+            .as_str()
+            .map(crate::registry_jurisdiction::is_registry_jurisdiction_code)
+            .unwrap_or(false),
         "number" => raw_value.is_number(),
         "integer" => raw_value.as_i64().is_some() || raw_value.as_u64().is_some(),
         "boolean" => raw_value.is_boolean(),
@@ -355,5 +390,42 @@ fn metric_value_matches_type(
                 .unwrap_or(false)
         }
         _ => true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DATA_MODEL_V1_VERSION, metric_value_matches_type, migrate_data_model_output};
+    use serde_json::json;
+
+    #[test]
+    fn migrate_data_model_output_adds_v1_version_to_legacy_entities() {
+        let migrated = migrate_data_model_output(json!([
+            { "$entity": "entity.person", "$id": "person:1" },
+            { "$entity": "entity.organization", "$id": "org:1", "$modelVersion": "0.0.1" }
+        ]));
+
+        assert_eq!(migrated[0]["$modelVersion"], DATA_MODEL_V1_VERSION);
+        assert_eq!(migrated[1]["$modelVersion"], DATA_MODEL_V1_VERSION);
+    }
+
+    #[test]
+    fn migrate_data_model_output_leaves_non_data_model_json_unchanged() {
+        let raw = json!([{ "value": 1 }]);
+        assert_eq!(migrate_data_model_output(raw.clone()), raw);
+    }
+
+    #[test]
+    fn metric_value_matches_jurisdiction_type() {
+        assert!(metric_value_matches_type(
+            &json!("us_de"),
+            crate::registry_jurisdiction::REGISTRY_JURISDICTION_CODE_TYPE_NAME,
+            None,
+        ));
+        assert!(!metric_value_matches_type(
+            &json!("delaware"),
+            crate::registry_jurisdiction::REGISTRY_JURISDICTION_CODE_TYPE_NAME,
+            None,
+        ));
     }
 }
