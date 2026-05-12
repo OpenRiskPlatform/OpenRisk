@@ -82,11 +82,14 @@ fn parse_field_type(type_json: &str, enum_values_json: Option<&str>) -> PluginFi
         });
 
     if field_type.values.is_none() {
-        field_type.values = enum_values_json.and_then(|s| {
-            serde_json::from_str::<Vec<String>>(s)
-                .ok()
-                .filter(|v| !v.is_empty())
-        });
+        field_type.values = crate::registry_jurisdiction::values_for_type_name(&field_type.name)
+            .or_else(|| {
+                enum_values_json.and_then(|s| {
+                    serde_json::from_str::<Vec<String>>(s)
+                        .ok()
+                        .filter(|v| !v.is_empty())
+                })
+            });
     }
 
     field_type
