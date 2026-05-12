@@ -258,6 +258,7 @@ export type PluginSettingDef = {
 	type: PluginFieldTypeDef,
 	description: string | null,
 	required: boolean,
+	secret: boolean,
 	defaultValue: SettingValue | null,
 };
 
