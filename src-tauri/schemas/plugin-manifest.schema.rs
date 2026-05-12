@@ -1779,6 +1779,11 @@ impl<'de> ::serde::Deserialize<'de> for PluginEntrypointDefinitionName {
 #[doc = "      \"default\": false,"]
 #[doc = "      \"type\": \"boolean\""]
 #[doc = "    },"]
+#[doc = "    \"secret\": {"]
+#[doc = "      \"description\": \"Frontend hint that this setting contains sensitive data and should use a secret input control\","]
+#[doc = "      \"default\": false,"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    },"]
 #[doc = "    \"title\": {"]
 #[doc = "      \"description\": \"Human-readable setting name\","]
 #[doc = "      \"type\": \"string\""]
@@ -1808,6 +1813,9 @@ pub struct SettingDefinition {
     #[doc = "Whether this setting is required"]
     #[serde(default)]
     pub required: bool,
+    #[doc = "Frontend hint that this setting contains sensitive data and should use a secret input control"]
+    #[serde(default)]
+    pub secret: bool,
     #[doc = "Human-readable setting name"]
     pub title: ::std::string::String,
     #[serde(rename = "type")]

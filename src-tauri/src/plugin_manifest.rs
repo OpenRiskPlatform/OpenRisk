@@ -136,3 +136,44 @@ pub fn parse_manifest(json_str: &str) -> Result<OpenRiskPluginManifest, Manifest
     serde_json::from_value::<OpenRiskPluginManifest>(raw)
         .map_err(|e| ManifestError::ParseError(e.to_string()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::parse_manifest;
+
+    #[test]
+    fn parse_manifest_accepts_secret_setting_hint() {
+        let manifest = parse_manifest(
+            r#"{
+                "id": "secret-test",
+                "version": "0.1.0",
+                "name": "Secret Test",
+                "description": "Test plugin with secret setting",
+                "authors": [{ "name": "OpenRisk" }],
+                "license": "MIT",
+                "main": "index.ts",
+                "entrypoints": [
+                    {
+                        "id": "search",
+                        "name": "Search",
+                        "function": "search",
+                        "inputs": []
+                    }
+                ],
+                "settings": [
+                    {
+                        "name": "token",
+                        "type": "string",
+                        "title": "API Token",
+                        "secret": true,
+                        "required": true,
+                        "default": null
+                    }
+                ]
+            }"#,
+        )
+        .expect("manifest with secret setting should parse");
+
+        assert!(manifest.settings[0].secret);
+    }
+}

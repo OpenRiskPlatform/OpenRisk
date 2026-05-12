@@ -549,14 +549,15 @@ impl SqliteProjectPersistence {
             let enum_values_json =
                 enum_values.map(|v| serde_json::to_string(&v).unwrap_or_default());
             let required = setting.required as i64;
+            let secret = setting.secret as i64;
             let default_json = setting
                 .default
                 .as_ref()
                 .map(|v| serde_json::to_string(v).unwrap_or_default());
             sqlx::query!(
                 r#"INSERT INTO PluginRevisionSettingDef
-                 (revision_id, name, title, type_, type_json, enum_values_json, description, required, default_value_json)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"#,
+                 (revision_id, name, title, type_, type_json, enum_values_json, description, required, secret, default_value_json)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"#,
                 revision_id,
                 name_str,
                 title_str,
@@ -565,6 +566,7 @@ impl SqliteProjectPersistence {
                 enum_values_json,
                 setting.description,
                 required,
+                secret,
                 default_json,
             )
             .execute(&mut *conn)

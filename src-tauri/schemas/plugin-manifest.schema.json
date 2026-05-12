@@ -300,6 +300,11 @@
                     "description": "Whether this setting is required",
                     "default": false
                 },
+                "secret": {
+                    "type": "boolean",
+                    "description": "Frontend hint that this setting contains sensitive data and should use a secret input control",
+                    "default": false
+                },
                 "validation": {
                     "$ref": "#/definitions/ValidationRules"
                 }

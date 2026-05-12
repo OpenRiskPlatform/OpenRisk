@@ -1,0 +1,2 @@
+ALTER TABLE PluginRevisionSettingDef
+ADD COLUMN secret INTEGER NOT NULL DEFAULT 0;
