@@ -79,6 +79,7 @@ export const ORGANIZATION_TABLE_COLUMNS: EntityTableColumnConfig[] = [
 const SKIP_PROPS = new Set([
     "name", "aliases", "alias", // name always first; aliases shown as secondary text
     "notes", "description", "remarks", "summary", // too long
+    "relativeCloseAssociates", // shown only in person cards/details
     "pepStatus", "sanctioned", // shown as badges in expanded view
     "id", "uuid", "sourceId", "externalId", // raw IDs, not useful in column
 ]);
@@ -106,6 +107,7 @@ const PROP_LABELS: Record<string, string> = {
     phone: "Phone",
     email: "Email",
     website: "Website",
+    relativeCloseAssociates: "RCA",
     position: "Position",
     employer: "Employer",
 };
@@ -175,4 +177,3 @@ export function buildDynamicColumns(
 
     return [nameCol, ...extraCols];
 }
-
