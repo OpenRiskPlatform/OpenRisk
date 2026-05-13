@@ -1,5 +1,6 @@
 import type { DataModelEntity, TypedValue } from "@/core/data-model/types";
 import { registryJurisdictionCompactText } from "./RegistryJurisdictionValue";
+import { relativeCloseAssociateCompactText } from "./RelativeCloseAssociateValue";
 
 export function hasDisplayValue(value: TypedValue | undefined): boolean {
     if (!value) return false;
@@ -50,6 +51,10 @@ export function typedValueToCompactText(value: TypedValue | undefined): string {
 
     if (value.$type === "registry-jurisdiction-code" && typeof rawValue === "string") {
         return registryJurisdictionCompactText(rawValue);
+    }
+
+    if (value.$type === "relative-close-associate") {
+        return relativeCloseAssociateCompactText(rawValue);
     }
 
     if (typeof rawValue === "object") {
