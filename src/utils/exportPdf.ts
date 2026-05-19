@@ -14,6 +14,42 @@ import type {
 } from "@/core/data-model/types";
 import { isDataModelResult } from "@/core/data-model/types";
 import { typedValueToCompactText } from "@/components/data-model/entityProps";
+import { toast } from "sonner";
+import notoSansRegularUrl from "@/assets/fonts/NotoSans-Regular.ttf?url";
+import notoSansBoldUrl from "@/assets/fonts/NotoSans-Bold.ttf?url";
+
+// ---------------------------------------------------------------------------
+// Unicode font support
+// jsPDF's built-in "helvetica" is Latin-1 only. We embed Noto Sans Regular
+// and Bold (proper static TTFs) so text in any script — Latin, Cyrillic,
+// Greek, etc. — renders correctly and crisply in exported PDFs.
+// ---------------------------------------------------------------------------
+
+const FONT_NAME = "NotoSans";
+let fontCacheRegular: string | null = null;
+let fontCacheBold: string | null = null;
+
+async function fetchBase64(url: string): Promise<string> {
+  const response = await fetch(url);
+  const buffer = await response.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+async function registerFont(doc: jsPDF): Promise<void> {
+  if (!fontCacheRegular) fontCacheRegular = await fetchBase64(notoSansRegularUrl);
+  if (!fontCacheBold) fontCacheBold = await fetchBase64(notoSansBoldUrl);
+
+  doc.addFileToVFS("NotoSans-Regular.ttf", fontCacheRegular);
+  doc.addFont("NotoSans-Regular.ttf", FONT_NAME, "normal");
+
+  doc.addFileToVFS("NotoSans-Bold.ttf", fontCacheBold);
+  doc.addFont("NotoSans-Bold.ttf", FONT_NAME, "bold");
+}
 
 const PRIMARY = [30, 64, 175] as [number, number, number];
 const MUTED = [100, 116, 139] as [number, number, number];
@@ -54,12 +90,12 @@ async function savePdf(doc: jsPDF, defaultFilename: string) {
 }
 
 function addHeader(doc: jsPDF, title: string, subtitle?: string) {
-  doc.setFont("helvetica", "bold");
+  doc.setFont(FONT_NAME, "bold");
   doc.setFontSize(16);
   doc.setTextColor(...PRIMARY);
   doc.text("OpenRisk", 40, 38);
 
-  doc.setFont("helvetica", "normal");
+  doc.setFont(FONT_NAME, "normal");
   doc.setFontSize(11);
   doc.setTextColor(30, 30, 30);
   doc.text(title, 40, 55);
@@ -83,6 +119,7 @@ function addFooter(doc: jsPDF) {
 
   for (let i = 1; i <= pageCount; i += 1) {
     doc.setPage(i);
+    doc.setFont(FONT_NAME, "normal");
     doc.setFontSize(8);
     doc.setTextColor(...MUTED);
     doc.text(`Generated ${generatedAt} · OpenRisk`, 40, height - 22);
@@ -165,10 +202,7 @@ function entityDisplayName(entity: DataModelEntity) {
 }
 
 function entityRows(entity: DataModelEntity): string[][] {
-  const rows: string[][] = [
-    ["$entity", entity.$entity],
-    ["$id", entity.$id],
-  ];
+  const rows: string[][] = [];
 
   for (const [key, values] of Object.entries(entity.$props ?? {})) {
     const display = (values as TypedValue[])
@@ -219,18 +253,13 @@ function renderEntityCard(
     startY = 40;
   }
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
+  doc.setFont(FONT_NAME, "bold");
+  doc.setFontSize(11);
   doc.setTextColor(...PRIMARY);
   doc.text(`${index}. ${entityDisplayName(entity)}`, 40, startY);
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(...MUTED);
-  doc.text(entity.$entity, 40, startY + 12);
-
   autoTable(doc, {
-    startY: startY + 18,
+    startY: startY + 16,
     head: [["Property", "Value"]],
     body: entityRows(entity),
     headStyles: {
@@ -238,12 +267,13 @@ function renderEntityCard(
       textColor: [30, 30, 30],
       fontStyle: "bold",
       fontSize: 8,
+      font: FONT_NAME,
     },
-    bodyStyles: { fontSize: 8, valign: "top" },
+    bodyStyles: { fontSize: 8, valign: "top", font: FONT_NAME },
     alternateRowStyles: { fillColor: ALT_ROW },
     columnStyles: {
-      0: { cellWidth: 130, fontStyle: "bold" },
-      1: { cellWidth: "auto" },
+      0: { cellWidth: 130, fontStyle: "bold", font: FONT_NAME },
+      1: { cellWidth: "auto", font: FONT_NAME },
     },
     margin: { left: 40, right: 40 },
   });
@@ -284,13 +314,30 @@ function parseResultData(result: ScanPluginResultRecord): DataModelResult | stri
   }
 }
 
-export function buildScanPdfDoc({
+function orderedResults(detail: ScanDetailRecord): ScanPluginResultRecord[] {
+  const order = new Map<string, number>();
+  detail.selectedPlugins.forEach((selection, index) => {
+    order.set(`${selection.pluginId}::${selection.entrypointId}`, index);
+  });
+
+  return [...detail.results].sort((left, right) => {
+    const leftIndex = order.get(`${left.pluginId}::${left.entrypointId}`);
+    const rightIndex = order.get(`${right.pluginId}::${right.entrypointId}`);
+    if (leftIndex === undefined && rightIndex === undefined) return 0;
+    if (leftIndex === undefined) return 1;
+    if (rightIndex === undefined) return -1;
+    return leftIndex - rightIndex;
+  });
+}
+
+export async function buildScanPdfDoc({
   scanTitle,
   performedAt,
   detail,
   pluginNameById,
-}: ExportScanPdfOptions): jsPDF {
+}: ExportScanPdfOptions): Promise<jsPDF> {
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+  await registerFont(doc);
   _appendScanToDoc(doc, { scanTitle, performedAt, detail, pluginNameById }, true);
   addFooter(doc);
   return doc;
@@ -303,16 +350,17 @@ interface AllScansPdfEntry {
   pluginNameById: Record<string, string>;
 }
 
-export function buildAllScansPdfDoc(scans: AllScansPdfEntry[]): jsPDF {
+export async function buildAllScansPdfDoc(scans: AllScansPdfEntry[]): Promise<jsPDF> {
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+  await registerFont(doc);
 
   // Cover page
-  doc.setFont("helvetica", "bold");
+  doc.setFont(FONT_NAME, "bold");
   doc.setFontSize(22);
   doc.setTextColor(...PRIMARY);
   doc.text("OpenRisk", 40, 80);
 
-  doc.setFont("helvetica", "normal");
+  doc.setFont(FONT_NAME, "normal");
   doc.setFontSize(14);
   doc.setTextColor(30, 30, 30);
   doc.text("All Scans Report", 40, 110);
@@ -327,7 +375,7 @@ export function buildAllScansPdfDoc(scans: AllScansPdfEntry[]): jsPDF {
 
   // TOC
   let tocY = 165;
-  doc.setFont("helvetica", "bold");
+  doc.setFont(FONT_NAME, "bold");
   doc.setFontSize(10);
   doc.setTextColor(...PRIMARY);
   doc.text("Contents", 40, tocY);
@@ -338,13 +386,23 @@ export function buildAllScansPdfDoc(scans: AllScansPdfEntry[]): jsPDF {
       doc.addPage();
       tocY = 40;
     }
-    doc.setFont("helvetica", "normal");
+    const pluginNames = Array.from(
+      new Set(
+        scan.detail.selectedPlugins.map(
+          (sp) => scan.pluginNameById[sp.pluginId] ?? sp.pluginId,
+        ),
+      ),
+    ).join(", ");
+    doc.setFont(FONT_NAME, "normal");
     doc.setFontSize(9);
     doc.setTextColor(30, 30, 30);
     doc.text(`${i + 1}. ${scan.scanTitle}`, 50, tocY);
     doc.setTextColor(...MUTED);
     doc.setFontSize(8);
-    doc.text(`${scan.performedAt} · ${scan.detail.status}`, 50, tocY + 11);
+    const metaLine = [scan.performedAt, scan.detail.status, pluginNames]
+      .filter(Boolean)
+      .join(" · ");
+    doc.text(metaLine, 50, tocY + 11);
     tocY += 26;
   });
 
@@ -364,12 +422,21 @@ function _appendScanToDoc(
   { scanTitle, performedAt, detail, pluginNameById }: ExportScanPdfOptions,
   _isFirstPage: boolean,
 ) {
-  const resultCount = detail.results.length;
+  const results = orderedResults(detail);
+  const entityCount = results.reduce((sum, r) => {
+    if (!r.output.ok || !r.output.dataJson) return sum;
+    try {
+      const parsed = JSON.parse(r.output.dataJson);
+      return sum + (Array.isArray(parsed) ? parsed.length : 1);
+    } catch {
+      return sum + 1;
+    }
+  }, 0);
 
   addHeader(
     doc,
     scanTitle,
-    `${performedAt} · ${detail.status} · ${resultCount} plugin result${resultCount === 1 ? "" : "s"}`,
+    `${performedAt} · ${detail.status} · ${entityCount} result${entityCount === 1 ? "" : "s"} across ${results.length} endpoint${results.length === 1 ? "" : "s"}`,
   );
 
   autoTable(doc, {
@@ -381,8 +448,8 @@ function _appendScanToDoc(
       ["Performed at", performedAt],
       ["Selected entrypoints", String(detail.selectedPlugins.length)],
     ],
-    headStyles: { fillColor: CARD_HEAD, textColor: [30, 30, 30], fontStyle: "bold", fontSize: 8 },
-    bodyStyles: { fontSize: 8 },
+    headStyles: { fillColor: CARD_HEAD, textColor: [30, 30, 30], fontStyle: "bold", fontSize: 8, font: FONT_NAME },
+    bodyStyles: { fontSize: 8, font: FONT_NAME },
     alternateRowStyles: { fillColor: ALT_ROW },
     columnStyles: { 0: { cellWidth: 140, fontStyle: "bold" }, 1: { cellWidth: "auto" } },
     margin: { left: 40, right: 40 },
@@ -390,35 +457,28 @@ function _appendScanToDoc(
 
   let y = (doc as unknown as LastTable).lastAutoTable.finalY + 22;
 
-  for (const result of detail.results) {
+  for (const result of results) {
     if (y > doc.internal.pageSize.height - 100) {
       doc.addPage();
       y = 40;
     }
 
-    const revisionSuffix = result.pluginRevisionId
-      ? ` [${result.pluginRevisionId.slice(0, 8)}]`
-      : "";
     const pluginName = pluginNameById[result.pluginId] ?? result.pluginId;
 
-    doc.setFont("helvetica", "bold");
+    doc.setFont(FONT_NAME, "bold");
     doc.setFontSize(11);
     doc.setTextColor(...PRIMARY);
     doc.text(pluginName, 40, y);
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(...MUTED);
-    doc.text(`${result.pluginId} / ${result.entrypointId}${revisionSuffix}`, 40, y + 12);
-    y += 24;
+    y += 16;
 
     if (!result.output.ok) {
       autoTable(doc, {
         startY: y,
         head: [["Error", "Details"]],
         body: [[result.output.error ?? "Unknown error", (result.output.logs ?? []).map((e) => `${e.level}: ${e.message}`).join("\n") || "No logs"]],
-        headStyles: { fillColor: CARD_HEAD, textColor: [30, 30, 30], fontStyle: "bold", fontSize: 8 },
-        bodyStyles: { fontSize: 8 },
+        headStyles: { fillColor: CARD_HEAD, textColor: [30, 30, 30], fontStyle: "bold", fontSize: 8, font: FONT_NAME },
+        bodyStyles: { fontSize: 8, font: FONT_NAME },
         margin: { left: 40, right: 40 },
       });
       y = (doc as unknown as LastTable).lastAutoTable.finalY + 18;
@@ -428,7 +488,7 @@ function _appendScanToDoc(
     const parsedData = parseResultData(result);
     if (Array.isArray(parsedData)) {
       if (!parsedData.length) {
-        doc.setFont("helvetica", "normal");
+        doc.setFont(FONT_NAME, "normal");
         doc.setFontSize(9);
         doc.setTextColor(...MUTED);
         doc.text("No entities in result.", 40, y);
@@ -439,7 +499,7 @@ function _appendScanToDoc(
         });
       }
     } else if (typeof parsedData === "string" && parsedData.trim()) {
-      doc.setFont("courier", "normal");
+      doc.setFont(FONT_NAME, "normal");
       doc.setFontSize(8);
       doc.setTextColor(30, 30, 30);
       y = renderRawJsonBlock(doc, parsedData, y);
@@ -450,8 +510,8 @@ function _appendScanToDoc(
         startY: y,
         head: [["Logs"]],
         body: result.output.logs.map((e) => [`${e.level}: ${e.message}`]),
-        headStyles: { fillColor: CARD_HEAD, textColor: [30, 30, 30], fontStyle: "bold", fontSize: 8 },
-        bodyStyles: { fontSize: 8 },
+        headStyles: { fillColor: CARD_HEAD, textColor: [30, 30, 30], fontStyle: "bold", fontSize: 8, font: FONT_NAME },
+        bodyStyles: { fontSize: 8, font: FONT_NAME },
         alternateRowStyles: { fillColor: ALT_ROW },
         margin: { left: 40, right: 40 },
       });
@@ -462,16 +522,17 @@ function _appendScanToDoc(
   }
 }
 
-export function buildFavoritesPdfDoc(entities: DataModelEntity[]): jsPDF {
+export async function buildFavoritesPdfDoc(entities: DataModelEntity[]): Promise<jsPDF> {
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+  await registerFont(doc);
 
   // Cover / header
-  doc.setFont("helvetica", "bold");
+  doc.setFont(FONT_NAME, "bold");
   doc.setFontSize(22);
   doc.setTextColor(...PRIMARY);
   doc.text("OpenRisk", 40, 80);
 
-  doc.setFont("helvetica", "normal");
+  doc.setFont(FONT_NAME, "normal");
   doc.setFontSize(14);
   doc.setTextColor(30, 30, 30);
   doc.text("Favourites Report", 40, 110);
@@ -498,13 +559,71 @@ export function buildFavoritesPdfDoc(entities: DataModelEntity[]): jsPDF {
 }
 
 export async function exportScanPdf(options: ExportScanPdfOptions) {
-  const doc = buildScanPdfDoc(options);
+  const doc = await buildScanPdfDoc(options);
   return savePdf(doc, `openrisk-${sanitizeFilenamePart(options.scanTitle)}.pdf`);
 }
 
 export async function exportFavoritesPdf(entities: DataModelEntity[]): Promise<string | null> {
-  const doc = buildFavoritesPdfDoc(entities);
+  const doc = await buildFavoritesPdfDoc(entities);
   return savePdf(doc, "openrisk-favourites.pdf");
+}
+
+export interface AllScansEntry {
+  id: string;
+  title: string;
+  status: string;
+  performedAt: string;
+  isArchived: boolean;
+}
+
+/**
+ * Shared "Save All" flow used by both SearchPage and HistoryPage.
+ * Loads full scan details, builds a combined PDF, prompts for save path,
+ * writes the file, and shows a success / error toast.
+ */
+export async function exportAllScansPdf(
+  entries: AllScansEntry[],
+  getScan: (id: string) => Promise<import("@/core/backend/bindings").ScanDetailRecord>,
+  pluginNameById: Record<string, string>,
+): Promise<void> {
+
+  const eligible = entries.filter(
+    (e) => (e.status === "Completed" || e.status === "Failed") && !e.isArchived,
+  );
+  if (!eligible.length) return;
+
+  const pdfEntries: AllScansPdfEntry[] = [];
+  for (const entry of eligible) {
+    try {
+      const detail = await getScan(entry.id);
+      pdfEntries.push({
+        scanTitle: entry.title.trim() || `Scan ${entry.id.slice(0, 8)}`,
+        performedAt: entry.performedAt,
+        detail,
+        pluginNameById,
+      });
+    } catch {
+      // skip unloadable scans
+    }
+  }
+  if (!pdfEntries.length) return;
+
+  const doc = await buildAllScansPdfDoc(pdfEntries);
+  const path = await save({
+    defaultPath: "openrisk-all-scans.pdf",
+    filters: [{ name: "PDF", extensions: ["pdf"] }],
+  });
+  if (!path) return;
+
+  const bytes = new Uint8Array(doc.output("arraybuffer"));
+  await writeFile(path, bytes);
+  toast.success("All scans saved to PDF", {
+    description: path,
+    action: {
+      label: "Open file",
+      onClick: () => void openPath(path),
+    },
+  });
 }
 
 /**
@@ -531,5 +650,3 @@ export async function openPdfInViewer(doc: jsPDF, filenameHint: string): Promise
   const fullPath = await join(dir, relativePath);
   await openPath(fullPath);
 }
-
-

@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ExternalLink } from "@/components/ui/ExternalLink";
 import { EntityTypeBadge } from "./EntityTypeBadge";
 import type { DataModelEntity } from "@/core/data-model/types";
 
@@ -91,15 +92,13 @@ export function RiskTopicGroupCard({ topics }: RiskTopicGroupCardProps) {
                                 {sources.length > 0 && (
                                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 pl-40">
                                         {sources.map((src) => (
-                                            <a
+                                            <ExternalLink
                                                 key={src.source}
                                                 href={src.source}
-                                                target="_blank"
-                                                rel="noreferrer"
                                                 className="text-xs text-primary underline underline-offset-2 truncate max-w-xs"
                                             >
                                                 {src.name}
-                                            </a>
+                                            </ExternalLink>
                                         ))}
                                     </div>
                                 )}
