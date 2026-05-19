@@ -1,6 +1,7 @@
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { Toaster } from "sonner";
 import { routeTree } from "./routeTree.gen";
+import { TooltipProvider } from "@radix-ui/react-tooltip";
 
 // Create router instance
 const router = createRouter({ routeTree });
@@ -15,8 +16,10 @@ declare module "@tanstack/react-router" {
 function App() {
   return (
     <>
-      <RouterProvider router={router} />
-      <Toaster position="bottom-left" richColors closeButton expand />
+      <TooltipProvider>
+        <RouterProvider router={router} />
+      </TooltipProvider>
+      <Toaster position="bottom-right" richColors closeButton expand />
     </>
   );
 }
