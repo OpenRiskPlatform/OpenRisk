@@ -10,6 +10,7 @@ import {
     FileEdit,
     Filter,
     X,
+    FileDown,
 } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +21,7 @@ import { ScanResultsPanel } from "@/components/project/ScanResultsPanel";
 import { useBackendClient } from "@/hooks/useBackendClient";
 import { useProjectWorkspace } from "@/hooks/useProjectWorkspace";
 import { unwrap } from "@/lib/utils";
+import { exportAllScansPdf } from "@/utils/exportPdf";
 
 interface HistoryPageProps {
     projectDir?: string;
@@ -48,6 +50,7 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
     const [querySearch, setQuerySearch] = useState("");
     const [pluginFilter, setPluginFilter] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState<string | null>(null);
+    const [printingAll, setPrintingAll] = useState(false);
 
     const allEntries = useMemo(() => {
         return workspace.scans.map((scan) => ({
@@ -116,6 +119,24 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
         });
     };
 
+    const handlePrintAll = async () => {
+        setPrintingAll(true);
+        try {
+            await exportAllScansPdf(
+                allEntries,
+                (id) => unwrap(backendClient.getScan(id)),
+                workspace.pluginNameById,
+            );
+        } catch (err) {
+            const { toast } = await import("sonner");
+            toast.error("Failed to export PDF", {
+                description: err instanceof Error ? err.message : String(err),
+            });
+        } finally {
+            setPrintingAll(false);
+        }
+    };
+
     return (
         <MainLayout
             projectDir={projectDir}
@@ -141,6 +162,7 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
                             {/* Header */}
                             <div className="rounded-[28px] border border-border/70 bg-card px-6 py-6 shadow-[0_20px_46px_-34px_rgba(15,23,42,0.18)]">
                                 <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                                    {/* Page header — remove the export button from here */}
                                     <div className="space-y-2">
                                         <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                                             <Clock className="h-6 w-6" />
@@ -243,6 +265,25 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
                                             <Badge variant="secondary" className="ml-1 text-[10px]">
                                                 {filtered.length === allEntries.length ? allEntries.length : `${filtered.length}/${allEntries.length}`}
                                             </Badge>
+                                            <button
+                                                type="button"
+                                                title="Export all as PDF"
+                                                disabled={
+                                                    printingAll ||
+                                                    allEntries.filter(
+                                                        (e) => e.status === "Completed" || e.status === "Failed",
+                                                    ).length === 0
+                                                }
+                                                onClick={() => void handlePrintAll()}
+                                                className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                            >
+                                                {printingAll ? (
+                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                ) : (
+                                                    <FileDown className="h-3 w-3" />
+                                                )}
+                                                {printingAll ? "Exporting…" : "Save All"}
+                                            </button>
                                         </div>
                                         {filtered.length === 0 ? (
                                             <p className="p-4 text-sm text-muted-foreground">

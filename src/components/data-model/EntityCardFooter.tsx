@@ -1,5 +1,6 @@
 import type { DataModelEntity, TypedValue } from "@/core/data-model/types";
 import { useSettings } from "@/core/settings/SettingsContext";
+import { ExternalLink } from "@/components/ui/ExternalLink";
 import { TypedValueView } from "./TypedValueView";
 
 function isKeyValue(item: TypedValue): item is {
@@ -77,15 +78,13 @@ export function EntityCardFooter({
                 <div className="space-y-1">
                     <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Sources</p>
                     {entity.$sources.map((source) => (
-                        <a
+                        <ExternalLink
                             key={source.source}
                             href={source.source}
-                            target="_blank"
-                            rel="noreferrer"
                             className="block text-xs text-primary underline underline-offset-4 break-all"
                         >
                             {source.name}
-                        </a>
+                        </ExternalLink>
                     ))}
                 </div>
             )}
@@ -144,7 +143,9 @@ function FlatPropertyRow({
     if (!nonEmpty.length) return null;
     return (
         <div className="flex items-start gap-3 py-1 border-b border-border/30 last:border-0">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground w-32 shrink-0 pt-0.5">{label}</p>
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground w-32 shrink-0 pt-0.5 whitespace-normal break-all">
+                {label}
+            </p>
             <div className="flex flex-wrap gap-1 flex-1 min-w-0">
                 {nonEmpty.map((value, idx) => (
                     <span key={`${label}-${idx}`} className="text-xs text-foreground">

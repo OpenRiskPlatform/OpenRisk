@@ -8,12 +8,9 @@ import {
   type ProjectScanHistoryEntry,
 } from "@/components/project/ProjectScanHistorySidebar";
 import { useBackendClient } from "@/hooks/useBackendClient";
-import { useProjectWorkspace, formatScanPerformedAt } from "@/hooks/useProjectWorkspace";
+import { useProjectWorkspace } from "@/hooks/useProjectWorkspace";
 import { unwrap } from "@/lib/utils";
-import { buildAllScansPdfDoc } from "@/utils/exportPdf";
-import { save } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
-import { openPath } from "@tauri-apps/plugin-opener";
+import { exportAllScansPdf } from "@/utils/exportPdf";
 import { toast } from "sonner";
 
 interface SearchPageProps {
@@ -67,42 +64,17 @@ export function SearchPage({ projectDir, routeScanId }: SearchPageProps) {
   };
 
   const handlePrintAll = async () => {
-    const completedScans = workspace.scans.filter(
-      (s) => (s.status === "Completed" || s.status === "Failed") && !s.isArchived,
-    );
-    if (!completedScans.length) return;
-
-    const entries = [];
-    for (const scan of completedScans) {
-      try {
-        const detail = await unwrap(backendClient.getScan(scan.id));
-        entries.push({
-          scanTitle: scan.preview?.trim() || `Scan ${scan.id.slice(0, 8)}`,
-          performedAt: formatScanPerformedAt(scan.createdAt),
-          detail,
-          pluginNameById: workspace.pluginNameById,
-        });
-      } catch {
-        // skip unloadable scans
-      }
+    try {
+      await exportAllScansPdf(
+        workspace.scanHistoryEntries,
+        (id: string) => unwrap(backendClient.getScan(id)),
+        workspace.pluginNameById,
+      );
+    } catch (err) {
+      toast.error("Failed to export PDF", {
+        description: err instanceof Error ? err.message : String(err),
+      });
     }
-    if (!entries.length) return;
-
-    const doc = buildAllScansPdfDoc(entries);
-    const path = await save({
-      defaultPath: "openrisk-all-scans.pdf",
-      filters: [{ name: "PDF", extensions: ["pdf"] }],
-    });
-    if (!path) return;
-    const bytes = new Uint8Array(doc.output("arraybuffer"));
-    await writeFile(path, bytes);
-    toast.success("All history of scans successfully saved to: ", {
-      description: path,
-      action: {
-        label: "Open file",
-        onClick: () => void openPath(path),
-      },
-    });
   };
 
   return (
