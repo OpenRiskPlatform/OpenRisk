@@ -36,6 +36,12 @@ export const PERSON_TABLE_COLUMNS: EntityTableColumnConfig[] = [
         getValues: (entity) => collectPropValues(entity, ["nationality", "nationalities"]),
         variant: "badges",
     },
+    {
+        id: "jurisdiction",
+        header: "jurisdiction",
+        getValues: (entity) => collectPropValues(entity, ["jurisdiction"]),
+        variant: "badges",
+    },
 ];
 
 export const ORGANIZATION_TABLE_COLUMNS: EntityTableColumnConfig[] = [
@@ -49,6 +55,12 @@ export const ORGANIZATION_TABLE_COLUMNS: EntityTableColumnConfig[] = [
         id: "registrationId",
         header: "registrationId",
         getValues: (entity) => collectPropValues(entity, ["registrationId", "organizationId"]),
+    },
+    {
+        id: "jurisdiction",
+        header: "jurisdiction",
+        getValues: (entity) => collectPropValues(entity, ["jurisdiction"]),
+        variant: "badges",
     },
     {
         id: "status",
@@ -67,6 +79,7 @@ export const ORGANIZATION_TABLE_COLUMNS: EntityTableColumnConfig[] = [
 const SKIP_PROPS = new Set([
     "name", "aliases", "alias", // name always first; aliases shown as secondary text
     "notes", "description", "remarks", "summary", // too long
+    "relativeCloseAssociates", // shown only in person cards/details
     "pepStatus", "sanctioned", // shown as badges in expanded view
     "id", "uuid", "sourceId", "externalId", // raw IDs, not useful in column
 ]);
@@ -78,6 +91,7 @@ const PROP_LABELS: Record<string, string> = {
     nationality: "Nationality",
     nationalities: "Nationality",
     country: "Country",
+    jurisdiction: "Jurisdiction",
     address: "Address",
     residenceAddress: "Address",
     registrationId: "Reg. ID",
@@ -93,6 +107,7 @@ const PROP_LABELS: Record<string, string> = {
     phone: "Phone",
     email: "Email",
     website: "Website",
+    relativeCloseAssociates: "RCA",
     position: "Position",
     employer: "Employer",
 };
@@ -162,5 +177,3 @@ export function buildDynamicColumns(
 
     return [nameCol, ...extraCols];
 }
-
-

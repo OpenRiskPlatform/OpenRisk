@@ -9,6 +9,7 @@ export interface SourceDescriptor {
 }
 
 export interface DataModelEntity {
+    $modelVersion?: string;
     $entity: string;
     $id: string;
     $sources?: SourceDescriptor[];

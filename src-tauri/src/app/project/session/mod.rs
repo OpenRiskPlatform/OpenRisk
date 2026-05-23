@@ -51,6 +51,15 @@ pub struct SqliteProjectPersistence {
     pub(super) conn: Arc<Mutex<Option<SqliteConnection>>>,
 }
 
+fn resolved_type_values(
+    type_name: &str,
+    explicit_values: Option<Vec<String>>,
+) -> Option<Vec<String>> {
+    explicit_values
+        .filter(|values| !values.is_empty())
+        .or_else(|| crate::registry_jurisdiction::values_for_type_name(type_name))
+}
+
 // ---------------------------------------------------------------------------
 // Factory methods
 // ---------------------------------------------------------------------------
@@ -480,11 +489,9 @@ impl SqliteProjectPersistence {
                 let type_str = input.type_.name().to_string();
                 let type_json = serde_json::to_string(&input.type_.to_json_value())
                     .unwrap_or_else(|_| "{\"name\":\"string\"}".to_string());
-                let enum_values_json = input
-                    .type_
-                    .enum_values()
-                    .map(|v| v.to_vec())
-                    .or_else(|| {
+                let enum_values = resolved_type_values(
+                    &type_str,
+                    input.type_.enum_values().map(|v| v.to_vec()).or_else(|| {
                         input.validation.as_ref().and_then(|v| {
                             if v.enum_.is_empty() {
                                 None
@@ -492,9 +499,10 @@ impl SqliteProjectPersistence {
                                 Some(v.enum_.clone())
                             }
                         })
-                    })
-                    .filter(|v| !v.is_empty())
-                    .map(|v| serde_json::to_string(&v).unwrap_or_default());
+                    }),
+                );
+                let enum_values_json =
+                    enum_values.map(|v| serde_json::to_string(&v).unwrap_or_default());
                 let optional = input.optional as i64;
                 let default_json = input
                     .default
@@ -526,11 +534,9 @@ impl SqliteProjectPersistence {
             let type_str = setting.type_.name().to_string();
             let type_json = serde_json::to_string(&setting.type_.to_json_value())
                 .unwrap_or_else(|_| "{\"name\":\"string\"}".to_string());
-            let enum_values_json = setting
-                .type_
-                .enum_values()
-                .map(|v| v.to_vec())
-                .or_else(|| {
+            let enum_values = resolved_type_values(
+                &type_str,
+                setting.type_.enum_values().map(|v| v.to_vec()).or_else(|| {
                     setting.validation.as_ref().and_then(|v| {
                         if v.enum_.is_empty() {
                             None
@@ -538,18 +544,20 @@ impl SqliteProjectPersistence {
                             Some(v.enum_.clone())
                         }
                     })
-                })
-                .filter(|v| !v.is_empty())
-                .map(|v| serde_json::to_string(&v).unwrap_or_default());
+                }),
+            );
+            let enum_values_json =
+                enum_values.map(|v| serde_json::to_string(&v).unwrap_or_default());
             let required = setting.required as i64;
+            let secret = setting.secret as i64;
             let default_json = setting
                 .default
                 .as_ref()
                 .map(|v| serde_json::to_string(v).unwrap_or_default());
             sqlx::query!(
                 r#"INSERT INTO PluginRevisionSettingDef
-                 (revision_id, name, title, type_, type_json, enum_values_json, description, required, default_value_json)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"#,
+                 (revision_id, name, title, type_, type_json, enum_values_json, description, required, secret, default_value_json)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"#,
                 revision_id,
                 name_str,
                 title_str,
@@ -558,6 +566,7 @@ impl SqliteProjectPersistence {
                 enum_values_json,
                 setting.description,
                 required,
+                secret,
                 default_json,
             )
             .execute(&mut *conn)
@@ -568,12 +577,10 @@ impl SqliteProjectPersistence {
             let type_str = metric.type_.name().to_string();
             let type_json = serde_json::to_string(&metric.type_.to_json_value())
                 .unwrap_or_else(|_| "{\"name\":\"string\"}".to_string());
-            let enum_values_json = metric
-                .type_
-                .enum_values()
-                .map(|v| v.to_vec())
-                .filter(|v| !v.is_empty())
-                .map(|v| serde_json::to_string(&v).unwrap_or_default());
+            let enum_values =
+                resolved_type_values(&type_str, metric.type_.enum_values().map(|v| v.to_vec()));
+            let enum_values_json =
+                enum_values.map(|v| serde_json::to_string(&v).unwrap_or_default());
             sqlx::query!(
                 r#"INSERT INTO PluginRevisionMetricDef
                  (revision_id, name, title, type_, type_json, enum_values_json, description)

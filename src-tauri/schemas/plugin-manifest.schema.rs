@@ -45,7 +45,8 @@ pub mod error {
 #[doc = "        \"boolean\","]
 #[doc = "        \"integer\","]
 #[doc = "        \"date\","]
-#[doc = "        \"url\""]
+#[doc = "        \"url\","]
+#[doc = "        \"registry-jurisdiction-code\""]
 #[doc = "      ]"]
 #[doc = "    },"]
 #[doc = "    {"]
@@ -63,7 +64,8 @@ pub mod error {
 #[doc = "            \"integer\","]
 #[doc = "            \"date\","]
 #[doc = "            \"url\","]
-#[doc = "            \"enum\""]
+#[doc = "            \"enum\","]
+#[doc = "            \"registry-jurisdiction-code\""]
 #[doc = "          ]"]
 #[doc = "        },"]
 #[doc = "        \"values\": {"]
@@ -115,7 +117,8 @@ impl ::std::convert::From<FieldTypeString> for FieldType {
 #[doc = "    \"integer\","]
 #[doc = "    \"date\","]
 #[doc = "    \"url\","]
-#[doc = "    \"enum\""]
+#[doc = "    \"enum\","]
+#[doc = "    \"registry-jurisdiction-code\""]
 #[doc = "  ]"]
 #[doc = "}"]
 #[doc = r" ```"]
@@ -147,6 +150,8 @@ pub enum FieldTypeObjectName {
     Url,
     #[serde(rename = "enum")]
     Enum,
+    #[serde(rename = "registry-jurisdiction-code")]
+    RegistryJurisdictionCode,
 }
 impl ::std::convert::From<&Self> for FieldTypeObjectName {
     fn from(value: &FieldTypeObjectName) -> Self {
@@ -163,6 +168,7 @@ impl ::std::fmt::Display for FieldTypeObjectName {
             Self::Date => f.write_str("date"),
             Self::Url => f.write_str("url"),
             Self::Enum => f.write_str("enum"),
+            Self::RegistryJurisdictionCode => f.write_str("registry-jurisdiction-code"),
         }
     }
 }
@@ -177,6 +183,7 @@ impl ::std::str::FromStr for FieldTypeObjectName {
             "date" => Ok(Self::Date),
             "url" => Ok(Self::Url),
             "enum" => Ok(Self::Enum),
+            "registry-jurisdiction-code" => Ok(Self::RegistryJurisdictionCode),
             _ => Err("invalid value".into()),
         }
     }
@@ -216,7 +223,8 @@ impl ::std::convert::TryFrom<::std::string::String> for FieldTypeObjectName {
 #[doc = "    \"boolean\","]
 #[doc = "    \"integer\","]
 #[doc = "    \"date\","]
-#[doc = "    \"url\""]
+#[doc = "    \"url\","]
+#[doc = "    \"registry-jurisdiction-code\""]
 #[doc = "  ]"]
 #[doc = "}"]
 #[doc = r" ```"]
@@ -246,6 +254,8 @@ pub enum FieldTypeString {
     Date,
     #[serde(rename = "url")]
     Url,
+    #[serde(rename = "registry-jurisdiction-code")]
+    RegistryJurisdictionCode,
 }
 impl ::std::convert::From<&Self> for FieldTypeString {
     fn from(value: &FieldTypeString) -> Self {
@@ -261,6 +271,7 @@ impl ::std::fmt::Display for FieldTypeString {
             Self::Integer => f.write_str("integer"),
             Self::Date => f.write_str("date"),
             Self::Url => f.write_str("url"),
+            Self::RegistryJurisdictionCode => f.write_str("registry-jurisdiction-code"),
         }
     }
 }
@@ -274,6 +285,7 @@ impl ::std::str::FromStr for FieldTypeString {
             "integer" => Ok(Self::Integer),
             "date" => Ok(Self::Date),
             "url" => Ok(Self::Url),
+            "registry-jurisdiction-code" => Ok(Self::RegistryJurisdictionCode),
             _ => Err("invalid value".into()),
         }
     }
@@ -1767,6 +1779,11 @@ impl<'de> ::serde::Deserialize<'de> for PluginEntrypointDefinitionName {
 #[doc = "      \"default\": false,"]
 #[doc = "      \"type\": \"boolean\""]
 #[doc = "    },"]
+#[doc = "    \"secret\": {"]
+#[doc = "      \"description\": \"Frontend hint that this setting contains sensitive data and should use a secret input control\","]
+#[doc = "      \"default\": false,"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    },"]
 #[doc = "    \"title\": {"]
 #[doc = "      \"description\": \"Human-readable setting name\","]
 #[doc = "      \"type\": \"string\""]
@@ -1796,6 +1813,9 @@ pub struct SettingDefinition {
     #[doc = "Whether this setting is required"]
     #[serde(default)]
     pub required: bool,
+    #[doc = "Frontend hint that this setting contains sensitive data and should use a secret input control"]
+    #[serde(default)]
+    pub secret: bool,
     #[doc = "Human-readable setting name"]
     pub title: ::std::string::String,
     #[serde(rename = "type")]

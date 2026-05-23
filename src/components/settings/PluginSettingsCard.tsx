@@ -70,21 +70,14 @@ export function PluginSettingsCard({
 
 
     return (
-        <div className="border rounded-lg p-4 space-y-4">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <div>
-                    <h2 className="font-medium text-lg">{plugin.name}</h2>
-                    <p className="text-sm text-base">{plugin.id} · v{plugin.version}</p>
-                </div>
-            </div>
-
+        <>
             {plugin.settingDefs.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                     <Settings />
                     This plugin does not declare configurable settings.
                 </p>
             ) : (
-                <div className="space-y-4">
+                <>
                     {plugin.settingDefs.map((setting) => {
                         const defaultValue =
                             setting.defaultValue === null || setting.defaultValue.type === "null"
@@ -101,7 +94,7 @@ export function PluginSettingsCard({
                                 ) : null}
                                 <TypedSettingInput
                                     typeName={setting.type.name}
-                                    options={setting.type.name === "enum" ? setting.type.values ?? undefined : undefined}
+                                    options={setting.type.values ?? undefined}
                                     value={currentValue}
                                     onChange={(value) => setField(setting.name, value)}
                                     emptyAsNull
@@ -123,8 +116,8 @@ export function PluginSettingsCard({
                     </div>
 
                     {saveError ? <p className="text-sm text-red-600">{saveError}</p> : null}
-                </div>
+                </>
             )}
-        </div>
+        </>
     );
 }

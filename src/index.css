@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: "Mozilla Headline";
+  src: url("./assets/fonts/MozillaText-VariableFont_wght.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-mozilla-headline {
+  font-family: "Mozilla Headline", system-ui, -apple-system, sans-serif;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

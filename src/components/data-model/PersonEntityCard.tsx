@@ -8,6 +8,7 @@ import {
 import type { DataModelEntity, TypedValue } from "@/core/data-model/types";
 import { EntityCardFooter } from "./EntityCardFooter";
 import { EntityTypeBadge } from "./EntityTypeBadge";
+import { RelativeCloseAssociatesField } from "./RelativeCloseAssociatesField";
 import { TypedValueView } from "./TypedValueView";
 
 interface PersonEntityCardProps {
@@ -37,10 +38,12 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
     const aliases = propList(entity, "aliases");
     const birthDate = firstProp(entity, "birthDate");
     const birthPlace = firstProp(entity, "birthPlace");
+    const jurisdiction = firstProp(entity, "jurisdiction");
     const nationalities = propList(entity, "nationalities");
     const addresses = propList(entity, "addresses");
     const emails = propList(entity, "emails");
     const phones = propList(entity, "phones");
+    const relativeCloseAssociates = propList(entity, "relativeCloseAssociates");
 
     const pepStatus = firstProp(entity, "pepStatus");
     const sanctioned = firstProp(entity, "sanctioned");
@@ -91,12 +94,14 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
                 <div className="grid gap-3 sm:grid-cols-2">
                     <Field label="Birth Date" value={birthDate} />
                     <Field label="Birth Place" value={birthPlace} />
+                    <Field label="Jurisdiction" value={jurisdiction} />
                 </div>
 
                 <TagField label="Nationalities" values={nationalities} />
                 <TagField label="Addresses" values={addresses} />
                 <TagField label="Emails" values={emails} />
                 <TagField label="Phones" values={phones} />
+                <RelativeCloseAssociatesField values={relativeCloseAssociates} />
 
                 {notesText && (
                     <p className="text-sm text-muted-foreground italic border-l-2 border-border pl-3">
@@ -112,10 +117,12 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
                         "aliases",
                         "birthDate",
                         "birthPlace",
+                        "jurisdiction",
                         "nationalities",
                         "addresses",
                         "emails",
                         "phones",
+                        "relativeCloseAssociates",
                         "pepStatus",
                         "sanctioned",
                     ]}

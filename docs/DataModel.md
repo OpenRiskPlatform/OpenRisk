@@ -35,6 +35,8 @@ Every typed value has this shape:
   - partial date, for example `2024` or `2024-06`
 - `date-time-iso8601`
   - full timestamp, for example `2024-06-01T12:34:56Z`
+- `registry-jurisdiction-code`
+  - jurisdiction code such as `sk` or `us_de`
 - `image-base64`
 - `image-url`
 - `url`
@@ -68,6 +70,7 @@ Rules:
 ## Entity Contract
 
 Each entity has:
+- `$modelVersion`: data model version; current value is `0.0.2`
 - `$entity`: entity type identifier, for example `entity.person`
 - `$id`: stable entity id; plugins should namespace external ids when needed, for example `opensanctions:Q7747`
 - `$sources`: array of source descriptors
@@ -131,6 +134,9 @@ Each source entry has this shape:
 - `nationality`
   - type: `string`
   - nationality or citizenship
+- `jurisdiction`
+  - type: `registry-jurisdiction-code`
+  - registry or legal jurisdiction attached to the person record
 - `residenceAddress`
   - type: `address`
   - permanent or known residential address
@@ -163,6 +169,7 @@ Generic legal entity representation.
 Typical props:
 - `name` (`string`)
 - `country` (`string`)
+- `jurisdiction` (`registry-jurisdiction-code`)
 - `address` (`address`)
 - `organizationId` (`string`)
 

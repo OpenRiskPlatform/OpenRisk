@@ -82,11 +82,14 @@ fn parse_field_type(type_json: &str, enum_values_json: Option<&str>) -> PluginFi
         });
 
     if field_type.values.is_none() {
-        field_type.values = enum_values_json.and_then(|s| {
-            serde_json::from_str::<Vec<String>>(s)
-                .ok()
-                .filter(|v| !v.is_empty())
-        });
+        field_type.values = crate::registry_jurisdiction::values_for_type_name(&field_type.name)
+            .or_else(|| {
+                enum_values_json.and_then(|s| {
+                    serde_json::from_str::<Vec<String>>(s)
+                        .ok()
+                        .filter(|v| !v.is_empty())
+                })
+            });
     }
 
     field_type
@@ -236,7 +239,7 @@ async fn load_plugin_setting_defs(
     let rows = sqlx::query!(
         r#"SELECT prs.name as "name!", prs.title as "title!",
                       prs.type_json as "type_json!", prs.enum_values_json, prs.description,
-                      prs.required, prs.default_value_json
+                      prs.required, prs.secret, prs.default_value_json
                FROM Plugin p
                LEFT JOIN ProjectPlugin pp ON pp.plugin_id = p.id AND pp.project_id = ?2
                INNER JOIN PluginRevisionSettingDef prs ON prs.revision_id = COALESCE(pp.pinned_revision_id, p.current_revision_id)
@@ -256,6 +259,7 @@ async fn load_plugin_setting_defs(
             type_: parse_field_type(&row.type_json, row.enum_values_json.as_deref()),
             description: row.description,
             required: row.required != 0,
+            secret: row.secret != 0,
             default_value: parse_default_setting_value(row.default_value_json.as_deref()),
         })
         .collect())

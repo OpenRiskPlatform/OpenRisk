@@ -115,6 +115,7 @@ pub struct PluginSettingDef {
     pub type_: PluginFieldTypeDef,
     pub description: Option<String>,
     pub required: bool,
+    pub secret: bool,
     pub default_value: Option<SettingValue>,
 }
 

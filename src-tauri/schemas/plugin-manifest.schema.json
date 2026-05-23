@@ -195,7 +195,8 @@
                         "boolean",
                         "integer",
                         "date",
-                        "url"
+                        "url",
+                        "registry-jurisdiction-code"
                     ]
                 },
                 {
@@ -213,7 +214,8 @@
                                 "integer",
                                 "date",
                                 "url",
-                                "enum"
+                                "enum",
+                                "registry-jurisdiction-code"
                             ]
                         },
                         "values": {
@@ -296,6 +298,11 @@
                 "required": {
                     "type": "boolean",
                     "description": "Whether this setting is required",
+                    "default": false
+                },
+                "secret": {
+                    "type": "boolean",
+                    "description": "Frontend hint that this setting contains sensitive data and should use a secret input control",
                     "default": false
                 },
                 "validation": {

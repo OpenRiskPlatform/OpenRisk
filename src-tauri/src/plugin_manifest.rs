@@ -19,6 +19,9 @@ impl PluginFieldType {
             PluginFieldType::String(FieldTypeString::Integer) => "integer",
             PluginFieldType::String(FieldTypeString::Date) => "date",
             PluginFieldType::String(FieldTypeString::Url) => "url",
+            PluginFieldType::String(FieldTypeString::RegistryJurisdictionCode) => {
+                crate::registry_jurisdiction::REGISTRY_JURISDICTION_CODE_TYPE_NAME
+            }
             PluginFieldType::Object {
                 name: FieldTypeObjectName::String,
                 ..
@@ -43,6 +46,10 @@ impl PluginFieldType {
                 name: FieldTypeObjectName::Url,
                 ..
             } => "url",
+            PluginFieldType::Object {
+                name: FieldTypeObjectName::RegistryJurisdictionCode,
+                ..
+            } => crate::registry_jurisdiction::REGISTRY_JURISDICTION_CODE_TYPE_NAME,
             PluginFieldType::Object {
                 name: FieldTypeObjectName::Enum,
                 ..
@@ -128,4 +135,45 @@ pub fn parse_manifest(json_str: &str) -> Result<OpenRiskPluginManifest, Manifest
     // Deserialize into strongly-typed structure
     serde_json::from_value::<OpenRiskPluginManifest>(raw)
         .map_err(|e| ManifestError::ParseError(e.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_manifest;
+
+    #[test]
+    fn parse_manifest_accepts_secret_setting_hint() {
+        let manifest = parse_manifest(
+            r#"{
+                "id": "secret-test",
+                "version": "0.1.0",
+                "name": "Secret Test",
+                "description": "Test plugin with secret setting",
+                "authors": [{ "name": "OpenRisk" }],
+                "license": "MIT",
+                "main": "index.ts",
+                "entrypoints": [
+                    {
+                        "id": "search",
+                        "name": "Search",
+                        "function": "search",
+                        "inputs": []
+                    }
+                ],
+                "settings": [
+                    {
+                        "name": "token",
+                        "type": "string",
+                        "title": "API Token",
+                        "secret": true,
+                        "required": true,
+                        "default": null
+                    }
+                ]
+            }"#,
+        )
+        .expect("manifest with secret setting should parse");
+
+        assert!(manifest.settings[0].secret);
+    }
 }

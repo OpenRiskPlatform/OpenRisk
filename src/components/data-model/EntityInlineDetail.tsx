@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import type { DataModelEntity, TypedValue } from "@/core/data-model/types";
 import { EntityCardFooter } from "./EntityCardFooter";
+import { RelativeCloseAssociatesField } from "./RelativeCloseAssociatesField";
 import { TypedValueView } from "./TypedValueView";
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -64,6 +65,7 @@ export function PersonEntityInline({ entity }: { entity: DataModelEntity }) {
     const addresses = propList(entity, "addresses");
     const emails = propList(entity, "emails");
     const phones = propList(entity, "phones");
+    const relativeCloseAssociates = propList(entity, "relativeCloseAssociates");
     const notes = firstProp(entity, "notes");
     const pepStatus = firstProp(entity, "pepStatus");
     const sanctioned = firstProp(entity, "sanctioned");
@@ -107,6 +109,7 @@ export function PersonEntityInline({ entity }: { entity: DataModelEntity }) {
             <TagField label="Addresses" values={addresses} />
             <TagField label="Emails" values={emails} />
             <TagField label="Phones" values={phones} />
+            <RelativeCloseAssociatesField values={relativeCloseAssociates} />
 
             {notesText && (
                 <p className="text-sm text-muted-foreground italic border-l-2 border-border pl-3">{notesText}</p>
@@ -115,7 +118,8 @@ export function PersonEntityInline({ entity }: { entity: DataModelEntity }) {
             <EntityCardFooter
                 entity={entity}
                 excludePropKeys={["name", "notes", "aliases", "birthDate", "birthPlace",
-                    "nationalities", "addresses", "emails", "phones", "pepStatus", "sanctioned"]}
+                    "nationalities", "addresses", "emails", "phones", "relativeCloseAssociates",
+                    "pepStatus", "sanctioned"]}
             />
         </div>
     );
@@ -195,4 +199,3 @@ export function OrganizationInline({ entity }: { entity: DataModelEntity }) {
         </div>
     );
 }
-
