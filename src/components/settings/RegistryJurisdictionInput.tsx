@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-const MAX_VISIBLE_RESULTS = 12;
+const SCROLLABLE_RESULTS_THRESHOLD = 8;
 
 interface RegistryJurisdictionInputProps {
     value: unknown;
@@ -58,7 +58,7 @@ export function RegistryJurisdictionInput({
                 return haystack.includes(normalized);
             });
 
-        return results.slice(0, MAX_VISIBLE_RESULTS);
+        return results;
     }, [availableOptions, query]);
 
     const exactMatch = useMemo(() => {
@@ -174,7 +174,12 @@ export function RegistryJurisdictionInput({
 
             {open ? (
                 <div className="absolute z-50 mt-2 w-full overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md">
-                    <ScrollArea className="max-h-72">
+                    <ScrollArea
+                        className={cn(
+                            "max-h-72",
+                            filteredOptions.length > SCROLLABLE_RESULTS_THRESHOLD && "h-72",
+                        )}
+                    >
                         {filteredOptions.length > 0 ? (
                             <div className="p-1">
                                 {filteredOptions.map((option, index) => (
