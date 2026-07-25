@@ -46,6 +46,7 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
     const relativeCloseAssociates = propList(entity, "relativeCloseAssociates");
 
     const pepStatus = firstProp(entity, "pepStatus");
+    const pepRcaStatus = firstProp(entity, "isPepRca");
     const sanctioned = firstProp(entity, "sanctioned");
     const notesText = notes
         && notes.value !== null
@@ -55,7 +56,12 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
         : null;
 
     const isPep = pepStatus?.value === true;
+    const isPepRca = pepRcaStatus?.value === true;
     const isSanctioned = sanctioned?.value === true;
+    const isExplicitlyClear =
+        pepStatus?.value === false
+        && sanctioned?.value === false
+        && pepRcaStatus?.value !== true;
 
     return (
         <Card>
@@ -81,7 +87,12 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
                                 ⚠️ PEP
                             </Badge>
                         )}
-                        {!isSanctioned && !isPep && (pepStatus !== undefined || sanctioned !== undefined) && (
+                        {isPepRca && (
+                            <Badge variant="destructive" className="text-xs font-semibold bg-orange-500/80 hover:bg-orange-500/90">
+                                PEP: RCA
+                            </Badge>
+                        )}
+                        {isExplicitlyClear && (
                             <Badge variant="secondary" className="text-xs font-semibold text-green-700 dark:text-green-400">
                                 ✓ No PEP / No Sanctions
                             </Badge>
@@ -124,6 +135,7 @@ export function PersonEntityCard({ entity }: PersonEntityCardProps) {
                         "phones",
                         "relativeCloseAssociates",
                         "pepStatus",
+                        "isPepRca",
                         "sanctioned",
                     ]}
                 />

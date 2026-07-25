@@ -80,7 +80,7 @@ const SKIP_PROPS = new Set([
     "name", "aliases", "alias", // name always first; aliases shown as secondary text
     "notes", "description", "remarks", "summary", // too long
     "relativeCloseAssociates", // shown only in person cards/details
-    "pepStatus", "sanctioned", // shown as badges in expanded view
+    "pepStatus", "isPepRca", "sanctioned", // shown as badges in expanded view
     "id", "uuid", "sourceId", "externalId", // raw IDs, not useful in column
 ]);
 

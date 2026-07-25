@@ -68,10 +68,16 @@ export function PersonEntityInline({ entity }: { entity: DataModelEntity }) {
     const relativeCloseAssociates = propList(entity, "relativeCloseAssociates");
     const notes = firstProp(entity, "notes");
     const pepStatus = firstProp(entity, "pepStatus");
+    const pepRcaStatus = firstProp(entity, "isPepRca");
     const sanctioned = firstProp(entity, "sanctioned");
 
     const isPep = pepStatus?.value === true;
+    const isPepRca = pepRcaStatus?.value === true;
     const isSanctioned = sanctioned?.value === true;
+    const isExplicitlyClear =
+        pepStatus?.value === false
+        && sanctioned?.value === false
+        && pepRcaStatus?.value !== true;
     const notesText = notes && hasValue(notes) ? String(notes.value) : null;
 
     return (
@@ -92,7 +98,12 @@ export function PersonEntityInline({ entity }: { entity: DataModelEntity }) {
                 {isPep && (
                     <Badge variant="destructive" className="text-xs font-semibold bg-orange-500/80 hover:bg-orange-500/90">PEP</Badge>
                 )}
-                {!isSanctioned && !isPep && (pepStatus !== undefined || sanctioned !== undefined) && (
+                {isPepRca && (
+                    <Badge variant="destructive" className="text-xs font-semibold bg-orange-500/80 hover:bg-orange-500/90">
+                        PEP: RCA
+                    </Badge>
+                )}
+                {isExplicitlyClear && (
                     <Badge variant="secondary" className="text-xs font-semibold text-green-700 dark:text-green-400">
                         No PEP / No Sanctions
                     </Badge>
@@ -119,7 +130,7 @@ export function PersonEntityInline({ entity }: { entity: DataModelEntity }) {
                 entity={entity}
                 excludePropKeys={["name", "notes", "aliases", "birthDate", "birthPlace",
                     "nationalities", "addresses", "emails", "phones", "relativeCloseAssociates",
-                    "pepStatus", "sanctioned"]}
+                    "pepStatus", "isPepRca", "sanctioned"]}
             />
         </div>
     );
