@@ -223,8 +223,8 @@ export function EntryPage({}: EntryPageProps) {
     };
 
     return (
-        <div className="min-h-screen bg-background flex items-center justify-center px-6 py-10">
-            <div className="w-full max-w-xl space-y-7">
+        <div className="flex h-full overflow-y-auto bg-background px-6 py-10">
+            <div className="m-auto w-full max-w-xl space-y-7">
                 <div className="flex items-center justify-center">
                     <OpenRiskLogo
                         size={120}

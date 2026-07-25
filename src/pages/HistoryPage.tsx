@@ -144,7 +144,7 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
             onGoBack={() => void goBack()}
             hasPlugins={workspace.settingsData === null ? true : workspace.settingsData.plugins.length > 0}
         >
-            <div className="min-h-full bg-muted/[0.18] px-16 py-10 lg:px-24 xl:px-32">
+            <div className="h-full overflow-y-auto overscroll-contain bg-muted/[0.18] px-16 py-10 lg:px-24 xl:px-32">
                 <div className="flex w-full flex-col gap-6">
                     {!projectDir ? (
                         <Card>
@@ -501,4 +501,3 @@ export function HistoryPage({ projectDir, routeScanId }: HistoryPageProps) {
         </MainLayout>
     );
 }
-
