@@ -17,6 +17,7 @@ interface TypedSettingInputProps {
     emptyAsNull?: boolean;
     placeholder?: string;
     disabled?: boolean;
+    isSecret?: boolean;
 }
 
 export function TypedSettingInput({
@@ -27,6 +28,7 @@ export function TypedSettingInput({
     emptyAsNull = false,
     placeholder,
     disabled = false,
+    isSecret = false,
 }: TypedSettingInputProps) {
     if (typeName === "registry-jurisdiction-code") {
         return (
@@ -106,9 +108,10 @@ export function TypedSettingInput({
     if (typeName === "url") {
         return (
             <Input
-                type="url"
+                type={isSecret ? "password" : "url"}
                 placeholder={placeholder}
                 disabled={disabled}
+                autoComplete={isSecret ? "off" : undefined}
                 value={value === null || value === undefined ? "" : String(value)}
                 onChange={(event) => onChange(event.target.value)}
             />
@@ -117,9 +120,10 @@ export function TypedSettingInput({
 
     return (
         <Input
-            type="text"
+            type={isSecret ? "password" : "text"}
             placeholder={placeholder}
             disabled={disabled}
+            autoComplete={isSecret ? "off" : undefined}
             value={value === null || value === undefined ? "" : String(value)}
             onChange={(event) => onChange(event.target.value)}
         />

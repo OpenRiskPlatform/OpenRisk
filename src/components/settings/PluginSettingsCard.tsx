@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { unwrap } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,14 @@ function unknownToSettingValue(v: unknown): SettingValue {
     return { type: "string", value: String(v) };
 }
 
+function draftFromSettingValues(plugin: PluginRecord): Record<string, unknown> {
+    const draft: Record<string, unknown> = {};
+    for (const sv of plugin.settingValues) {
+        draft[sv.name] = sv.value.type === "null" ? null : sv.value.value;
+    }
+    return draft;
+}
+
 interface PluginSettingsCardProps {
     plugin: PluginRecord;
     metricsRefreshToken: number;
@@ -27,16 +35,19 @@ export function PluginSettingsCard({
     onPluginUpdated,
     backendClient,
 }: PluginSettingsCardProps) {
-    const [draft, setDraft] = useState<Record<string, unknown>>(() => {
-        const r: Record<string, unknown> = {};
-        for (const sv of plugin.settingValues) {
-            r[sv.name] = sv.value.type === "null" ? null : sv.value.value;
-        }
-        return r;
-    });
+    const [draft, setDraft] = useState<Record<string, unknown>>(() => draftFromSettingValues(plugin));
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [savedAt, setSavedAt] = useState<number | null>(null);
+
+    useEffect(() => {
+        setDraft(draftFromSettingValues(plugin));
+    }, [plugin]);
+
+    useEffect(() => {
+        setSaveError(null);
+        setSavedAt(null);
+    }, [plugin.id]);
 
     const handleSave = async () => {
         setSaveError(null);
@@ -98,6 +109,7 @@ export function PluginSettingsCard({
                                     value={currentValue}
                                     onChange={(value) => setField(setting.name, value)}
                                     emptyAsNull
+                                    isSecret={setting.secret}
                                 />
                                 <p className="text-xs text-muted-foreground">Type: {setting.type.name}</p>
                             </div>
