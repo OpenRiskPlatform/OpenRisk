@@ -1,10 +1,33 @@
-import { useMemo, useState } from "react";
+import {
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   Archive,
   ArchiveRestore,
   ArrowDown,
   ArrowUp,
   Check,
+  GripVertical,
   MoreHorizontal,
   PanelLeftClose,
   Pencil,
@@ -29,6 +52,38 @@ interface InvestigationHistoryProps {
   onRename: (scanId: string, preview: string) => Promise<void>;
   onArchive: (scanId: string, archived: boolean) => Promise<void>;
   onReorder: (orderedScanIds: string[]) => Promise<void>;
+}
+
+function SortableHistoryItem({
+  id,
+  disabled,
+  children,
+}: {
+  id: string;
+  disabled: boolean;
+  children: (sortable: ReturnType<typeof useSortable>) => ReactNode;
+}) {
+  const sortable = useSortable({ id, disabled });
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(sortable.transform),
+    transition: sortable.transition,
+    position: "relative",
+    zIndex: sortable.isDragging ? 30 : undefined,
+  };
+
+  return (
+    <li
+      ref={sortable.setNodeRef}
+      data-scan-id={id}
+      style={style}
+      className={cn(
+        "group relative bg-background",
+        sortable.isDragging && "opacity-80 shadow-lg",
+      )}
+    >
+      {children(sortable)}
+    </li>
+  );
 }
 
 export function InvestigationHistory({
@@ -70,6 +125,14 @@ export function InvestigationHistory({
       );
     });
   }, [query, scans, showArchived]);
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
 
   const saveRename = async (scanId: string) => {
     const preview = editingPreview.trim();
@@ -94,10 +157,19 @@ export function InvestigationHistory({
     }
   };
 
-  const reorder = async (
-    scanId: string,
-    direction: "up" | "down",
-  ) => {
+  const persistOrder = async (scanId: string, nextActiveIds: string[]) => {
+    const archivedIds = scans
+      .filter((scan) => scan.isArchived)
+      .map((scan) => scan.id);
+    setOperatingId(scanId);
+    try {
+      await onReorder([...nextActiveIds, ...archivedIds]);
+    } finally {
+      setOperatingId(null);
+    }
+  };
+
+  const reorder = async (scanId: string, direction: "up" | "down") => {
     const currentIndex = activeScanIds.indexOf(scanId);
     if (currentIndex < 0) {
       return;
@@ -108,21 +180,29 @@ export function InvestigationHistory({
     if (nextIndex < 0 || nextIndex >= activeScanIds.length) {
       return;
     }
-    const nextActiveIds = [...activeScanIds];
-    [nextActiveIds[currentIndex], nextActiveIds[nextIndex]] = [
-      nextActiveIds[nextIndex],
-      nextActiveIds[currentIndex],
-    ];
+    await persistOrder(
+      scanId,
+      arrayMove(activeScanIds, currentIndex, nextIndex),
+    );
+  };
 
-    const archivedIds = scans
-      .filter((scan) => scan.isArchived)
-      .map((scan) => scan.id);
-    setOperatingId(scanId);
-    try {
-      await onReorder([...nextActiveIds, ...archivedIds]);
-    } finally {
-      setOperatingId(null);
+  const finishDrag = (event: DragEndEvent) => {
+    const scanId = String(event.active.id);
+    const targetId = event.over ? String(event.over.id) : null;
+    if (!targetId || targetId === scanId) {
+      return;
     }
+
+    const currentIndex = activeScanIds.indexOf(scanId);
+    const targetIndex = activeScanIds.indexOf(targetId);
+    if (currentIndex < 0 || targetIndex < 0) {
+      return;
+    }
+
+    void persistOrder(
+      scanId,
+      arrayMove(activeScanIds, currentIndex, targetIndex),
+    );
   };
 
   return (
@@ -176,7 +256,16 @@ export function InvestigationHistory({
             No investigations found.
           </p>
         ) : (
-          <ul className="divide-y">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={finishDrag}
+          >
+            <SortableContext
+              items={visibleScans.map((scan) => scan.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <ul className="divide-y">
             {visibleScans.map((scan) => {
               const selected = scan.id === selectedScanId;
               const preview =
@@ -187,7 +276,18 @@ export function InvestigationHistory({
               const canMoveDown =
                 activeIndex >= 0 && activeIndex < activeScanIds.length - 1;
               return (
-                <li key={scan.id} className="group relative">
+                <SortableHistoryItem
+                  key={scan.id}
+                  id={scan.id}
+                  disabled={
+                    disabled ||
+                    operatingId !== null ||
+                    scan.isArchived ||
+                    editingId === scan.id
+                  }
+                >
+                  {(sortable) => (
+                    <>
                   {editingId === scan.id ? (
                     <form
                       className="flex items-center gap-1 border-l-2 border-l-primary bg-muted/60 p-2"
@@ -240,6 +340,20 @@ export function InvestigationHistory({
                         selected && "border-l-primary bg-muted/60",
                       )}
                     >
+                      {!scan.isArchived ? (
+                        <button
+                          ref={sortable.setActivatorNodeRef}
+                          type="button"
+                          {...sortable.attributes}
+                          {...sortable.listeners}
+                          disabled={disabled || operatingId !== null}
+                          aria-label={`Drag ${preview}`}
+                          title="Drag to reorder"
+                          className="ml-1 flex w-6 shrink-0 touch-none cursor-grab items-center justify-center text-muted-foreground opacity-50 hover:opacity-100 active:cursor-grabbing"
+                        >
+                          <GripVertical className="h-4 w-4" />
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         disabled={disabled}
@@ -362,10 +476,14 @@ export function InvestigationHistory({
                       </details>
                     </div>
                   )}
-                </li>
+                    </>
+                  )}
+                </SortableHistoryItem>
               );
             })}
-          </ul>
+              </ul>
+            </SortableContext>
+          </DndContext>
         )}
       </div>
     </aside>

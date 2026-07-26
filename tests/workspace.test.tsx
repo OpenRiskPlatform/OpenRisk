@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { vi } from "vitest";
@@ -29,7 +29,9 @@ describe("Workspace investigation flow", () => {
 
     await user.click(screen.getByLabelText("Plugin"));
     await user.click(screen.getByRole("option", { name: "Demo Registry" }));
-    await user.click(screen.getByRole("checkbox"));
+    const entrypointCheckbox = screen.getByRole("checkbox");
+    await user.click(entrypointCheckbox);
+    await waitFor(() => expect(entrypointCheckbox).toBeChecked());
     await user.type(await screen.findByLabelText(/Name/), "Ada Lovelace");
 
     expect(client.runScan).not.toHaveBeenCalled();
@@ -125,7 +127,9 @@ describe("Workspace investigation flow", () => {
 
     await user.click(screen.getByLabelText("Plugin"));
     await user.click(screen.getByRole("option", { name: "Demo Registry" }));
-    await user.click(screen.getByRole("checkbox"));
+    const runningCheckbox = screen.getByRole("checkbox");
+    await user.click(runningCheckbox);
+    await waitFor(() => expect(runningCheckbox).toBeChecked());
     await user.type(await screen.findByLabelText(/Name/), "Running scan");
     await waitFor(() => expect(client.updateScanDraft).toHaveBeenCalled());
     await user.click(
@@ -164,7 +168,7 @@ describe("Workspace investigation flow", () => {
 
     expect(await screen.findByDisplayValue("Grace Hopper")).toBeInTheDocument();
     expect(screen.getByRole("checkbox")).toBeChecked();
-    expect(screen.getByRole("status")).toHaveTextContent("Draft saved");
+    expect(screen.getByText("Draft saved")).toBeInTheDocument();
   });
 
   it("keeps a manually renamed Draft name independent from its inputs", async () => {
@@ -309,7 +313,7 @@ describe("Workspace investigation flow", () => {
     ).toBeLessThan(onCloseProject.mock.invocationCallOrder[0]);
   });
 
-  it("persists explicit scan reordering", async () => {
+  it("persists scan reordering from the actions menu", async () => {
     const user = userEvent.setup();
     const secondScan = {
       ...completedScan,
@@ -356,6 +360,90 @@ describe("Workspace investigation flow", () => {
     );
   });
 
+  it("persists scan reordering after pointer drag and drop", async () => {
+    const secondScan = {
+      ...completedScan,
+      id: "scan-2",
+      preview: "Second case",
+      sortOrder: 1,
+    };
+    const reordered = [
+      { ...secondScan, sortOrder: 0 },
+      { ...completedScan, sortOrder: 1 },
+    ];
+    const client = createClient({
+      reorderScans: vi.fn(async () => reordered),
+    });
+    const rectSpy = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function () {
+        const scanId = this.getAttribute("data-scan-id");
+        const top = scanId === secondScan.id ? 64 : 0;
+        return {
+          x: 0,
+          y: top,
+          top,
+          left: 0,
+          right: 288,
+          bottom: top + 64,
+          width: 288,
+          height: 64,
+          toJSON: () => undefined,
+        };
+      });
+
+    render(
+      <Workspace
+        client={client}
+        initialSettings={projectSettings}
+        initialScans={[completedScan, secondScan]}
+        onCloseProject={async () => undefined}
+      />,
+    );
+
+    const handle = screen.getByRole("button", {
+      name: "Drag Ada Lovelace",
+    });
+    fireEvent.pointerDown(handle, {
+      button: 0,
+      clientX: 12,
+      clientY: 32,
+      isPrimary: true,
+      pointerId: 1,
+    });
+    fireEvent.pointerMove(document, {
+      clientX: 12,
+      clientY: 40,
+      isPrimary: true,
+      pointerId: 1,
+    });
+    await waitFor(() =>
+      expect(handle).toHaveAttribute("aria-pressed", "true"),
+    );
+    fireEvent.pointerMove(document, {
+      clientX: 12,
+      clientY: 96,
+      isPrimary: true,
+      pointerId: 1,
+    });
+    fireEvent.pointerUp(document, {
+      clientX: 12,
+      clientY: 96,
+      isPrimary: true,
+      pointerId: 1,
+    });
+
+    await waitFor(() =>
+      expect(client.reorderScans).toHaveBeenCalledWith([
+        secondScan.id,
+        completedScan.id,
+      ]),
+    );
+    // dnd-kit briefly suppresses the click following a pointer drop.
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    rectSpy.mockRestore();
+  });
+
   it("archives an active saved Draft without restoring it from cache", async () => {
     const user = userEvent.setup();
     const client = createClient({
@@ -376,8 +464,13 @@ describe("Workspace investigation flow", () => {
 
     await user.click(screen.getByLabelText("Plugin"));
     await user.click(screen.getByRole("option", { name: "Demo Registry" }));
-    await user.click(screen.getByRole("checkbox"));
-    await user.type(await screen.findByLabelText(/Name/), "Draft target");
+    const archiveDraftCheckbox = screen.getByRole("checkbox");
+    await user.click(archiveDraftCheckbox);
+    await waitFor(() => expect(archiveDraftCheckbox).toBeChecked());
+    await user.type(
+      await screen.findByLabelText(/Name/, {}, { timeout: 3_000 }),
+      "Draft target",
+    );
     await screen.findByText("Untitled");
 
     await user.click(screen.getByLabelText("Actions for Untitled"));

@@ -413,12 +413,21 @@ export function Workspace({
   };
 
   const reorderScans = async (orderedScanIds: string[]) => {
+    const previousScans = state.scans;
+    const scansById = new Map(state.scans.map((scan) => [scan.id, scan]));
+    const optimisticScans = orderedScanIds.flatMap((scanId, sortOrder) => {
+      const scan = scansById.get(scanId);
+      return scan ? [{ ...scan, sortOrder }] : [];
+    });
+    dispatch({ type: "scans-replaced", scans: optimisticScans });
+
     try {
       dispatch({
         type: "scans-replaced",
         scans: await client.reorderScans(orderedScanIds),
       });
     } catch (error) {
+      dispatch({ type: "scans-replaced", scans: previousScans });
       dispatch({ type: "operation-failed", error: errorMessage(error) });
     }
   };
