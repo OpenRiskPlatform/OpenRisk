@@ -1,262 +1,144 @@
-# Data Model 0.0.2
+# Plugin Data Model 0.0.3
 
-OpenRisk plugins return JSON arrays of entities.
+The canonical OpenRisk plugin contract is maintained in
+[`openrisk-plugin-sdk`](https://openriskplatform.github.io/plugin-sdk).
+
+Semantic source of truth:
+
+- `model/data-model-v0.0.3.ts` for entities, properties, labels, types, and
+  multiplicity
+- `model/openrisk-types.ts` for the inline plugin-author helper
+- `schemas/data-model-v0.0.3.schema.json` for wire-format validation
+- `schemas/plugin-manifest-v0.0.2.schema.json` for `plugin.json`
+
+The JSON Schema validates the common envelope and typed values. It does not
+enforce every entity-specific property rule, so application code must also
+follow the structured TypeScript model.
+
+## Result envelope
+
+An entrypoint returns a JSON array of flat entities:
 
 ```json
 [
-  { "...": "entity-1" },
-  { "...": "entity-2" }
+  {
+    "$modelVersion": "0.0.3",
+    "$entity": "entity.person",
+    "$id": "source:person:123",
+    "$props": {
+      "name": [{ "$type": "string", "value": "Jane Example" }]
+    },
+    "$extra": [],
+    "$sources": [
+      {
+        "name": "Source name",
+        "source": "https://example.com/record/123"
+      }
+    ]
+  }
 ]
 ```
 
-The model has two layers:
-- typed values for machine-readable fields
-- entities that combine well-known props with raw extra data
+Rules:
 
-## Typed Value
+- `$modelVersion`, `$entity`, and a non-empty stable `$id` are required.
+- Every `$props` value is an array of typed values.
+- `$extra` is a flat array of `key-value` typed values.
+- `$sources` contains source name and source location pairs.
+- New plugins explicitly return model version `0.0.3`.
+- Unversioned historical results remain on the legacy compatibility path; they
+  are not reinterpreted as `0.0.3`.
 
-Every typed value has this shape:
+## Typed values
 
-```json
-{
-  "$type": "string",
-  "value": "some value"
-}
-```
-
-### Primitive types
+Model `0.0.3` defines:
 
 - `string`
 - `number`
 - `boolean`
+- `jurisdiction-iso-3166-2`
+- `relative-close-associate`
 - `date-iso8601`
-  - full date, for example `2024-06-01`
 - `date-partial-iso8601`
-  - partial date, for example `2024` or `2024-06`
 - `date-time-iso8601`
-  - full timestamp, for example `2024-06-01T12:34:56Z`
-- `registry-jurisdiction-code`
-  - jurisdiction code such as `sk` or `us_de`
-- `image-base64`
-- `image-url`
 - `url`
 - `address`
 - `location-iso6709`
+- `image-url`
+- `image-base64`
+- `key-value`
 
-### key-value
+`relative-close-associate` contains `{ "name": string, "relation"?: string }`.
 
-`key-value` is used inside `$extra`.
+## Entities
 
-```json
-{
-  "$type": "key-value",
-  "value": {
-    "key": {
-      "$type": "string",
-      "value": "someKey"
-    },
-    "value": {
-      "$type": "string",
-      "value": "someValue"
-    }
-  }
-}
-```
+### `entity.person`
 
-Rules:
-- `key` is always a `string`
-- `value` can be any typed value
+`name`, `aliases`, `notes`, `birthDate`, `birthPlace`, `nationalities`,
+`jurisdiction`, `addresses`, `emails`, `phones`,
+`relativeCloseAssociates`, `pepStatus`, `isPepRca`, `sanctioned`.
 
-## Entity Contract
+`pepStatus`, `isPepRca`, and `sanctioned` are tri-state:
 
-Each entity has:
-- `$modelVersion`: data model version; current value is `0.0.2`
-- `$entity`: entity type identifier, for example `entity.person`
-- `$id`: stable entity id; plugins should namespace external ids when needed, for example `opensanctions:Q7747`
-- `$sources`: array of source descriptors
-- `$props`: object of predefined props that the UI can render intentionally
-- `$extra`: flat array of `key-value` entries for raw or unmapped data
+- `true`: confirmed
+- `false`: explicitly checked and clear
+- absent: not evaluated
 
-### $sources
+### `entity.organization`
 
-Each source entry has this shape:
+`name`, `aliases`, `notes`, `previousNames`, `registrationId`, `country`,
+`jurisdiction`, `address`, `status`, `involvedPersons`, `legalRoles`,
+`sourceRegister`, `entryTypes`, `effectiveTo`, `pepStatus`, `sanctioned`.
 
-```json
-{
-  "name": "OpenSanctions",
-  "source": "https://www.opensanctions.org/entities/Q7747/"
-}
-```
+### `entity.mediaMention`
 
-### $props rules
+`name`, `title`, `url`, `analysis`, `adverseActivityDetected`.
 
-- each prop value is always an array
-- arrays allow several values for the same prop
-- props are optional unless a specific entity definition says otherwise
-- if the source has no usable value for a prop, omit that prop
+Atomic claims are stored in `$extra` with the label `Claim`, not in `$props`.
 
-### $extra rules
+### `entity.riskTopic`
 
-- `$extra` is for data that is still useful but not part of the predefined card layout
-- repeated keys are allowed
-- `$extra` should preserve source-specific detail that would otherwise be lost
+`name`, `topicId`, `summary`, `adverseActivityDetected`.
 
-## entity.person
+One entity represents one topic. The UI groups all topics returned by one
+report into a single summary.
 
-`entity.person` is the first defined entity in this draft. It is designed for person-oriented registry and sanctions plugins.
+### `entity.socialProfile`
 
-### Defined props
+`name`, `platform`, `profileTitle`, `profileUrl`, `userId`.
 
-- `name`
-  - type: `string`
-  - primary display name
-- `surname`
-  - type: `string`
-  - family name or last name
-- `position`
-  - type: `string`
-  - public role, office, title, or position
-- `country`
-  - type: `string`
-  - country code or country text attached to the person
-- `age`
-  - type: `number`
-  - optional point-in-time value, usually derived from birth date
-- `photo`
-  - type: `image-url` or `image-base64`
-  - profile image or portrait
-- `personId`
-  - type: `string`
-  - personal identifier such as rodne cislo, SSN, or another country-specific person number
-- `birthDate`
-  - type: `date-iso8601` or `date-partial-iso8601`
-  - birth date as provided by the source
-- `nationality`
-  - type: `string`
-  - nationality or citizenship
-- `jurisdiction`
-  - type: `registry-jurisdiction-code`
-  - registry or legal jurisdiction attached to the person record
-- `residenceAddress`
-  - type: `address`
-  - permanent or known residential address
-- `documentId`
-  - type: `string`
-  - passport number, identity card number, or similar document identifier
+### `entity.financialRecord`
 
-### What belongs in $extra for person
+`name`, `amountOwed`, `location`, `debtSource`.
 
-Typical examples:
-- aliases and alternative spellings
-- source URLs
-- sanctions topics
-- dataset names
-- registry-specific notes
-- raw identifiers with source-specific keys
-- match score and matching metadata
-- timestamps such as `first_seen`, `last_seen`, `last_change`
-- any other raw properties that are not mapped to a defined prop
+### `entity.detectedEntity`
 
-## Additional Universal Entities
+`name`, `description`.
 
-To keep integrations lossless, plugins may use additional entity types when
-`entity.person` alone is not enough.
+This is the fallback when a plugin cannot reliably classify an extracted
+entity as a person or organization.
 
-### entity.organization
+## Presentation contract
 
-Generic legal entity representation.
+Normal mode is intended for office users:
 
-Typical props:
-- `name` (`string`)
-- `country` (`string`)
-- `jurisdiction` (`registry-jurisdiction-code`)
-- `address` (`address`)
-- `organizationId` (`string`)
+- known property labels come from the model metadata
+- booleans are presented as meaningful states, not raw `true`/`false`
+- PEP, PEP associate, sanctions, and adverse-activity states are prominent
+- typed URLs, images, and relative/close associates receive dedicated views
+- sources remain visible
 
-### entity.mediaMention
+Advanced mode exposes identifiers, typed-value containers, raw keys, and
+execution logs.
 
-One analyzed media/search hit linked to a target.
+Unknown plugin-provided keys and values are preserved and displayed as-is.
+The frontend must not rename, sanitize, or otherwise mutate them.
 
-Typical props:
-- `name` (`string`)
-- `title` (`string`)
-- `url` (`url`)
-- `analysis` (`string`)
-- `adverseActivityDetected` (`boolean`)
+## Manifest compatibility
 
-### entity.riskTopic
+The current plugin manifest schema is `0.0.2`. The canonical jurisdiction
+field type is `jurisdiction-iso-3166-2`.
 
-One topic-level screening result.
-
-Typical props:
-- `name` (`string`)
-- `topicId` (`string`)
-- `summary` (`string`)
-- `adverseActivityDetected` (`boolean`)
-
-### entity.socialProfile
-
-One discovered social profile.
-
-Typical props:
-- `name` (`string`)
-- `platform` (`string`)
-- `profileTitle` (`string`)
-- `profileUrl` (`url`)
-- `userId` (`string`)
-
-### entity.businessActivity
-
-One business-subject/activity record.
-
-Typical props:
-- `organizationId` (`string`)
-- `description` (`string`)
-- `effectiveFrom` (`date-iso8601` or `date-partial-iso8601`)
-- `effectiveTo` (`date-iso8601` or `date-partial-iso8601`)
-
-### entity.financialRecord
-
-One financial obligation/debtor record.
-
-Typical props:
-- `name` (`string`)
-- `amountOwed` (`string`)
-- `location` (`address`)
-- `debtSource` (`string`)
-
-### entity.legalCase
-
-One court-case level record.
-
-Typical props:
-- `courtTopic` (`string`)
-- `courtDecision` (`string`)
-- `court` (`string`)
-- `courtMark` (`string`)
-- `courtId` (`string`)
-- `courtDecisionDate` (`date-iso8601` or `date-partial-iso8601`)
-
-### entity.detectedEntity
-
-Entity recognized by extraction endpoints when person/organization type is not guaranteed.
-
-Typical props:
-- `name` (`string`)
-- `description` (`string`)
-
-### entity.serviceAccount
-
-Operational account/service metadata.
-
-Typical props:
-- `provider` (`string`)
-- `remainingCredit` (`number`)
-
-## Current Scope
-
-This draft defines:
-- typed values
-- shared entity contract
-- `entity.person`
-- additional universal entities listed above
+OpenRisk continues to accept the historical
+`registry-jurisdiction-code` alias and the application extensions `secret` and
+`validation` so existing plugins remain usable.

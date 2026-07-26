@@ -1,49 +1,24 @@
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { PluginEntity } from "./resultSchema";
-import { EntityCard } from "./EntityCard";
+import {
+  firstPropertyValue,
+  isRecord,
+  pluginSources,
+  propertyValues,
+  type PluginEntity,
+} from "./resultSchema";
+import { EntityCard, extraRows } from "./EntityCard";
+import { propertyMetadata } from "./dataModel";
 import { ValueView } from "./ValueView";
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function hasContent(value: unknown): boolean {
-  if (value === null || value === undefined) {
-    return false;
+function safeWebUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? url.href
+      : null;
+  } catch {
+    return null;
   }
-  if (Array.isArray(value)) {
-    return value.length > 0;
-  }
-  if (isRecord(value)) {
-    return Object.keys(value).length > 0;
-  }
-  return true;
-}
-
-function typedPrimitive(value: unknown): unknown {
-  if (isRecord(value) && "$type" in value && "value" in value) {
-    return value.value;
-  }
-  return value;
-}
-
-function firstProp(entity: PluginEntity, key: string): unknown {
-  if (!isRecord(entity.$props)) {
-    return undefined;
-  }
-  const value = entity.$props[key];
-  return Array.isArray(value) ? typedPrimitive(value[0]) : typedPrimitive(value);
-}
-
-function detected(value: unknown): boolean {
-  const primitive = typedPrimitive(value);
-  return (
-    primitive === true ||
-    (typeof primitive === "string" &&
-      primitive.trim().toLowerCase() !== "false" &&
-      primitive.trim() !== "")
-  );
 }
 
 export function RiskTopicSummary({
@@ -55,7 +30,7 @@ export function RiskTopicSummary({
 }) {
   if (advancedMode) {
     return (
-      <div>
+      <div className="space-y-4">
         {topics.map((topic, index) => (
           <EntityCard
             key={`${topic.$entity}:${topic.$id}:${index}`}
@@ -68,90 +43,121 @@ export function RiskTopicSummary({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[42rem] border-collapse text-sm">
-        <thead>
-          <tr className="border-b text-left text-xs text-muted-foreground">
-            <th className="pb-2 pr-5 font-medium">topicId</th>
-            <th className="pb-2 pr-5 font-medium">
-              adverseActivityDetected
-            </th>
-            <th className="pb-2 font-medium">summary</th>
-          </tr>
-        </thead>
-        <tbody>
-          {topics.map((topic, index) => {
-            const props = isRecord(topic.$props) ? topic.$props : {};
-            const topicId = firstProp(topic, "topicId");
-            const activity = firstProp(topic, "adverseActivityDetected");
-            const summary = firstProp(topic, "summary");
-            const active = detected(activity);
-            const Icon = active ? AlertTriangle : CheckCircle2;
-            const remaining = Object.fromEntries(
-              Object.entries(props).filter(
-                ([key]) =>
-                  ![
-                    "topicId",
-                    "name",
-                    "adverseActivityDetected",
-                    "summary",
-                  ].includes(key),
-              ),
-            );
-            const hasDetails =
-              Object.keys(remaining).length > 0 ||
-              hasContent(topic.$extra) ||
-              hasContent(topic.$sources);
+    <div>
+      {topics.map((topic, index) => {
+        const topicId = firstPropertyValue(topic, "topicId");
+        const activity = firstPropertyValue(
+          topic,
+          "adverseActivityDetected",
+        );
+        const summary = firstPropertyValue(topic, "summary");
+        const adverse = activity === true;
+        const evaluated = typeof activity === "boolean";
+        const sources = pluginSources(topic);
+        const props = isRecord(topic.$props) ? topic.$props : {};
+        const detailRows: Array<[string, unknown]> = Object.keys(props)
+          .filter(
+            (key) =>
+              ![
+                "name",
+                "topicId",
+                "summary",
+                "adverseActivityDetected",
+              ].includes(key),
+          )
+          .map((key) => [
+            propertyMetadata(topic.$entity, key)?.label ?? key,
+            propertyValues(topic, key),
+          ]);
+        detailRows.push(...extraRows(topic.$extra));
 
-            return (
-              <tr
-                key={`${topic.$id}:${index}`}
-                className="border-b align-top last:border-b-0"
-              >
-                <td className="py-3 pr-5 font-medium">
-                  {topicId === undefined ? "—" : String(topicId)}
-                </td>
-                <td
-                  className={cn(
-                    "py-3 pr-5",
-                    active
-                      ? "font-medium text-red-700 dark:text-red-300"
-                      : "text-emerald-700 dark:text-emerald-300",
-                  )}
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    <Icon className="h-4 w-4" />
-                    {activity === undefined ? "—" : String(activity)}
-                  </span>
-                </td>
-                <td className="py-3">
-                  <p className="leading-relaxed">
-                    {summary === undefined ? "—" : String(summary)}
+        return (
+          <article
+            key={`${topic.$id}:${index}`}
+            className="border-b border-border py-4 first:pt-0 last:border-b-0 last:pb-0"
+          >
+            <header className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">
+                  {topicId === undefined ? "Risk topic" : String(topicId)}
+                </p>
+                {evaluated ? (
+                  <p
+                    className={
+                      adverse
+                        ? "mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-red-700 dark:text-red-300"
+                        : "mt-1 inline-flex items-center gap-1.5 text-sm text-emerald-700 dark:text-emerald-300"
+                    }
+                  >
+                    {adverse ? (
+                      <AlertTriangle className="h-4 w-4" aria-hidden />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4" aria-hidden />
+                    )}
+                    {adverse
+                      ? "Potential adverse activity found"
+                      : "No adverse activity found"}
                   </p>
-                  {hasDetails ? (
-                    <details className="mt-2 text-xs">
-                      <summary className="cursor-pointer text-muted-foreground">
-                        Details
-                      </summary>
-                      <div className="mt-2">
-                        {Object.keys(remaining).length > 0 ? (
-                          <ValueView value={remaining} />
-                        ) : null}
-                        {hasContent(topic.$extra) ? (
-                          <ValueView value={topic.$extra} />
-                        ) : null}
-                        {hasContent(topic.$sources) ? (
-                          <ValueView value={topic.$sources} />
-                        ) : null}
-                      </div>
-                    </details>
-                  ) : null}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Not evaluated
+                  </p>
+                )}
+              </div>
+            </header>
+
+            {summary !== undefined && String(summary).trim() ? (
+              <p className="mt-2 max-w-3xl text-sm leading-relaxed">
+                {String(summary)}
+              </p>
+            ) : null}
+
+            {detailRows.length > 0 ? (
+              <dl className="mt-2">
+                {detailRows.map(([label, value], detailIndex) => (
+                  <div
+                    key={`${label}:${detailIndex}`}
+                    className="grid gap-1 border-b border-border/70 py-2 last:border-b-0 sm:grid-cols-[11rem_minmax(0,1fr)]"
+                  >
+                    <dt className="break-words text-xs text-muted-foreground">
+                      {label}
+                    </dt>
+                    <dd className="min-w-0 text-sm">
+                      <ValueView value={value} />
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
+
+            {sources.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                {sources.map((source, sourceIndex) => {
+                  const href = safeWebUrl(source.source);
+                  return href ? (
+                    <a
+                      key={`${source.source}:${sourceIndex}`}
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="max-w-full break-all text-xs text-primary underline decoration-border underline-offset-4 hover:decoration-current"
+                    >
+                      {source.name}
+                    </a>
+                  ) : (
+                    <span
+                      key={`${source.source}:${sourceIndex}`}
+                      className="break-all text-xs text-muted-foreground"
+                    >
+                      {source.name}: {source.source}
+                    </span>
+                  );
+                })}
+              </div>
+            ) : null}
+          </article>
+        );
+      })}
     </div>
   );
 }

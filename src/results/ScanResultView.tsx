@@ -187,6 +187,16 @@ function dedupeInputs(inputs: ScanEntrypointInput[]): ScanEntrypointInput[] {
   });
 }
 
+function displayInputValue(input: ScanEntrypointInput): string {
+  if (input.value.type === "null") {
+    return "Not provided";
+  }
+  if (input.value.type === "boolean") {
+    return input.value.value ? "Yes" : "No";
+  }
+  return String(input.value.value);
+}
+
 export function ScanResultView({
   detail,
   pluginNameById,
@@ -296,9 +306,11 @@ export function ScanResultView({
                   ) : null}
                 </dt>
                 <dd className="break-words text-sm">
-                  {input.value.type === "null"
-                    ? "null"
-                    : String(input.value.value)}
+                  {advancedMode
+                    ? input.value.type === "null"
+                      ? "null"
+                      : String(input.value.value)
+                    : displayInputValue(input)}
                 </dd>
               </div>
             ))}

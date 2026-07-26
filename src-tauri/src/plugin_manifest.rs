@@ -7,7 +7,7 @@ use std::sync::OnceLock;
 mod manifest_types;
 
 pub use manifest_types::FieldType as PluginFieldType;
-pub use manifest_types::OpenRiskPluginManifest;
+pub use manifest_types::OpenRiskPluginManifest002 as OpenRiskPluginManifest;
 use manifest_types::{FieldTypeObjectName, FieldTypeString};
 
 impl PluginFieldType {
@@ -19,8 +19,9 @@ impl PluginFieldType {
             PluginFieldType::String(FieldTypeString::Integer) => "integer",
             PluginFieldType::String(FieldTypeString::Date) => "date",
             PluginFieldType::String(FieldTypeString::Url) => "url",
-            PluginFieldType::String(FieldTypeString::RegistryJurisdictionCode) => {
-                crate::registry_jurisdiction::REGISTRY_JURISDICTION_CODE_TYPE_NAME
+            PluginFieldType::String(FieldTypeString::JurisdictionIso31662)
+            | PluginFieldType::String(FieldTypeString::RegistryJurisdictionCode) => {
+                crate::registry_jurisdiction::JURISDICTION_ISO_3166_2_TYPE_NAME
             }
             PluginFieldType::Object {
                 name: FieldTypeObjectName::String,
@@ -47,9 +48,13 @@ impl PluginFieldType {
                 ..
             } => "url",
             PluginFieldType::Object {
+                name: FieldTypeObjectName::JurisdictionIso31662,
+                ..
+            }
+            | PluginFieldType::Object {
                 name: FieldTypeObjectName::RegistryJurisdictionCode,
                 ..
-            } => crate::registry_jurisdiction::REGISTRY_JURISDICTION_CODE_TYPE_NAME,
+            } => crate::registry_jurisdiction::JURISDICTION_ISO_3166_2_TYPE_NAME,
             PluginFieldType::Object {
                 name: FieldTypeObjectName::Enum,
                 ..
@@ -68,17 +73,12 @@ impl PluginFieldType {
     }
 
     pub fn to_json_value(&self) -> Value {
-        match self {
-            PluginFieldType::String(kind) => {
-                serde_json::json!({ "name": kind.to_string() })
+        let name = self.name();
+        match self.enum_values() {
+            Some(values) if !values.is_empty() => {
+                serde_json::json!({ "name": name, "values": values })
             }
-            PluginFieldType::Object { name, values } => {
-                if values.is_empty() {
-                    serde_json::json!({ "name": name.to_string() })
-                } else {
-                    serde_json::json!({ "name": name.to_string(), "values": values })
-                }
-            }
+            _ => serde_json::json!({ "name": name }),
         }
     }
 }
@@ -175,5 +175,100 @@ mod tests {
         .expect("manifest with secret setting should parse");
 
         assert!(manifest.settings[0].secret);
+    }
+
+    #[test]
+    fn parse_manifest_accepts_sdk_v002_field_contract() {
+        let manifest = parse_manifest(
+            r#"{
+                "$schema": "https://openriskplatform.github.io/plugin-sdk/schemas/plugin-manifest-v0.0.2.schema.json",
+                "id": "sdk-contract-test",
+                "version": "0.1.0",
+                "name": "SDK Contract Test",
+                "description": "Canonical SDK manifest fields",
+                "authors": [{ "name": "OpenRisk" }],
+                "license": "MIT",
+                "main": "index.ts",
+                "entrypoints": [
+                    {
+                        "id": "search",
+                        "name": "Search",
+                        "function": "search",
+                        "inputs": [
+                            {
+                                "name": "targetName",
+                                "title": "Target name",
+                                "type": "jurisdiction-iso-3166-2",
+                                "required": true
+                            }
+                        ]
+                    }
+                ],
+                "settings": [
+                    {
+                        "name": "apiKey",
+                        "title": "API key",
+                        "type": "string",
+                        "optional": true
+                    }
+                ],
+                "metrics": [
+                    {
+                        "name": "requestsToday",
+                        "title": "Requests today",
+                        "type": "number",
+                        "default": 0
+                    }
+                ]
+            }"#,
+        )
+        .expect("SDK v0.0.2 manifest should parse");
+
+        assert_eq!(manifest.entrypoints[0].inputs[0].name, "targetName");
+        assert_eq!(
+            manifest.entrypoints[0].inputs[0].type_.name(),
+            "jurisdiction-iso-3166-2"
+        );
+        assert_eq!(manifest.settings[0].name, "apiKey");
+        assert_eq!(manifest.metrics[0].name, "requestsToday");
+    }
+
+    #[test]
+    fn legacy_jurisdiction_type_is_normalized_to_sdk_name() {
+        let manifest = parse_manifest(
+            r#"{
+                "id": "legacy-jurisdiction-test",
+                "version": "0.1.0",
+                "name": "Legacy Jurisdiction Test",
+                "description": "Legacy field alias remains supported",
+                "authors": [{ "name": "OpenRisk" }],
+                "license": "MIT",
+                "main": "index.ts",
+                "entrypoints": [
+                    {
+                        "id": "search",
+                        "name": "Search",
+                        "function": "search",
+                        "inputs": [
+                            {
+                                "name": "jurisdiction",
+                                "title": "Jurisdiction",
+                                "type": "registry-jurisdiction-code"
+                            }
+                        ]
+                    }
+                ]
+            }"#,
+        )
+        .expect("legacy jurisdiction alias should parse");
+
+        assert_eq!(
+            manifest.entrypoints[0].inputs[0].type_.name(),
+            "jurisdiction-iso-3166-2"
+        );
+        assert_eq!(
+            manifest.entrypoints[0].inputs[0].type_.to_json_value(),
+            serde_json::json!({ "name": "jurisdiction-iso-3166-2" })
+        );
     }
 }

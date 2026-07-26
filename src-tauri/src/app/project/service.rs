@@ -374,7 +374,8 @@ fn metric_value_matches_type(
 ) -> bool {
     match type_name {
         "string" | "date" | "url" => raw_value.is_string(),
-        crate::registry_jurisdiction::REGISTRY_JURISDICTION_CODE_TYPE_NAME => raw_value
+        crate::registry_jurisdiction::JURISDICTION_ISO_3166_2_TYPE_NAME
+        | crate::registry_jurisdiction::LEGACY_REGISTRY_JURISDICTION_CODE_TYPE_NAME => raw_value
             .as_str()
             .map(crate::registry_jurisdiction::is_registry_jurisdiction_code)
             .unwrap_or(false),
@@ -419,12 +420,17 @@ mod tests {
     fn metric_value_matches_jurisdiction_type() {
         assert!(metric_value_matches_type(
             &json!("us_de"),
-            crate::registry_jurisdiction::REGISTRY_JURISDICTION_CODE_TYPE_NAME,
+            crate::registry_jurisdiction::JURISDICTION_ISO_3166_2_TYPE_NAME,
+            None,
+        ));
+        assert!(metric_value_matches_type(
+            &json!("us_de"),
+            crate::registry_jurisdiction::LEGACY_REGISTRY_JURISDICTION_CODE_TYPE_NAME,
             None,
         ));
         assert!(!metric_value_matches_type(
             &json!("delaware"),
-            crate::registry_jurisdiction::REGISTRY_JURISDICTION_CODE_TYPE_NAME,
+            crate::registry_jurisdiction::JURISDICTION_ISO_3166_2_TYPE_NAME,
             None,
         ));
     }

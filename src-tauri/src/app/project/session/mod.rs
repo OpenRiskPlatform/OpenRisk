@@ -397,7 +397,7 @@ impl SqliteProjectPersistence {
         plugin: &LocalPluginBundle,
     ) -> Result<(), PersistenceError> {
         let revision_id = Uuid::new_v4().to_string();
-        let version: String = plugin.manifest.version.clone().into();
+        let version: String = plugin.manifest.version.clone();
         let name: String = plugin.manifest.name.clone().into();
         let description: String = plugin.manifest.description.clone().into();
         let license: String = plugin.manifest.license.clone().into();
@@ -484,7 +484,7 @@ impl SqliteProjectPersistence {
             let ep_id: String = ep.id.clone().into();
             let inputs = &ep.inputs;
             for input in inputs {
-                let name_str: String = input.name.clone().into();
+                let name_str: String = input.name.clone();
                 let title_str = input.title.clone();
                 let type_str = input.type_.name().to_string();
                 let type_json = serde_json::to_string(&input.type_.to_json_value())
@@ -503,7 +503,10 @@ impl SqliteProjectPersistence {
                 );
                 let enum_values_json =
                     enum_values.map(|v| serde_json::to_string(&v).unwrap_or_default());
-                let optional = input.optional as i64;
+                let optional = input
+                    .required
+                    .map(|required| !required)
+                    .unwrap_or(input.optional) as i64;
                 let default_json = input
                     .default
                     .as_ref()
@@ -529,7 +532,7 @@ impl SqliteProjectPersistence {
         }
 
         for setting in &plugin.manifest.settings {
-            let name_str: String = setting.name.clone().into();
+            let name_str: String = setting.name.clone();
             let title_str = setting.title.clone();
             let type_str = setting.type_.name().to_string();
             let type_json = serde_json::to_string(&setting.type_.to_json_value())
@@ -548,7 +551,10 @@ impl SqliteProjectPersistence {
             );
             let enum_values_json =
                 enum_values.map(|v| serde_json::to_string(&v).unwrap_or_default());
-            let required = setting.required as i64;
+            let required = setting
+                .optional
+                .map(|optional| !optional)
+                .unwrap_or(setting.required) as i64;
             let secret = setting.secret as i64;
             let default_json = setting
                 .default

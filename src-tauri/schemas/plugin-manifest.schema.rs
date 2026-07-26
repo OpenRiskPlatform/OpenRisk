@@ -46,6 +46,7 @@ pub mod error {
 #[doc = "        \"integer\","]
 #[doc = "        \"date\","]
 #[doc = "        \"url\","]
+#[doc = "        \"jurisdiction-iso-3166-2\","]
 #[doc = "        \"registry-jurisdiction-code\""]
 #[doc = "      ]"]
 #[doc = "    },"]
@@ -65,6 +66,7 @@ pub mod error {
 #[doc = "            \"date\","]
 #[doc = "            \"url\","]
 #[doc = "            \"enum\","]
+#[doc = "            \"jurisdiction-iso-3166-2\","]
 #[doc = "            \"registry-jurisdiction-code\""]
 #[doc = "          ]"]
 #[doc = "        },"]
@@ -118,6 +120,7 @@ impl ::std::convert::From<FieldTypeString> for FieldType {
 #[doc = "    \"date\","]
 #[doc = "    \"url\","]
 #[doc = "    \"enum\","]
+#[doc = "    \"jurisdiction-iso-3166-2\","]
 #[doc = "    \"registry-jurisdiction-code\""]
 #[doc = "  ]"]
 #[doc = "}"]
@@ -150,6 +153,8 @@ pub enum FieldTypeObjectName {
     Url,
     #[serde(rename = "enum")]
     Enum,
+    #[serde(rename = "jurisdiction-iso-3166-2")]
+    JurisdictionIso31662,
     #[serde(rename = "registry-jurisdiction-code")]
     RegistryJurisdictionCode,
 }
@@ -168,6 +173,7 @@ impl ::std::fmt::Display for FieldTypeObjectName {
             Self::Date => f.write_str("date"),
             Self::Url => f.write_str("url"),
             Self::Enum => f.write_str("enum"),
+            Self::JurisdictionIso31662 => f.write_str("jurisdiction-iso-3166-2"),
             Self::RegistryJurisdictionCode => f.write_str("registry-jurisdiction-code"),
         }
     }
@@ -183,6 +189,7 @@ impl ::std::str::FromStr for FieldTypeObjectName {
             "date" => Ok(Self::Date),
             "url" => Ok(Self::Url),
             "enum" => Ok(Self::Enum),
+            "jurisdiction-iso-3166-2" => Ok(Self::JurisdictionIso31662),
             "registry-jurisdiction-code" => Ok(Self::RegistryJurisdictionCode),
             _ => Err("invalid value".into()),
         }
@@ -224,6 +231,7 @@ impl ::std::convert::TryFrom<::std::string::String> for FieldTypeObjectName {
 #[doc = "    \"integer\","]
 #[doc = "    \"date\","]
 #[doc = "    \"url\","]
+#[doc = "    \"jurisdiction-iso-3166-2\","]
 #[doc = "    \"registry-jurisdiction-code\""]
 #[doc = "  ]"]
 #[doc = "}"]
@@ -254,6 +262,8 @@ pub enum FieldTypeString {
     Date,
     #[serde(rename = "url")]
     Url,
+    #[serde(rename = "jurisdiction-iso-3166-2")]
+    JurisdictionIso31662,
     #[serde(rename = "registry-jurisdiction-code")]
     RegistryJurisdictionCode,
 }
@@ -271,6 +281,7 @@ impl ::std::fmt::Display for FieldTypeString {
             Self::Integer => f.write_str("integer"),
             Self::Date => f.write_str("date"),
             Self::Url => f.write_str("url"),
+            Self::JurisdictionIso31662 => f.write_str("jurisdiction-iso-3166-2"),
             Self::RegistryJurisdictionCode => f.write_str("registry-jurisdiction-code"),
         }
     }
@@ -285,6 +296,7 @@ impl ::std::str::FromStr for FieldTypeString {
             "integer" => Ok(Self::Integer),
             "date" => Ok(Self::Date),
             "url" => Ok(Self::Url),
+            "jurisdiction-iso-3166-2" => Ok(Self::JurisdictionIso31662),
             "registry-jurisdiction-code" => Ok(Self::RegistryJurisdictionCode),
             _ => Err("invalid value".into()),
         }
@@ -333,13 +345,16 @@ impl ::std::convert::TryFrom<::std::string::String> for FieldTypeString {
 #[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
 #[doc = "    \"name\": {"]
-#[doc = "      \"description\": \"Input parameter name (can use *args or **kwargs syntax)\","]
-#[doc = "      \"type\": \"string\","]
-#[doc = "      \"pattern\": \"^(\\\\*{0,2}[a-z][a-z0-9_]*)$\""]
+#[doc = "      \"description\": \"Input parameter name passed to the plugin entrypoint\","]
+#[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
 #[doc = "    \"optional\": {"]
 #[doc = "      \"description\": \"Whether this input is optional\","]
 #[doc = "      \"default\": false,"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    },"]
+#[doc = "    \"required\": {"]
+#[doc = "      \"description\": \"Whether this input is required\","]
 #[doc = "      \"type\": \"boolean\""]
 #[doc = "    },"]
 #[doc = "    \"title\": {"]
@@ -366,11 +381,14 @@ pub struct InputDefinition {
     #[doc = "Detailed input description"]
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub description: ::std::option::Option<::std::string::String>,
-    #[doc = "Input parameter name (can use *args or **kwargs syntax)"]
-    pub name: InputDefinitionName,
+    #[doc = "Input parameter name passed to the plugin entrypoint"]
+    pub name: ::std::string::String,
     #[doc = "Whether this input is optional"]
     #[serde(default)]
     pub optional: bool,
+    #[doc = "Whether this input is required"]
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub required: ::std::option::Option<bool>,
     #[doc = "Human-readable input name"]
     pub title: ::std::string::String,
     #[serde(rename = "type")]
@@ -381,84 +399,6 @@ pub struct InputDefinition {
 impl ::std::convert::From<&InputDefinition> for InputDefinition {
     fn from(value: &InputDefinition) -> Self {
         value.clone()
-    }
-}
-#[doc = "Input parameter name (can use *args or **kwargs syntax)"]
-#[doc = r""]
-#[doc = r" <details><summary>JSON schema</summary>"]
-#[doc = r""]
-#[doc = r" ```json"]
-#[doc = "{"]
-#[doc = "  \"description\": \"Input parameter name (can use *args or **kwargs syntax)\","]
-#[doc = "  \"type\": \"string\","]
-#[doc = "  \"pattern\": \"^(\\\\*{0,2}[a-z][a-z0-9_]*)$\""]
-#[doc = "}"]
-#[doc = r" ```"]
-#[doc = r" </details>"]
-#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[serde(transparent)]
-pub struct InputDefinitionName(::std::string::String);
-impl ::std::ops::Deref for InputDefinitionName {
-    type Target = ::std::string::String;
-    fn deref(&self) -> &::std::string::String {
-        &self.0
-    }
-}
-impl ::std::convert::From<InputDefinitionName> for ::std::string::String {
-    fn from(value: InputDefinitionName) -> Self {
-        value.0
-    }
-}
-impl ::std::convert::From<&InputDefinitionName> for InputDefinitionName {
-    fn from(value: &InputDefinitionName) -> Self {
-        value.clone()
-    }
-}
-impl ::std::str::FromStr for InputDefinitionName {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
-            ::std::sync::LazyLock::new(|| {
-                ::regress::Regex::new("^(\\*{0,2}[a-z][a-z0-9_]*)$").unwrap()
-            });
-        if PATTERN.find(value).is_none() {
-            return Err("doesn't match pattern \"^(\\*{0,2}[a-z][a-z0-9_]*)$\"".into());
-        }
-        Ok(Self(value.to_string()))
-    }
-}
-impl ::std::convert::TryFrom<&str> for InputDefinitionName {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<&::std::string::String> for InputDefinitionName {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: &::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for InputDefinitionName {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl<'de> ::serde::Deserialize<'de> for InputDefinitionName {
-    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-    where
-        D: ::serde::Deserializer<'de>,
-    {
-        ::std::string::String::deserialize(deserializer)?
-            .parse()
-            .map_err(|e: self::error::ConversionError| {
-                <D::Error as ::serde::de::Error>::custom(e.to_string())
-            })
     }
 }
 #[doc = "`MetricDefinition`"]
@@ -474,14 +414,22 @@ impl<'de> ::serde::Deserialize<'de> for InputDefinitionName {
 #[doc = "    \"type\""]
 #[doc = "  ],"]
 #[doc = "  \"properties\": {"]
+#[doc = "    \"default\": {"]
+#[doc = "      \"description\": \"Default metric value\""]
+#[doc = "    },"]
 #[doc = "    \"description\": {"]
 #[doc = "      \"description\": \"Metric purpose shown in UI\","]
 #[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
 #[doc = "    \"name\": {"]
 #[doc = "      \"description\": \"Metric key used by openrisk.metrics.set/get/inc\","]
-#[doc = "      \"type\": \"string\","]
-#[doc = "      \"pattern\": \"^[a-z][a-z0-9_]{1,63}$\""]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"optional\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    },"]
+#[doc = "    \"required\": {"]
+#[doc = "      \"type\": \"boolean\""]
 #[doc = "    },"]
 #[doc = "    \"title\": {"]
 #[doc = "      \"description\": \"Human-readable metric name\","]
@@ -498,11 +446,18 @@ impl<'de> ::serde::Deserialize<'de> for InputDefinitionName {
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct MetricDefinition {
+    #[doc = "Default metric value"]
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub default: ::std::option::Option<::serde_json::Value>,
     #[doc = "Metric purpose shown in UI"]
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub description: ::std::option::Option<::std::string::String>,
     #[doc = "Metric key used by openrisk.metrics.set/get/inc"]
-    pub name: MetricDefinitionName,
+    pub name: ::std::string::String,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub optional: ::std::option::Option<bool>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub required: ::std::option::Option<bool>,
     #[doc = "Human-readable metric name"]
     pub title: ::std::string::String,
     #[serde(rename = "type")]
@@ -513,91 +468,15 @@ impl ::std::convert::From<&MetricDefinition> for MetricDefinition {
         value.clone()
     }
 }
-#[doc = "Metric key used by openrisk.metrics.set/get/inc"]
+#[doc = "OpenRisk plugin SDK manifest contract with backwards-compatible application extensions."]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
 #[doc = r""]
 #[doc = r" ```json"]
 #[doc = "{"]
-#[doc = "  \"description\": \"Metric key used by openrisk.metrics.set/get/inc\","]
-#[doc = "  \"type\": \"string\","]
-#[doc = "  \"pattern\": \"^[a-z][a-z0-9_]{1,63}$\""]
-#[doc = "}"]
-#[doc = r" ```"]
-#[doc = r" </details>"]
-#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[serde(transparent)]
-pub struct MetricDefinitionName(::std::string::String);
-impl ::std::ops::Deref for MetricDefinitionName {
-    type Target = ::std::string::String;
-    fn deref(&self) -> &::std::string::String {
-        &self.0
-    }
-}
-impl ::std::convert::From<MetricDefinitionName> for ::std::string::String {
-    fn from(value: MetricDefinitionName) -> Self {
-        value.0
-    }
-}
-impl ::std::convert::From<&MetricDefinitionName> for MetricDefinitionName {
-    fn from(value: &MetricDefinitionName) -> Self {
-        value.clone()
-    }
-}
-impl ::std::str::FromStr for MetricDefinitionName {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
-            ::std::sync::LazyLock::new(|| ::regress::Regex::new("^[a-z][a-z0-9_]{1,63}$").unwrap());
-        if PATTERN.find(value).is_none() {
-            return Err("doesn't match pattern \"^[a-z][a-z0-9_]{1,63}$\"".into());
-        }
-        Ok(Self(value.to_string()))
-    }
-}
-impl ::std::convert::TryFrom<&str> for MetricDefinitionName {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<&::std::string::String> for MetricDefinitionName {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: &::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for MetricDefinitionName {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl<'de> ::serde::Deserialize<'de> for MetricDefinitionName {
-    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-    where
-        D: ::serde::Deserializer<'de>,
-    {
-        ::std::string::String::deserialize(deserializer)?
-            .parse()
-            .map_err(|e: self::error::ConversionError| {
-                <D::Error as ::serde::de::Error>::custom(e.to_string())
-            })
-    }
-}
-#[doc = "Schema for OpenRisk plugin manifest (plugin.json)"]
-#[doc = r""]
-#[doc = r" <details><summary>JSON schema</summary>"]
-#[doc = r""]
-#[doc = r" ```json"]
-#[doc = "{"]
-#[doc = "  \"$id\": \"https://openrisk.platform/schemas/plugin-manifest/0.0.1.json\","]
-#[doc = "  \"title\": \"OpenRisk Plugin Manifest\","]
-#[doc = "  \"description\": \"Schema for OpenRisk plugin manifest (plugin.json)\","]
+#[doc = "  \"$id\": \"https://openriskplatform.github.io/plugin-sdk/schemas/plugin-manifest-v0.0.2.schema.json\","]
+#[doc = "  \"title\": \"OpenRisk Plugin Manifest 0.0.2\","]
+#[doc = "  \"description\": \"OpenRisk plugin SDK manifest contract with backwards-compatible application extensions.\","]
 #[doc = "  \"type\": \"object\","]
 #[doc = "  \"required\": ["]
 #[doc = "    \"authors\","]
@@ -625,8 +504,7 @@ impl<'de> ::serde::Deserialize<'de> for MetricDefinitionName {
 #[doc = "        \"properties\": {"]
 #[doc = "          \"email\": {"]
 #[doc = "            \"description\": \"Author email address\","]
-#[doc = "            \"type\": \"string\","]
-#[doc = "            \"format\": \"email\""]
+#[doc = "            \"type\": \"string\""]
 #[doc = "          },"]
 #[doc = "          \"name\": {"]
 #[doc = "            \"description\": \"Author name\","]
@@ -634,8 +512,7 @@ impl<'de> ::serde::Deserialize<'de> for MetricDefinitionName {
 #[doc = "          },"]
 #[doc = "          \"url\": {"]
 #[doc = "            \"description\": \"Author website\","]
-#[doc = "            \"type\": \"string\","]
-#[doc = "            \"format\": \"uri\""]
+#[doc = "            \"type\": \"string\""]
 #[doc = "          }"]
 #[doc = "        },"]
 #[doc = "        \"additionalProperties\": false"]
@@ -645,7 +522,6 @@ impl<'de> ::serde::Deserialize<'de> for MetricDefinitionName {
 #[doc = "    \"description\": {"]
 #[doc = "      \"description\": \"Brief description of plugin functionality\","]
 #[doc = "      \"type\": \"string\","]
-#[doc = "      \"maxLength\": 1000,"]
 #[doc = "      \"minLength\": 1"]
 #[doc = "    },"]
 #[doc = "    \"entrypoints\": {"]
@@ -658,13 +534,11 @@ impl<'de> ::serde::Deserialize<'de> for MetricDefinitionName {
 #[doc = "    },"]
 #[doc = "    \"homepage\": {"]
 #[doc = "      \"description\": \"Plugin homepage URL\","]
-#[doc = "      \"type\": \"string\","]
-#[doc = "      \"format\": \"uri\""]
+#[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
 #[doc = "    \"icon\": {"]
-#[doc = "      \"description\": \"Path to plugin icon (relative to plugin directory)\","]
-#[doc = "      \"type\": \"string\","]
-#[doc = "      \"pattern\": \"^[^/].*\\\\.(png|svg|jpg|jpeg)$\""]
+#[doc = "      \"description\": \"Plugin icon\","]
+#[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
 #[doc = "    \"id\": {"]
 #[doc = "      \"description\": \"Stable plugin identifier used in project database\","]
@@ -698,13 +572,11 @@ impl<'de> ::serde::Deserialize<'de> for MetricDefinitionName {
 #[doc = "    \"name\": {"]
 #[doc = "      \"description\": \"Human-readable plugin name\","]
 #[doc = "      \"type\": \"string\","]
-#[doc = "      \"maxLength\": 255,"]
 #[doc = "      \"minLength\": 1"]
 #[doc = "    },"]
 #[doc = "    \"repository\": {"]
 #[doc = "      \"description\": \"Plugin source code repository URL\","]
-#[doc = "      \"type\": \"string\","]
-#[doc = "      \"format\": \"uri\""]
+#[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
 #[doc = "    \"settings\": {"]
 #[doc = "      \"description\": \"Plugin configuration settings\","]
@@ -715,13 +587,11 @@ impl<'de> ::serde::Deserialize<'de> for MetricDefinitionName {
 #[doc = "    },"]
 #[doc = "    \"update_metrics_fn\": {"]
 #[doc = "      \"description\": \"Optional function name to call for refreshing declared metrics in settings.\","]
-#[doc = "      \"type\": \"string\","]
-#[doc = "      \"pattern\": \"^[a-zA-Z_$][a-zA-Z0-9_$]*$\""]
+#[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
 #[doc = "    \"version\": {"]
-#[doc = "      \"description\": \"Plugin version in semver format (e.g., 0.1.0)\","]
-#[doc = "      \"type\": \"string\","]
-#[doc = "      \"pattern\": \"^(0|[1-9]\\\\d*)\\\\.(0|[1-9]\\\\d*)\\\\.(0|[1-9]\\\\d*)(?:-((?:0|[1-9]\\\\d*|\\\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\\\.(?:0|[1-9]\\\\d*|\\\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\\\+([0-9a-zA-Z-]+(?:\\\\.[0-9a-zA-Z-]+)*))?$\""]
+#[doc = "      \"description\": \"Plugin version\","]
+#[doc = "      \"type\": \"string\""]
 #[doc = "    }"]
 #[doc = "  },"]
 #[doc = "  \"additionalProperties\": false"]
@@ -730,33 +600,33 @@ impl<'de> ::serde::Deserialize<'de> for MetricDefinitionName {
 #[doc = r" </details>"]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct OpenRiskPluginManifest {
+pub struct OpenRiskPluginManifest002 {
     #[doc = "List of plugin authors"]
-    pub authors: ::std::vec::Vec<OpenRiskPluginManifestAuthorsItem>,
+    pub authors: ::std::vec::Vec<OpenRiskPluginManifest002AuthorsItem>,
     #[doc = "Brief description of plugin functionality"]
-    pub description: OpenRiskPluginManifestDescription,
+    pub description: OpenRiskPluginManifest002Description,
     #[doc = "Named entrypoints exposed by the plugin. At least one named entrypoint is required."]
     pub entrypoints: ::std::vec::Vec<PluginEntrypointDefinition>,
     #[doc = "Plugin homepage URL"]
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub homepage: ::std::option::Option<::std::string::String>,
-    #[doc = "Path to plugin icon (relative to plugin directory)"]
+    #[doc = "Plugin icon"]
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
-    pub icon: ::std::option::Option<OpenRiskPluginManifestIcon>,
+    pub icon: ::std::option::Option<::std::string::String>,
     #[doc = "Stable plugin identifier used in project database"]
-    pub id: OpenRiskPluginManifestId,
+    pub id: OpenRiskPluginManifest002Id,
     #[doc = "Plugin keywords for searchability"]
     #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
     pub keywords: ::std::vec::Vec<::std::string::String>,
     #[doc = "SPDX license identifier (e.g., MIT, Apache-2.0, GPL-3.0)"]
-    pub license: OpenRiskPluginManifestLicense,
+    pub license: OpenRiskPluginManifest002License,
     #[doc = "Main TypeScript/JavaScript file (relative to plugin directory)"]
-    pub main: OpenRiskPluginManifestMain,
+    pub main: OpenRiskPluginManifest002Main,
     #[doc = "Runtime metrics emitted by plugin code through openrisk.metrics.* receiver."]
     #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
     pub metrics: ::std::vec::Vec<MetricDefinition>,
     #[doc = "Human-readable plugin name"]
-    pub name: OpenRiskPluginManifestName,
+    pub name: OpenRiskPluginManifest002Name,
     #[doc = "Plugin source code repository URL"]
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub repository: ::std::option::Option<::std::string::String>,
@@ -772,16 +642,16 @@ pub struct OpenRiskPluginManifest {
     pub settings: ::std::vec::Vec<SettingDefinition>,
     #[doc = "Optional function name to call for refreshing declared metrics in settings."]
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
-    pub update_metrics_fn: ::std::option::Option<OpenRiskPluginManifestUpdateMetricsFn>,
-    #[doc = "Plugin version in semver format (e.g., 0.1.0)"]
-    pub version: OpenRiskPluginManifestVersion,
+    pub update_metrics_fn: ::std::option::Option<::std::string::String>,
+    #[doc = "Plugin version"]
+    pub version: ::std::string::String,
 }
-impl ::std::convert::From<&OpenRiskPluginManifest> for OpenRiskPluginManifest {
-    fn from(value: &OpenRiskPluginManifest) -> Self {
+impl ::std::convert::From<&OpenRiskPluginManifest002> for OpenRiskPluginManifest002 {
+    fn from(value: &OpenRiskPluginManifest002) -> Self {
         value.clone()
     }
 }
-#[doc = "`OpenRiskPluginManifestAuthorsItem`"]
+#[doc = "`OpenRiskPluginManifest002AuthorsItem`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
 #[doc = r""]
@@ -794,8 +664,7 @@ impl ::std::convert::From<&OpenRiskPluginManifest> for OpenRiskPluginManifest {
 #[doc = "  \"properties\": {"]
 #[doc = "    \"email\": {"]
 #[doc = "      \"description\": \"Author email address\","]
-#[doc = "      \"type\": \"string\","]
-#[doc = "      \"format\": \"email\""]
+#[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
 #[doc = "    \"name\": {"]
 #[doc = "      \"description\": \"Author name\","]
@@ -803,8 +672,7 @@ impl ::std::convert::From<&OpenRiskPluginManifest> for OpenRiskPluginManifest {
 #[doc = "    },"]
 #[doc = "    \"url\": {"]
 #[doc = "      \"description\": \"Author website\","]
-#[doc = "      \"type\": \"string\","]
-#[doc = "      \"format\": \"uri\""]
+#[doc = "      \"type\": \"string\""]
 #[doc = "    }"]
 #[doc = "  },"]
 #[doc = "  \"additionalProperties\": false"]
@@ -813,7 +681,7 @@ impl ::std::convert::From<&OpenRiskPluginManifest> for OpenRiskPluginManifest {
 #[doc = r" </details>"]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct OpenRiskPluginManifestAuthorsItem {
+pub struct OpenRiskPluginManifest002AuthorsItem {
     #[doc = "Author email address"]
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub email: ::std::option::Option<::std::string::String>,
@@ -823,10 +691,10 @@ pub struct OpenRiskPluginManifestAuthorsItem {
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub url: ::std::option::Option<::std::string::String>,
 }
-impl ::std::convert::From<&OpenRiskPluginManifestAuthorsItem>
-    for OpenRiskPluginManifestAuthorsItem
+impl ::std::convert::From<&OpenRiskPluginManifest002AuthorsItem>
+    for OpenRiskPluginManifest002AuthorsItem
 {
-    fn from(value: &OpenRiskPluginManifestAuthorsItem) -> Self {
+    fn from(value: &OpenRiskPluginManifest002AuthorsItem) -> Self {
         value.clone()
     }
 }
@@ -838,51 +706,47 @@ impl ::std::convert::From<&OpenRiskPluginManifestAuthorsItem>
 #[doc = "{"]
 #[doc = "  \"description\": \"Brief description of plugin functionality\","]
 #[doc = "  \"type\": \"string\","]
-#[doc = "  \"maxLength\": 1000,"]
 #[doc = "  \"minLength\": 1"]
 #[doc = "}"]
 #[doc = r" ```"]
 #[doc = r" </details>"]
 #[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[serde(transparent)]
-pub struct OpenRiskPluginManifestDescription(::std::string::String);
-impl ::std::ops::Deref for OpenRiskPluginManifestDescription {
+pub struct OpenRiskPluginManifest002Description(::std::string::String);
+impl ::std::ops::Deref for OpenRiskPluginManifest002Description {
     type Target = ::std::string::String;
     fn deref(&self) -> &::std::string::String {
         &self.0
     }
 }
-impl ::std::convert::From<OpenRiskPluginManifestDescription> for ::std::string::String {
-    fn from(value: OpenRiskPluginManifestDescription) -> Self {
+impl ::std::convert::From<OpenRiskPluginManifest002Description> for ::std::string::String {
+    fn from(value: OpenRiskPluginManifest002Description) -> Self {
         value.0
     }
 }
-impl ::std::convert::From<&OpenRiskPluginManifestDescription>
-    for OpenRiskPluginManifestDescription
+impl ::std::convert::From<&OpenRiskPluginManifest002Description>
+    for OpenRiskPluginManifest002Description
 {
-    fn from(value: &OpenRiskPluginManifestDescription) -> Self {
+    fn from(value: &OpenRiskPluginManifest002Description) -> Self {
         value.clone()
     }
 }
-impl ::std::str::FromStr for OpenRiskPluginManifestDescription {
+impl ::std::str::FromStr for OpenRiskPluginManifest002Description {
     type Err = self::error::ConversionError;
     fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        if value.chars().count() > 1000usize {
-            return Err("longer than 1000 characters".into());
-        }
         if value.chars().count() < 1usize {
             return Err("shorter than 1 characters".into());
         }
         Ok(Self(value.to_string()))
     }
 }
-impl ::std::convert::TryFrom<&str> for OpenRiskPluginManifestDescription {
+impl ::std::convert::TryFrom<&str> for OpenRiskPluginManifest002Description {
     type Error = self::error::ConversionError;
     fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
         value.parse()
     }
 }
-impl ::std::convert::TryFrom<&::std::string::String> for OpenRiskPluginManifestDescription {
+impl ::std::convert::TryFrom<&::std::string::String> for OpenRiskPluginManifest002Description {
     type Error = self::error::ConversionError;
     fn try_from(
         value: &::std::string::String,
@@ -890,7 +754,7 @@ impl ::std::convert::TryFrom<&::std::string::String> for OpenRiskPluginManifestD
         value.parse()
     }
 }
-impl ::std::convert::TryFrom<::std::string::String> for OpenRiskPluginManifestDescription {
+impl ::std::convert::TryFrom<::std::string::String> for OpenRiskPluginManifest002Description {
     type Error = self::error::ConversionError;
     fn try_from(
         value: ::std::string::String,
@@ -898,85 +762,7 @@ impl ::std::convert::TryFrom<::std::string::String> for OpenRiskPluginManifestDe
         value.parse()
     }
 }
-impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifestDescription {
-    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-    where
-        D: ::serde::Deserializer<'de>,
-    {
-        ::std::string::String::deserialize(deserializer)?
-            .parse()
-            .map_err(|e: self::error::ConversionError| {
-                <D::Error as ::serde::de::Error>::custom(e.to_string())
-            })
-    }
-}
-#[doc = "Path to plugin icon (relative to plugin directory)"]
-#[doc = r""]
-#[doc = r" <details><summary>JSON schema</summary>"]
-#[doc = r""]
-#[doc = r" ```json"]
-#[doc = "{"]
-#[doc = "  \"description\": \"Path to plugin icon (relative to plugin directory)\","]
-#[doc = "  \"type\": \"string\","]
-#[doc = "  \"pattern\": \"^[^/].*\\\\.(png|svg|jpg|jpeg)$\""]
-#[doc = "}"]
-#[doc = r" ```"]
-#[doc = r" </details>"]
-#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[serde(transparent)]
-pub struct OpenRiskPluginManifestIcon(::std::string::String);
-impl ::std::ops::Deref for OpenRiskPluginManifestIcon {
-    type Target = ::std::string::String;
-    fn deref(&self) -> &::std::string::String {
-        &self.0
-    }
-}
-impl ::std::convert::From<OpenRiskPluginManifestIcon> for ::std::string::String {
-    fn from(value: OpenRiskPluginManifestIcon) -> Self {
-        value.0
-    }
-}
-impl ::std::convert::From<&OpenRiskPluginManifestIcon> for OpenRiskPluginManifestIcon {
-    fn from(value: &OpenRiskPluginManifestIcon) -> Self {
-        value.clone()
-    }
-}
-impl ::std::str::FromStr for OpenRiskPluginManifestIcon {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
-            ::std::sync::LazyLock::new(|| {
-                ::regress::Regex::new("^[^/].*\\.(png|svg|jpg|jpeg)$").unwrap()
-            });
-        if PATTERN.find(value).is_none() {
-            return Err("doesn't match pattern \"^[^/].*\\.(png|svg|jpg|jpeg)$\"".into());
-        }
-        Ok(Self(value.to_string()))
-    }
-}
-impl ::std::convert::TryFrom<&str> for OpenRiskPluginManifestIcon {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<&::std::string::String> for OpenRiskPluginManifestIcon {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: &::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for OpenRiskPluginManifestIcon {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifestIcon {
+impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifest002Description {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
     where
         D: ::serde::Deserializer<'de>,
@@ -1002,24 +788,24 @@ impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifestIcon {
 #[doc = r" </details>"]
 #[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[serde(transparent)]
-pub struct OpenRiskPluginManifestId(::std::string::String);
-impl ::std::ops::Deref for OpenRiskPluginManifestId {
+pub struct OpenRiskPluginManifest002Id(::std::string::String);
+impl ::std::ops::Deref for OpenRiskPluginManifest002Id {
     type Target = ::std::string::String;
     fn deref(&self) -> &::std::string::String {
         &self.0
     }
 }
-impl ::std::convert::From<OpenRiskPluginManifestId> for ::std::string::String {
-    fn from(value: OpenRiskPluginManifestId) -> Self {
+impl ::std::convert::From<OpenRiskPluginManifest002Id> for ::std::string::String {
+    fn from(value: OpenRiskPluginManifest002Id) -> Self {
         value.0
     }
 }
-impl ::std::convert::From<&OpenRiskPluginManifestId> for OpenRiskPluginManifestId {
-    fn from(value: &OpenRiskPluginManifestId) -> Self {
+impl ::std::convert::From<&OpenRiskPluginManifest002Id> for OpenRiskPluginManifest002Id {
+    fn from(value: &OpenRiskPluginManifest002Id) -> Self {
         value.clone()
     }
 }
-impl ::std::str::FromStr for OpenRiskPluginManifestId {
+impl ::std::str::FromStr for OpenRiskPluginManifest002Id {
     type Err = self::error::ConversionError;
     fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
         static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
@@ -1032,13 +818,13 @@ impl ::std::str::FromStr for OpenRiskPluginManifestId {
         Ok(Self(value.to_string()))
     }
 }
-impl ::std::convert::TryFrom<&str> for OpenRiskPluginManifestId {
+impl ::std::convert::TryFrom<&str> for OpenRiskPluginManifest002Id {
     type Error = self::error::ConversionError;
     fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
         value.parse()
     }
 }
-impl ::std::convert::TryFrom<&::std::string::String> for OpenRiskPluginManifestId {
+impl ::std::convert::TryFrom<&::std::string::String> for OpenRiskPluginManifest002Id {
     type Error = self::error::ConversionError;
     fn try_from(
         value: &::std::string::String,
@@ -1046,7 +832,7 @@ impl ::std::convert::TryFrom<&::std::string::String> for OpenRiskPluginManifestI
         value.parse()
     }
 }
-impl ::std::convert::TryFrom<::std::string::String> for OpenRiskPluginManifestId {
+impl ::std::convert::TryFrom<::std::string::String> for OpenRiskPluginManifest002Id {
     type Error = self::error::ConversionError;
     fn try_from(
         value: ::std::string::String,
@@ -1054,7 +840,7 @@ impl ::std::convert::TryFrom<::std::string::String> for OpenRiskPluginManifestId
         value.parse()
     }
 }
-impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifestId {
+impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifest002Id {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
     where
         D: ::serde::Deserializer<'de>,
@@ -1080,24 +866,24 @@ impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifestId {
 #[doc = r" </details>"]
 #[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[serde(transparent)]
-pub struct OpenRiskPluginManifestLicense(::std::string::String);
-impl ::std::ops::Deref for OpenRiskPluginManifestLicense {
+pub struct OpenRiskPluginManifest002License(::std::string::String);
+impl ::std::ops::Deref for OpenRiskPluginManifest002License {
     type Target = ::std::string::String;
     fn deref(&self) -> &::std::string::String {
         &self.0
     }
 }
-impl ::std::convert::From<OpenRiskPluginManifestLicense> for ::std::string::String {
-    fn from(value: OpenRiskPluginManifestLicense) -> Self {
+impl ::std::convert::From<OpenRiskPluginManifest002License> for ::std::string::String {
+    fn from(value: OpenRiskPluginManifest002License) -> Self {
         value.0
     }
 }
-impl ::std::convert::From<&OpenRiskPluginManifestLicense> for OpenRiskPluginManifestLicense {
-    fn from(value: &OpenRiskPluginManifestLicense) -> Self {
+impl ::std::convert::From<&OpenRiskPluginManifest002License> for OpenRiskPluginManifest002License {
+    fn from(value: &OpenRiskPluginManifest002License) -> Self {
         value.clone()
     }
 }
-impl ::std::str::FromStr for OpenRiskPluginManifestLicense {
+impl ::std::str::FromStr for OpenRiskPluginManifest002License {
     type Err = self::error::ConversionError;
     fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
         if value.chars().count() < 1usize {
@@ -1106,13 +892,13 @@ impl ::std::str::FromStr for OpenRiskPluginManifestLicense {
         Ok(Self(value.to_string()))
     }
 }
-impl ::std::convert::TryFrom<&str> for OpenRiskPluginManifestLicense {
+impl ::std::convert::TryFrom<&str> for OpenRiskPluginManifest002License {
     type Error = self::error::ConversionError;
     fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
         value.parse()
     }
 }
-impl ::std::convert::TryFrom<&::std::string::String> for OpenRiskPluginManifestLicense {
+impl ::std::convert::TryFrom<&::std::string::String> for OpenRiskPluginManifest002License {
     type Error = self::error::ConversionError;
     fn try_from(
         value: &::std::string::String,
@@ -1120,7 +906,7 @@ impl ::std::convert::TryFrom<&::std::string::String> for OpenRiskPluginManifestL
         value.parse()
     }
 }
-impl ::std::convert::TryFrom<::std::string::String> for OpenRiskPluginManifestLicense {
+impl ::std::convert::TryFrom<::std::string::String> for OpenRiskPluginManifest002License {
     type Error = self::error::ConversionError;
     fn try_from(
         value: ::std::string::String,
@@ -1128,7 +914,7 @@ impl ::std::convert::TryFrom<::std::string::String> for OpenRiskPluginManifestLi
         value.parse()
     }
 }
-impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifestLicense {
+impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifest002License {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
     where
         D: ::serde::Deserializer<'de>,
@@ -1154,24 +940,24 @@ impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifestLicense {
 #[doc = r" </details>"]
 #[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[serde(transparent)]
-pub struct OpenRiskPluginManifestMain(::std::string::String);
-impl ::std::ops::Deref for OpenRiskPluginManifestMain {
+pub struct OpenRiskPluginManifest002Main(::std::string::String);
+impl ::std::ops::Deref for OpenRiskPluginManifest002Main {
     type Target = ::std::string::String;
     fn deref(&self) -> &::std::string::String {
         &self.0
     }
 }
-impl ::std::convert::From<OpenRiskPluginManifestMain> for ::std::string::String {
-    fn from(value: OpenRiskPluginManifestMain) -> Self {
+impl ::std::convert::From<OpenRiskPluginManifest002Main> for ::std::string::String {
+    fn from(value: OpenRiskPluginManifest002Main) -> Self {
         value.0
     }
 }
-impl ::std::convert::From<&OpenRiskPluginManifestMain> for OpenRiskPluginManifestMain {
-    fn from(value: &OpenRiskPluginManifestMain) -> Self {
+impl ::std::convert::From<&OpenRiskPluginManifest002Main> for OpenRiskPluginManifest002Main {
+    fn from(value: &OpenRiskPluginManifest002Main) -> Self {
         value.clone()
     }
 }
-impl ::std::str::FromStr for OpenRiskPluginManifestMain {
+impl ::std::str::FromStr for OpenRiskPluginManifest002Main {
     type Err = self::error::ConversionError;
     fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
         static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
@@ -1182,13 +968,13 @@ impl ::std::str::FromStr for OpenRiskPluginManifestMain {
         Ok(Self(value.to_string()))
     }
 }
-impl ::std::convert::TryFrom<&str> for OpenRiskPluginManifestMain {
+impl ::std::convert::TryFrom<&str> for OpenRiskPluginManifest002Main {
     type Error = self::error::ConversionError;
     fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
         value.parse()
     }
 }
-impl ::std::convert::TryFrom<&::std::string::String> for OpenRiskPluginManifestMain {
+impl ::std::convert::TryFrom<&::std::string::String> for OpenRiskPluginManifest002Main {
     type Error = self::error::ConversionError;
     fn try_from(
         value: &::std::string::String,
@@ -1196,7 +982,7 @@ impl ::std::convert::TryFrom<&::std::string::String> for OpenRiskPluginManifestM
         value.parse()
     }
 }
-impl ::std::convert::TryFrom<::std::string::String> for OpenRiskPluginManifestMain {
+impl ::std::convert::TryFrom<::std::string::String> for OpenRiskPluginManifest002Main {
     type Error = self::error::ConversionError;
     fn try_from(
         value: ::std::string::String,
@@ -1204,7 +990,7 @@ impl ::std::convert::TryFrom<::std::string::String> for OpenRiskPluginManifestMa
         value.parse()
     }
 }
-impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifestMain {
+impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifest002Main {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
     where
         D: ::serde::Deserializer<'de>,
@@ -1224,49 +1010,45 @@ impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifestMain {
 #[doc = "{"]
 #[doc = "  \"description\": \"Human-readable plugin name\","]
 #[doc = "  \"type\": \"string\","]
-#[doc = "  \"maxLength\": 255,"]
 #[doc = "  \"minLength\": 1"]
 #[doc = "}"]
 #[doc = r" ```"]
 #[doc = r" </details>"]
 #[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[serde(transparent)]
-pub struct OpenRiskPluginManifestName(::std::string::String);
-impl ::std::ops::Deref for OpenRiskPluginManifestName {
+pub struct OpenRiskPluginManifest002Name(::std::string::String);
+impl ::std::ops::Deref for OpenRiskPluginManifest002Name {
     type Target = ::std::string::String;
     fn deref(&self) -> &::std::string::String {
         &self.0
     }
 }
-impl ::std::convert::From<OpenRiskPluginManifestName> for ::std::string::String {
-    fn from(value: OpenRiskPluginManifestName) -> Self {
+impl ::std::convert::From<OpenRiskPluginManifest002Name> for ::std::string::String {
+    fn from(value: OpenRiskPluginManifest002Name) -> Self {
         value.0
     }
 }
-impl ::std::convert::From<&OpenRiskPluginManifestName> for OpenRiskPluginManifestName {
-    fn from(value: &OpenRiskPluginManifestName) -> Self {
+impl ::std::convert::From<&OpenRiskPluginManifest002Name> for OpenRiskPluginManifest002Name {
+    fn from(value: &OpenRiskPluginManifest002Name) -> Self {
         value.clone()
     }
 }
-impl ::std::str::FromStr for OpenRiskPluginManifestName {
+impl ::std::str::FromStr for OpenRiskPluginManifest002Name {
     type Err = self::error::ConversionError;
     fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        if value.chars().count() > 255usize {
-            return Err("longer than 255 characters".into());
-        }
         if value.chars().count() < 1usize {
             return Err("shorter than 1 characters".into());
         }
         Ok(Self(value.to_string()))
     }
 }
-impl ::std::convert::TryFrom<&str> for OpenRiskPluginManifestName {
+impl ::std::convert::TryFrom<&str> for OpenRiskPluginManifest002Name {
     type Error = self::error::ConversionError;
     fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
         value.parse()
     }
 }
-impl ::std::convert::TryFrom<&::std::string::String> for OpenRiskPluginManifestName {
+impl ::std::convert::TryFrom<&::std::string::String> for OpenRiskPluginManifest002Name {
     type Error = self::error::ConversionError;
     fn try_from(
         value: &::std::string::String,
@@ -1274,7 +1056,7 @@ impl ::std::convert::TryFrom<&::std::string::String> for OpenRiskPluginManifestN
         value.parse()
     }
 }
-impl ::std::convert::TryFrom<::std::string::String> for OpenRiskPluginManifestName {
+impl ::std::convert::TryFrom<::std::string::String> for OpenRiskPluginManifest002Name {
     type Error = self::error::ConversionError;
     fn try_from(
         value: ::std::string::String,
@@ -1282,166 +1064,7 @@ impl ::std::convert::TryFrom<::std::string::String> for OpenRiskPluginManifestNa
         value.parse()
     }
 }
-impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifestName {
-    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-    where
-        D: ::serde::Deserializer<'de>,
-    {
-        ::std::string::String::deserialize(deserializer)?
-            .parse()
-            .map_err(|e: self::error::ConversionError| {
-                <D::Error as ::serde::de::Error>::custom(e.to_string())
-            })
-    }
-}
-#[doc = "Optional function name to call for refreshing declared metrics in settings."]
-#[doc = r""]
-#[doc = r" <details><summary>JSON schema</summary>"]
-#[doc = r""]
-#[doc = r" ```json"]
-#[doc = "{"]
-#[doc = "  \"description\": \"Optional function name to call for refreshing declared metrics in settings.\","]
-#[doc = "  \"type\": \"string\","]
-#[doc = "  \"pattern\": \"^[a-zA-Z_$][a-zA-Z0-9_$]*$\""]
-#[doc = "}"]
-#[doc = r" ```"]
-#[doc = r" </details>"]
-#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[serde(transparent)]
-pub struct OpenRiskPluginManifestUpdateMetricsFn(::std::string::String);
-impl ::std::ops::Deref for OpenRiskPluginManifestUpdateMetricsFn {
-    type Target = ::std::string::String;
-    fn deref(&self) -> &::std::string::String {
-        &self.0
-    }
-}
-impl ::std::convert::From<OpenRiskPluginManifestUpdateMetricsFn> for ::std::string::String {
-    fn from(value: OpenRiskPluginManifestUpdateMetricsFn) -> Self {
-        value.0
-    }
-}
-impl ::std::convert::From<&OpenRiskPluginManifestUpdateMetricsFn>
-    for OpenRiskPluginManifestUpdateMetricsFn
-{
-    fn from(value: &OpenRiskPluginManifestUpdateMetricsFn) -> Self {
-        value.clone()
-    }
-}
-impl ::std::str::FromStr for OpenRiskPluginManifestUpdateMetricsFn {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
-            ::std::sync::LazyLock::new(|| {
-                ::regress::Regex::new("^[a-zA-Z_$][a-zA-Z0-9_$]*$").unwrap()
-            });
-        if PATTERN.find(value).is_none() {
-            return Err("doesn't match pattern \"^[a-zA-Z_$][a-zA-Z0-9_$]*$\"".into());
-        }
-        Ok(Self(value.to_string()))
-    }
-}
-impl ::std::convert::TryFrom<&str> for OpenRiskPluginManifestUpdateMetricsFn {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<&::std::string::String> for OpenRiskPluginManifestUpdateMetricsFn {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: &::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for OpenRiskPluginManifestUpdateMetricsFn {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifestUpdateMetricsFn {
-    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-    where
-        D: ::serde::Deserializer<'de>,
-    {
-        ::std::string::String::deserialize(deserializer)?
-            .parse()
-            .map_err(|e: self::error::ConversionError| {
-                <D::Error as ::serde::de::Error>::custom(e.to_string())
-            })
-    }
-}
-#[doc = "Plugin version in semver format (e.g., 0.1.0)"]
-#[doc = r""]
-#[doc = r" <details><summary>JSON schema</summary>"]
-#[doc = r""]
-#[doc = r" ```json"]
-#[doc = "{"]
-#[doc = "  \"description\": \"Plugin version in semver format (e.g., 0.1.0)\","]
-#[doc = "  \"type\": \"string\","]
-#[doc = "  \"pattern\": \"^(0|[1-9]\\\\d*)\\\\.(0|[1-9]\\\\d*)\\\\.(0|[1-9]\\\\d*)(?:-((?:0|[1-9]\\\\d*|\\\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\\\.(?:0|[1-9]\\\\d*|\\\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\\\+([0-9a-zA-Z-]+(?:\\\\.[0-9a-zA-Z-]+)*))?$\""]
-#[doc = "}"]
-#[doc = r" ```"]
-#[doc = r" </details>"]
-#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[serde(transparent)]
-pub struct OpenRiskPluginManifestVersion(::std::string::String);
-impl ::std::ops::Deref for OpenRiskPluginManifestVersion {
-    type Target = ::std::string::String;
-    fn deref(&self) -> &::std::string::String {
-        &self.0
-    }
-}
-impl ::std::convert::From<OpenRiskPluginManifestVersion> for ::std::string::String {
-    fn from(value: OpenRiskPluginManifestVersion) -> Self {
-        value.0
-    }
-}
-impl ::std::convert::From<&OpenRiskPluginManifestVersion> for OpenRiskPluginManifestVersion {
-    fn from(value: &OpenRiskPluginManifestVersion) -> Self {
-        value.clone()
-    }
-}
-impl ::std::str::FromStr for OpenRiskPluginManifestVersion {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(
-            || {
-                :: regress :: Regex :: new ("^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$") . unwrap ()
-            },
-        );
-        if PATTERN.find(value).is_none() {
-            return Err ("doesn't match pattern \"^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$\"" . into ()) ;
-        }
-        Ok(Self(value.to_string()))
-    }
-}
-impl ::std::convert::TryFrom<&str> for OpenRiskPluginManifestVersion {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<&::std::string::String> for OpenRiskPluginManifestVersion {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: &::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for OpenRiskPluginManifestVersion {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifestVersion {
+impl<'de> ::serde::Deserialize<'de> for OpenRiskPluginManifest002Name {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
     where
         D: ::serde::Deserializer<'de>,
@@ -1770,9 +1393,12 @@ impl<'de> ::serde::Deserialize<'de> for PluginEntrypointDefinitionName {
 #[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
 #[doc = "    \"name\": {"]
-#[doc = "      \"description\": \"Setting identifier (snake_case)\","]
-#[doc = "      \"type\": \"string\","]
-#[doc = "      \"pattern\": \"^[a-z][a-z0-9_]*$\""]
+#[doc = "      \"description\": \"Setting identifier\","]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"optional\": {"]
+#[doc = "      \"description\": \"Whether this setting is optional\","]
+#[doc = "      \"type\": \"boolean\""]
 #[doc = "    },"]
 #[doc = "    \"required\": {"]
 #[doc = "      \"description\": \"Whether this setting is required\","]
@@ -1808,8 +1434,11 @@ pub struct SettingDefinition {
     #[doc = "Detailed setting description"]
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub description: ::std::option::Option<::std::string::String>,
-    #[doc = "Setting identifier (snake_case)"]
-    pub name: SettingDefinitionName,
+    #[doc = "Setting identifier"]
+    pub name: ::std::string::String,
+    #[doc = "Whether this setting is optional"]
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub optional: ::std::option::Option<bool>,
     #[doc = "Whether this setting is required"]
     #[serde(default)]
     pub required: bool,
@@ -1826,82 +1455,6 @@ pub struct SettingDefinition {
 impl ::std::convert::From<&SettingDefinition> for SettingDefinition {
     fn from(value: &SettingDefinition) -> Self {
         value.clone()
-    }
-}
-#[doc = "Setting identifier (snake_case)"]
-#[doc = r""]
-#[doc = r" <details><summary>JSON schema</summary>"]
-#[doc = r""]
-#[doc = r" ```json"]
-#[doc = "{"]
-#[doc = "  \"description\": \"Setting identifier (snake_case)\","]
-#[doc = "  \"type\": \"string\","]
-#[doc = "  \"pattern\": \"^[a-z][a-z0-9_]*$\""]
-#[doc = "}"]
-#[doc = r" ```"]
-#[doc = r" </details>"]
-#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[serde(transparent)]
-pub struct SettingDefinitionName(::std::string::String);
-impl ::std::ops::Deref for SettingDefinitionName {
-    type Target = ::std::string::String;
-    fn deref(&self) -> &::std::string::String {
-        &self.0
-    }
-}
-impl ::std::convert::From<SettingDefinitionName> for ::std::string::String {
-    fn from(value: SettingDefinitionName) -> Self {
-        value.0
-    }
-}
-impl ::std::convert::From<&SettingDefinitionName> for SettingDefinitionName {
-    fn from(value: &SettingDefinitionName) -> Self {
-        value.clone()
-    }
-}
-impl ::std::str::FromStr for SettingDefinitionName {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
-            ::std::sync::LazyLock::new(|| ::regress::Regex::new("^[a-z][a-z0-9_]*$").unwrap());
-        if PATTERN.find(value).is_none() {
-            return Err("doesn't match pattern \"^[a-z][a-z0-9_]*$\"".into());
-        }
-        Ok(Self(value.to_string()))
-    }
-}
-impl ::std::convert::TryFrom<&str> for SettingDefinitionName {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<&::std::string::String> for SettingDefinitionName {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: &::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for SettingDefinitionName {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl<'de> ::serde::Deserialize<'de> for SettingDefinitionName {
-    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-    where
-        D: ::serde::Deserializer<'de>,
-    {
-        ::std::string::String::deserialize(deserializer)?
-            .parse()
-            .map_err(|e: self::error::ConversionError| {
-                <D::Error as ::serde::de::Error>::custom(e.to_string())
-            })
     }
 }
 #[doc = "Additional validation rules (legacy fallback for enum)."]

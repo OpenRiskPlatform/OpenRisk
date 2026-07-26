@@ -1,18 +1,14 @@
+import { ExternalLink, ImageIcon } from "lucide-react";
 import type { ReactNode } from "react";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function typedValue(value: unknown): unknown {
-  if (isRecord(value) && "$type" in value && "value" in value) {
-    return value.value;
-  }
-  return value;
-}
+import {
+  isRecord,
+  isTypedValue,
+  typedValuePayload,
+  type TypedValue,
+} from "./resultSchema";
 
 function isScalar(value: unknown): boolean {
-  const normalized = typedValue(value);
+  const normalized = typedValuePayload(value);
   return (
     normalized === null ||
     normalized === undefined ||
@@ -22,36 +18,130 @@ function isScalar(value: unknown): boolean {
   );
 }
 
-function primitive(value: unknown): ReactNode {
-  if (value === null) {
-    return <span className="text-muted-foreground">null</span>;
+function booleanText(value: boolean): string {
+  return value ? "Yes" : "No";
+}
+
+function primitive(value: unknown, advancedMode: boolean): ReactNode {
+  if (value === null || value === undefined) {
+    return <span className="text-muted-foreground">Not provided</span>;
   }
-  if (value === undefined) {
-    return <span className="text-muted-foreground">undefined</span>;
+  if (typeof value === "boolean") {
+    return advancedMode ? String(value) : booleanText(value);
   }
-  if (
-    typeof value === "boolean" ||
-    typeof value === "string" ||
-    typeof value === "number"
-  ) {
+  if (typeof value === "string" || typeof value === "number") {
     return String(value);
   }
   return null;
 }
 
-function isKeyValueList(
-  value: unknown[],
-): value is Array<Record<"key" | "value", unknown>> {
+function safeWebUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? url.href
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function RelativeAssociate({ value }: { value: unknown }) {
+  if (!isRecord(value) || typeof value.name !== "string") {
+    return <span className="break-words">{String(value)}</span>;
+  }
+
   return (
-    value.length > 0 &&
-    value.every(
-      (item) =>
-        isRecord(item) &&
-        "key" in item &&
-        "value" in item &&
-        ["string", "number"].includes(typeof typedValue(item.key)),
-    )
+    <span className="break-words">
+      {value.name}
+      {typeof value.relation === "string" && value.relation.trim() ? (
+        <span className="text-muted-foreground"> — {value.relation}</span>
+      ) : null}
+    </span>
   );
+}
+
+function TypedValueView({ item }: { item: TypedValue }) {
+  const value = item.value;
+
+  if (item.$type === "boolean" && typeof value === "boolean") {
+    return <span>{booleanText(value)}</span>;
+  }
+
+  if (item.$type === "url" && typeof value === "string") {
+    const href = safeWebUrl(value);
+    if (!href) {
+      return <span className="break-all">{value}</span>;
+    }
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex max-w-full items-center gap-1.5 break-all text-primary underline decoration-border underline-offset-4 hover:decoration-current"
+      >
+        <span>{value}</span>
+        <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      </a>
+    );
+  }
+
+  if (item.$type === "image-url" && typeof value === "string") {
+    const src = safeWebUrl(value);
+    if (!src) {
+      return <span className="break-all">{value}</span>;
+    }
+    return (
+      <a href={src} target="_blank" rel="noreferrer" className="inline-block">
+        <img
+          src={src}
+          alt="Result attachment"
+          className="max-h-40 max-w-full rounded-md object-contain"
+          loading="lazy"
+        />
+      </a>
+    );
+  }
+
+  if (item.$type === "image-base64" && typeof value === "string") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+        <ImageIcon className="h-4 w-4" aria-hidden />
+        Image attachment
+      </span>
+    );
+  }
+
+  if (item.$type === "relative-close-associate") {
+    return <RelativeAssociate value={value} />;
+  }
+
+  if (item.$type === "key-value" && isRecord(value)) {
+    const key = typedValuePayload(value.key);
+    const nestedValue = value.value;
+    return (
+      <DataRows
+        entries={[[String(key ?? "Value"), nestedValue]]}
+        advancedMode={false}
+      />
+    );
+  }
+
+  return <ValueView value={value} />;
+}
+
+function legacyKeyValueEntry(
+  value: unknown,
+): [string, unknown] | null {
+  const payload = typedValuePayload(value);
+  if (!isRecord(payload) || !("key" in payload) || !("value" in payload)) {
+    return null;
+  }
+  const key = typedValuePayload(payload.key);
+  if (typeof key !== "string" && typeof key !== "number") {
+    return null;
+  }
+  return [String(key), payload.value];
 }
 
 function tableShape(
@@ -116,8 +206,8 @@ export function ValueView({
   value: unknown;
   advancedMode?: boolean;
 }) {
-  if (!advancedMode) {
-    value = typedValue(value);
+  if (!advancedMode && isTypedValue(value)) {
+    return <TypedValueView item={value} />;
   }
 
   if (
@@ -127,30 +217,66 @@ export function ValueView({
     typeof value === "string" ||
     typeof value === "number"
   ) {
-    return <span className="break-words">{primitive(value)}</span>;
+    return (
+      <span className="break-words">{primitive(value, advancedMode)}</span>
+    );
   }
 
   if (Array.isArray(value)) {
     if (value.length === 0) {
-      return <span className="text-muted-foreground">—</span>;
-    }
-
-    const items = advancedMode ? value : value.map(typedValue);
-
-    if (!advancedMode && isKeyValueList(items)) {
-      return (
-        <DataRows
-          entries={items.map((item) => [
-            String(typedValue(item.key)),
-            item.value,
-          ])}
-          advancedMode={false}
-        />
-      );
+      return <span className="text-muted-foreground">Not provided</span>;
     }
 
     if (!advancedMode) {
-      const table = tableShape(items);
+      const keyValueEntries = value
+        .map(legacyKeyValueEntry)
+        .filter((entry): entry is [string, unknown] => entry !== null);
+      if (keyValueEntries.length === value.length) {
+        return (
+          <DataRows entries={keyValueEntries} advancedMode={false} />
+        );
+      }
+
+      const typedItems = value.filter(isTypedValue);
+      if (typedItems.length === value.length) {
+        const requiresDedicatedView = typedItems.some((item) =>
+          [
+            "url",
+            "image-url",
+            "image-base64",
+            "relative-close-associate",
+            "key-value",
+          ].includes(item.$type),
+        );
+        if (!requiresDedicatedView && typedItems.every(isScalar)) {
+          return (
+            <span className="break-words">
+              {typedItems
+                .map((item) =>
+                  typeof item.value === "boolean"
+                    ? booleanText(item.value)
+                    : String(item.value),
+                )
+                .join(", ")}
+            </span>
+          );
+        }
+        return (
+          <div>
+            {typedItems.map((item, index) => (
+              <div
+                key={index}
+                className="border-b border-border/70 py-2 first:pt-0 last:border-b-0 last:pb-0"
+              >
+                <TypedValueView item={item} />
+              </div>
+            ))}
+          </div>
+        );
+      }
+
+      const payloads = value.map(typedValuePayload);
+      const table = tableShape(payloads);
       if (table) {
         return (
           <div className="overflow-x-auto">
@@ -179,19 +305,26 @@ export function ValueView({
           </div>
         );
       }
-    }
 
-    if (items.every(isScalar)) {
-      return (
-        <span className="break-words">
-          {items.map((item) => String(typedValue(item))).join(", ")}
-        </span>
-      );
+      if (value.every(isScalar)) {
+        return (
+          <span className="break-words">
+            {value
+              .map((item) => {
+                const payload = typedValuePayload(item);
+                return typeof payload === "boolean"
+                  ? booleanText(payload)
+                  : String(payload);
+              })
+              .join(", ")}
+          </span>
+        );
+      }
     }
 
     return (
       <div>
-        {items.map((item, index) => (
+        {value.map((item, index) => (
           <div
             key={index}
             className="border-b border-border/70 py-2.5 first:pt-0 last:border-b-0 last:pb-0"

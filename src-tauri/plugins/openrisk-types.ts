@@ -1,5 +1,5 @@
 // =============================================================================
-// openrisk-types.ts  ·  OpenRisk Canonical Entity Types  ·  v0.0.2
+// openrisk-types.ts  ·  OpenRisk Canonical Entity Types  ·  v0.0.3
 //
 // Paste this block verbatim at the top of each plugin file.
 // All shared identifiers use _or_ / _tv prefixes to avoid collisions.
@@ -21,7 +21,7 @@ interface _OR_KV {
 }
 
 interface DataModelEntity {
-    $modelVersion: "0.0.2";
+    $modelVersion: "0.0.3";
     $entity: string;
     $id: string;
     $sources?: Array<{ name: string; source: string }>;
@@ -29,7 +29,7 @@ interface DataModelEntity {
     $extra?: _OR_KV[];
 }
 
-const OPENRISK_DATA_MODEL_VERSION = "0.0.2" as const;
+const OPENRISK_DATA_MODEL_VERSION = "0.0.3" as const;
 
 // ---------------------------------------------------------------------------
 // Sub-types used inside canonical payloads
@@ -53,7 +53,13 @@ interface BusinessSubject {
     effectiveTo?: string;
 }
 
-const OPENRISK_REGISTRY_JURISDICTION_CODES = [
+/** A flat relative or close associate reference. */
+interface RelativeCloseAssociate {
+    name: string;
+    relation?: string;
+}
+
+const OPENRISK_JURISDICTION_ISO_3166_2_CODES = [
     "al", "by", "be", "bg", "hr", "cy", "cz", "dk", "fi", "fr", "de", "gi",
     "gr", "gg", "gl", "is", "ie", "im", "je", "lv", "li", "lu", "mt", "md",
     "me", "nl", "no", "pl", "ro", "sk", "si", "es", "se", "ch", "ua", "gb",
@@ -71,8 +77,8 @@ const OPENRISK_REGISTRY_JURISDICTION_CODES = [
     "to", "tz", "ug", "vn", "vu", "yt", "za", "pf", "nc", "wf",
 ] as const;
 
-type RegistryJurisdictionCode =
-    typeof OPENRISK_REGISTRY_JURISDICTION_CODES[number];
+type JurisdictionIso31662Code =
+    typeof OPENRISK_JURISDICTION_ISO_3166_2_CODES[number];
 
 // ---------------------------------------------------------------------------
 // Canonical payload types — what plugin authors construct
@@ -86,12 +92,15 @@ interface PersonPayload {
     birthPlace?: string;
     /** ISO alpha-2 codes or full country names. */
     nationalities?: string[];
-    jurisdiction?: RegistryJurisdictionCode;
+    jurisdiction?: JurisdictionIso31662Code;
     addresses?: string[];
     emails?: string[];
     phones?: string[];
+    relativeCloseAssociates?: RelativeCloseAssociate[];
     /** true = PEP confirmed, false = clear, undefined = not evaluated. */
     isPep?: boolean;
+    /** true = PEP relative/close associate, false = clear, undefined = not evaluated. */
+    isPepRca?: boolean;
     pepDatasets?: string[];
     pepMunicipality?: string;
     pepState?: string;
@@ -112,7 +121,7 @@ interface OrganizationPayload {
     /** Registration number (ICO, EIN, company number, etc.). */
     registrationId?: string;
     country?: string;
-    jurisdiction?: RegistryJurisdictionCode;
+    jurisdiction?: JurisdictionIso31662Code;
     address?: string;
     status?: "active" | "inactive" | "unknown";
     involvedPersons?: string[];
@@ -198,9 +207,13 @@ const _tv = {
     str: (v: string): TypedValue<string> => ({ $type: "string", value: v }),
     num: (v: number): TypedValue<number> => ({ $type: "number", value: v }),
     bool: (v: boolean): TypedValue<boolean> => ({ $type: "boolean", value: v }),
-    jurisdiction: (v: RegistryJurisdictionCode): TypedValue<RegistryJurisdictionCode> => ({
-        $type: "registry-jurisdiction-code",
+    jurisdiction: (v: JurisdictionIso31662Code): TypedValue<JurisdictionIso31662Code> => ({
+        $type: "jurisdiction-iso-3166-2",
         value: v,
+    }),
+    rca: (v: RelativeCloseAssociate): TypedValue<RelativeCloseAssociate> => ({
+        $type: "relative-close-associate",
+        value: v.relation ? { name: v.name, relation: v.relation } : { name: v.name },
     }),
     url: (v: string): TypedValue<string> => ({ $type: "url", value: v }),
     addr: (v: string): TypedValue<string> => ({ $type: "address", value: v }),
@@ -257,8 +270,10 @@ function buildPerson(opts: _OR_Opts<PersonPayload>): DataModelEntity {
     _or_many(props, "addresses", (p.addresses ?? []).map(_tv.addr));
     _or_many(props, "emails", (p.emails ?? []).map(_tv.str));
     _or_many(props, "phones", (p.phones ?? []).map(_tv.str));
+    _or_many(props, "relativeCloseAssociates", (p.relativeCloseAssociates ?? []).map(_tv.rca));
     _or_set(props, "notes", p.notes ? _tv.str(p.notes) : undefined);
     _or_set(props, "pepStatus", p.isPep !== undefined ? _tv.bool(p.isPep) : undefined);
+    _or_set(props, "isPepRca", p.isPepRca !== undefined ? _tv.bool(p.isPepRca) : undefined);
     _or_set(props, "sanctioned", p.isSanctioned !== undefined ? _tv.bool(p.isSanctioned) : undefined);
 
     const extra = _or_extra(opts.extra);

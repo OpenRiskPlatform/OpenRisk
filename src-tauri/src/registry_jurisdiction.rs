@@ -1,4 +1,5 @@
-pub const REGISTRY_JURISDICTION_CODE_TYPE_NAME: &str = "registry-jurisdiction-code";
+pub const JURISDICTION_ISO_3166_2_TYPE_NAME: &str = "jurisdiction-iso-3166-2";
+pub const LEGACY_REGISTRY_JURISDICTION_CODE_TYPE_NAME: &str = "registry-jurisdiction-code";
 
 pub const REGISTRY_JURISDICTION_CODES: &[&str] = &[
     "ae_az", "ae_du", "al", "au", "aw", "bb", "bd", "be", "bg", "bh", "bl", "bm", "bo", "br", "bs",
@@ -17,7 +18,7 @@ pub const REGISTRY_JURISDICTION_CODES: &[&str] = &[
 
 pub fn values_for_type_name(type_name: &str) -> Option<Vec<String>> {
     match type_name {
-        REGISTRY_JURISDICTION_CODE_TYPE_NAME => Some(
+        JURISDICTION_ISO_3166_2_TYPE_NAME | LEGACY_REGISTRY_JURISDICTION_CODE_TYPE_NAME => Some(
             REGISTRY_JURISDICTION_CODES
                 .iter()
                 .map(|value| (*value).to_string())

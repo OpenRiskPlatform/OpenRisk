@@ -115,7 +115,7 @@ export const completedScanDetail: ScanDetailRecord = {
         ok: true,
         dataJson: JSON.stringify([
           {
-            $modelVersion: "0.0.2",
+            $modelVersion: "0.0.3",
             $entity: "entity.person",
             $id: "demo:ada",
             $props: {

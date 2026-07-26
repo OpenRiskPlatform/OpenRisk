@@ -45,7 +45,7 @@ pub fn load_plugin_bundle_with_id(
     let manifest = parse_manifest_relaxed(&manifest_raw)
         .map_err(|e| PersistenceError::Validation(e.to_string()))?;
     let metric_defs = metric_defs_from_manifest(&manifest).map_err(PersistenceError::Validation)?;
-    let update_metrics_fn = manifest.update_metrics_fn.clone().map(Into::into);
+    let update_metrics_fn = manifest.update_metrics_fn.clone();
 
     let code_path = dir.join(manifest.main.clone().to_string());
     if !code_path.exists() {
@@ -84,7 +84,7 @@ pub fn load_plugin_bundle_from_zip(zip_path: &Path) -> Result<LocalPluginBundle,
 
     let manifest = parse_manifest_relaxed(&manifest_raw).map_err(PersistenceError::Validation)?;
     let metric_defs = metric_defs_from_manifest(&manifest).map_err(PersistenceError::Validation)?;
-    let update_metrics_fn = manifest.update_metrics_fn.clone().map(Into::into);
+    let update_metrics_fn = manifest.update_metrics_fn.clone();
 
     let plugin_id: String = manifest.id.clone().into();
 
@@ -186,7 +186,7 @@ fn metric_defs_from_manifest(
     let mut names = std::collections::HashSet::new();
     let mut defs = Vec::with_capacity(manifest.metrics.len());
     for metric in &manifest.metrics {
-        let name: String = metric.name.clone().into();
+        let name = metric.name.clone();
         if !names.insert(name.clone()) {
             return Err(format!("Duplicate metric name '{}'", name));
         }
@@ -220,7 +220,7 @@ pub async fn load_plugin_bundle_from_url(
     let manifest = parse_manifest_relaxed(&manifest_raw).map_err(PersistenceError::Validation)?;
     let plugin_id: String = manifest.id.clone().into();
     let metric_defs = metric_defs_from_manifest(&manifest).map_err(PersistenceError::Validation)?;
-    let update_metrics_fn = manifest.update_metrics_fn.clone().map(Into::into);
+    let update_metrics_fn = manifest.update_metrics_fn.clone();
 
     // Derive base URL: everything up to and including the last '/'
     let base_url = manifest_url

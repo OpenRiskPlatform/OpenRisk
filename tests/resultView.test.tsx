@@ -30,6 +30,12 @@ describe("ScanResultView presentation modes", () => {
       inputs: [
         ...completedScanDetail.inputs,
         { ...completedScanDetail.inputs[0], entrypointId: "second-check" },
+        {
+          pluginId: "demo",
+          entrypointId: "person-search",
+          fieldName: "includeArchived",
+          value: { type: "boolean", value: false },
+        },
       ],
       results: [
         {
@@ -39,11 +45,15 @@ describe("ScanResultView presentation modes", () => {
             logs: [{ level: "info", message: "technical log" }],
             dataJson: JSON.stringify([
               {
+                $modelVersion: "0.0.3",
                 $entity: "entity.person",
                 $id: "demo:ada",
                 $props: {
                   name: [{ $type: "string", value: "Ada Lovelace" }],
-                  birthDate: [{ $type: "date", value: "1815-12-10" }],
+                  birthDate: [
+                    { $type: "date-iso8601", value: "1815-12-10" },
+                  ],
+                  custom_field: [{ $type: "string", value: "Preserved" }],
                   pepStatus: [{ $type: "boolean", value: false }],
                   sanctioned: [{ $type: "boolean", value: false }],
                 },
@@ -68,8 +78,16 @@ describe("ScanResultView presentation modes", () => {
 
     expect(screen.getByText("Full name")).toBeInTheDocument();
     expect(screen.queryByText("name")).not.toBeInTheDocument();
-    expect(screen.getByText("birthDate")).toBeInTheDocument();
-    expect(screen.getByText("pepStatus: false")).toBeInTheDocument();
+    expect(screen.getByText("Birth Date")).toBeInTheDocument();
+    expect(
+      screen.getByText("No risk flags in completed checks"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("pepStatus: false")).not.toBeInTheDocument();
+    expect(screen.queryByText("false")).not.toBeInTheDocument();
+    expect(screen.getByText("Include Archived")).toBeInTheDocument();
+    expect(screen.getByText("No")).toBeInTheDocument();
+    expect(screen.getByText("custom_field")).toBeInTheDocument();
+    expect(screen.queryByText("Custom Field")).not.toBeInTheDocument();
     expect(screen.getByText("Score")).toBeInTheDocument();
     expect(screen.getByText("0.95")).toBeInTheDocument();
     expect(screen.queryByText("key")).not.toBeInTheDocument();
@@ -138,13 +156,77 @@ describe("ScanResultView presentation modes", () => {
     await user.click(screen.getByRole("tab", { name: "Topic report" }));
 
     expect(screen.getByText("political_activity")).toBeInTheDocument();
-    expect(screen.getByText("adverseActivityDetected")).toBeInTheDocument();
-    expect(screen.getByText("false")).toBeInTheDocument();
+    expect(screen.getByText("No adverse activity found")).toBeInTheDocument();
+    expect(
+      screen.queryByText("adverseActivityDetected"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("false")).not.toBeInTheDocument();
     expect(
       screen.getByText("No relevant information was found."),
     ).toBeInTheDocument();
     expect(screen.queryByText("Details")).not.toBeInTheDocument();
     expect(screen.queryByText("topic:political")).not.toBeInTheDocument();
+  });
+
+  it("renders SDK typed values and risk flags in office-friendly language", () => {
+    const detail: ScanDetailRecord = {
+      ...completedScanDetail,
+      results: [
+        {
+          ...completedScanDetail.results[0],
+          output: {
+            ...completedScanDetail.results[0].output,
+            dataJson: JSON.stringify([
+              {
+                $modelVersion: "0.0.3",
+                $entity: "entity.person",
+                $id: "demo:rca",
+                $props: {
+                  name: [{ $type: "string", value: "Jane Example" }],
+                  relativeCloseAssociates: [
+                    {
+                      $type: "relative-close-associate",
+                      value: { name: "John Example", relation: "spouse" },
+                    },
+                  ],
+                  isPepRca: [{ $type: "boolean", value: true }],
+                  profile: [
+                    {
+                      $type: "url",
+                      value: "https://example.com/profile",
+                    },
+                  ],
+                },
+                $sources: [
+                  {
+                    name: "Example Registry",
+                    source: "https://example.com/source",
+                  },
+                ],
+              },
+            ]),
+          },
+        },
+      ],
+    };
+
+    renderResult(detail, false);
+
+    expect(screen.getByText("PEP associate")).toBeInTheDocument();
+    expect(
+      screen.getByText("Relatives and Close Associates"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/John Example/)).toHaveTextContent(
+      "John Example — spouse",
+    );
+    expect(
+      screen.getByRole("link", { name: /https:\/\/example.com\/profile/ }),
+    ).toHaveAttribute("href", "https://example.com/profile");
+    expect(
+      screen.getByRole("link", { name: "Example Registry" }),
+    ).toHaveAttribute("href", "https://example.com/source");
+    expect(screen.queryByText("true")).not.toBeInTheDocument();
+    expect(screen.queryByText("isPepRca")).not.toBeInTheDocument();
   });
 
   it("separates entrypoints into tabs", async () => {
