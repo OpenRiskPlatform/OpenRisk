@@ -1,11 +1,23 @@
-import { useMemo, useReducer, useState } from "react";
-import { LogOut, Settings, ShieldAlert } from "lucide-react";
+import {
+  useCallback,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
+import {
+  LogOut,
+  PanelLeftOpen,
+  Settings,
+  ShieldAlert,
+} from "lucide-react";
 import type { OpenRiskClient } from "@/backend/OpenRiskClient";
 import { errorMessage } from "@/backend/errors";
 import type {
   PluginEntrypointSelection,
   PluginRecord,
   ProjectSettingsPayload,
+  ScanDetailRecord,
   ScanEntrypointInput,
   ScanSummaryRecord,
 } from "@/core/backend/bindings";
@@ -28,6 +40,33 @@ interface WorkspaceProps {
   onCloseProject: () => Promise<void>;
 }
 
+interface DraftSnapshot {
+  selectedPlugins: PluginEntrypointSelection[];
+  inputs: ScanEntrypointInput[];
+}
+
+interface DraftSession {
+  scanId: string | null;
+  queue: Promise<void>;
+  lastHash: string | null;
+  lastResult: PersistedDraft | null;
+  revealWhenSaved: boolean;
+}
+
+interface PersistedDraft {
+  summary: ScanSummaryRecord;
+  detail: ScanDetailRecord;
+}
+
+interface PendingDraft {
+  session: DraftSession;
+  snapshot: DraftSnapshot;
+}
+
+function draftHash(snapshot: DraftSnapshot) {
+  return JSON.stringify(snapshot);
+}
+
 export function Workspace({
   client,
   initialSettings,
@@ -39,7 +78,19 @@ export function Workspace({
     createWorkspaceState(initialSettings, initialScans),
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(true);
   const [closing, setClosing] = useState(false);
+  const draftSession = useRef<DraftSession>({
+    scanId: null,
+    queue: Promise.resolve(),
+    lastHash: null,
+    lastResult: null,
+    revealWhenSaved: false,
+  });
+  const navigationRequest = useRef(0);
+  const pendingDraft = useRef<PendingDraft | null>(null);
+  const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeDraftSaves = useRef<Set<Promise<PersistedDraft>>>(new Set());
 
   const pluginNameById = useMemo(
     () =>
@@ -62,60 +113,303 @@ export function Workspace({
     [state.settings.plugins],
   );
 
+  const inputNameByKey = useMemo(
+    () =>
+      Object.fromEntries(
+        state.settings.plugins.flatMap((plugin) =>
+          plugin.inputDefs.map((input) => [
+            `${plugin.id}::${input.entrypointId}::${input.name}`,
+            input.title,
+          ]),
+        ),
+      ),
+    [state.settings.plugins],
+  );
+
   const enabledPlugins = state.settings.plugins.filter(
     (plugin) => plugin.enabled,
   );
-  const busy = state.pending !== "idle" || closing;
+  const formSession = draftSession.current;
 
-  const selectScan = async (scanId: string) => {
-    if (busy) {
+  const persistDraft = useCallback(
+    (
+      session: DraftSession,
+      snapshot: DraftSnapshot,
+    ): Promise<PersistedDraft> => {
+      const hash = draftHash(snapshot);
+      const operation = session.queue
+        .catch(() => undefined)
+        .then(async () => {
+          if (session.lastHash === hash && session.lastResult) {
+            dispatch({
+              type: "draft-saved",
+              summary: session.lastResult.summary,
+              detail: session.lastResult.detail,
+              activate: draftSession.current === session,
+              reveal: session.revealWhenSaved,
+            });
+            return session.lastResult;
+          }
+
+          if (!session.scanId) {
+            const created = await client.createScan(null);
+            session.scanId = created.id;
+          }
+
+          const summary = await client.updateScanDraft(
+            session.scanId,
+            snapshot.selectedPlugins,
+            snapshot.inputs,
+          );
+          const detail: ScanDetailRecord = {
+            id: summary.id,
+            status: "Draft",
+            preview: summary.preview,
+            createdAt: summary.createdAt,
+            selectedPlugins: snapshot.selectedPlugins,
+            inputs: snapshot.inputs,
+            results: [],
+          };
+          const result = { summary, detail };
+          session.lastHash = hash;
+          session.lastResult = result;
+
+          dispatch({
+            type: "draft-saved",
+            summary,
+            detail,
+            activate: draftSession.current === session,
+            reveal: session.revealWhenSaved,
+          });
+          return result;
+        });
+
+      let trackedOperation: Promise<PersistedDraft>;
+      trackedOperation = operation.finally(() => {
+        activeDraftSaves.current.delete(trackedOperation);
+      });
+      activeDraftSaves.current.add(trackedOperation);
+      session.queue = trackedOperation.then(
+        () => undefined,
+        () => undefined,
+      );
+      return trackedOperation;
+    },
+    [client],
+  );
+
+  const saveDraftNow = useCallback(
+    async (
+      session: DraftSession,
+      snapshot: DraftSnapshot,
+    ) => {
+      if (draftSession.current === session) {
+        dispatch({ type: "draft-save-started" });
+      }
+      try {
+        await persistDraft(session, snapshot);
+      } catch (error) {
+        if (draftSession.current === session) {
+          dispatch({ type: "operation-failed", error: errorMessage(error) });
+        }
+      }
+    },
+    [persistDraft],
+  );
+
+  const scheduleDraftSave = useCallback(
+    (
+      selectedPlugins: PluginEntrypointSelection[],
+      inputs: ScanEntrypointInput[],
+    ) => {
+      if (draftSaveTimer.current) {
+        clearTimeout(draftSaveTimer.current);
+      }
+
+      const pending = {
+        session: formSession,
+        snapshot: { selectedPlugins, inputs },
+      };
+      pendingDraft.current = pending;
+      draftSaveTimer.current = setTimeout(() => {
+        draftSaveTimer.current = null;
+        if (pendingDraft.current === pending) {
+          pendingDraft.current = null;
+        }
+        void saveDraftNow(pending.session, pending.snapshot);
+      }, 600);
+    },
+    [formSession, saveDraftNow],
+  );
+
+  const flushScheduledDraft = useCallback(() => {
+    const pending = pendingDraft.current;
+    if (!pending) {
       return;
     }
-    dispatch({ type: "result-loading", scanId });
+    pendingDraft.current = null;
+    if (draftSaveTimer.current) {
+      clearTimeout(draftSaveTimer.current);
+      draftSaveTimer.current = null;
+    }
+    void saveDraftNow(pending.session, pending.snapshot);
+  }, [saveDraftNow]);
+
+  const revealCurrentDraft = useCallback(() => {
+    const session = draftSession.current;
+    session.revealWhenSaved = true;
+    if (session.lastResult) {
+      dispatch({
+        type: "draft-saved",
+        summary: session.lastResult.summary,
+        detail: session.lastResult.detail,
+        activate: false,
+        reveal: true,
+      });
+    }
+    flushScheduledDraft();
+  }, [flushScheduledDraft]);
+
+  const selectScan = async (scanId: string) => {
+    if (closing) {
+      return;
+    }
+
+    revealCurrentDraft();
+    const request = ++navigationRequest.current;
+    const session: DraftSession = {
+      scanId: null,
+      queue: Promise.resolve(),
+      lastHash: null,
+      lastResult: null,
+      revealWhenSaved: false,
+    };
+    draftSession.current = session;
+    dispatch({ type: "scan-loading", scanId });
+
     try {
-      dispatch({ type: "result-loaded", detail: await client.getScan(scanId) });
+      const detail = await client.getScan(scanId);
+      if (request !== navigationRequest.current) {
+        return;
+      }
+      if (detail.status === "Draft") {
+        session.scanId = detail.id;
+      }
+      dispatch({ type: "scan-loaded", detail });
     } catch (error) {
-      dispatch({ type: "operation-failed", error: errorMessage(error) });
+      if (request === navigationRequest.current) {
+        dispatch({ type: "operation-failed", error: errorMessage(error) });
+      }
     }
   };
 
   const runInvestigation = async (
     selectedPlugins: PluginEntrypointSelection[],
     inputs: ScanEntrypointInput[],
-    preview: string,
   ) => {
-    if (busy) {
-      return;
-    }
-
-    dispatch({ type: "run-started" });
-    let scanId: string | null = null;
+    const session = draftSession.current;
+    let launched = false;
 
     try {
-      const created = await client.createScan(preview);
-      scanId = created.id;
-      await client.runScan(created.id, selectedPlugins, inputs);
+      if (pendingDraft.current?.session === session) {
+        if (draftSaveTimer.current) {
+          clearTimeout(draftSaveTimer.current);
+          draftSaveTimer.current = null;
+        }
+        pendingDraft.current = null;
+      }
+      dispatch({ type: "draft-save-started" });
+      const saved = await persistDraft(session, {
+        selectedPlugins,
+        inputs,
+      });
+      const runningSummary = { ...saved.summary, status: "Running" };
+      const runningDetail = { ...saved.detail, status: "Running" };
+      const activate = draftSession.current === session;
+
+      dispatch({
+        type: "run-started",
+        summary: runningSummary,
+        detail: runningDetail,
+        activate,
+      });
+      launched = true;
+      await client.runScan(saved.summary.id, selectedPlugins, inputs);
 
       const [detail, scans, settings] = await Promise.all([
-        client.getScan(created.id),
+        client.getScan(saved.summary.id),
         client.listScans(),
         client.loadSettings(),
       ]);
 
       dispatch({ type: "run-completed", detail, scans, settings });
     } catch (error) {
-      if (scanId) {
+      if (launched && session.scanId) {
         const [detailResult, scansResult] = await Promise.allSettled([
-          client.getScan(scanId),
+          client.getScan(session.scanId),
           client.listScans(),
         ]);
-        if (detailResult.status === "fulfilled") {
-          dispatch({ type: "result-loaded", detail: detailResult.value });
-        }
-        if (scansResult.status === "fulfilled") {
-          dispatch({ type: "scans-replaced", scans: scansResult.value });
-        }
+        dispatch({
+          type: "run-failed",
+          scanId: session.scanId,
+          detail:
+            detailResult.status === "fulfilled" ? detailResult.value : null,
+          scans:
+            scansResult.status === "fulfilled" ? scansResult.value : state.scans,
+          error: errorMessage(error),
+        });
+      } else if (draftSession.current === session) {
+        dispatch({ type: "operation-failed", error: errorMessage(error) });
       }
+    }
+  };
+
+  const newInvestigation = () => {
+    revealCurrentDraft();
+    ++navigationRequest.current;
+    draftSession.current = {
+      scanId: null,
+      queue: Promise.resolve(),
+      lastHash: null,
+      lastResult: null,
+      revealWhenSaved: false,
+    };
+    dispatch({ type: "new-investigation-selected" });
+  };
+
+  const renameScan = async (scanId: string, preview: string) => {
+    try {
+      const summary = await client.updateScanPreview(scanId, preview);
+      dispatch({
+        type: "scan-summary-updated",
+        summary,
+      });
+    } catch (error) {
+      dispatch({ type: "operation-failed", error: errorMessage(error) });
+    }
+  };
+
+  const archiveScan = async (scanId: string, archived: boolean) => {
+    try {
+      dispatch({
+        type: "scan-summary-updated",
+        summary: await client.setScanArchived(scanId, archived),
+      });
+      if (archived && state.selectedScanId === scanId) {
+        newInvestigation();
+      }
+    } catch (error) {
+      dispatch({ type: "operation-failed", error: errorMessage(error) });
+    }
+  };
+
+  const reorderScans = async (orderedScanIds: string[]) => {
+    try {
+      dispatch({
+        type: "scans-replaced",
+        scans: await client.reorderScans(orderedScanIds),
+      });
+    } catch (error) {
       dispatch({ type: "operation-failed", error: errorMessage(error) });
     }
   };
@@ -140,11 +434,25 @@ export function Workspace({
   };
 
   const closeProject = async () => {
-    if (busy) {
+    if (
+      closing ||
+      state.runningScanIds.length > 0 ||
+      state.draftSaveStatus === "saving"
+    ) {
       return;
     }
     setClosing(true);
     try {
+      if (pendingDraft.current) {
+        const pending = pendingDraft.current;
+        pendingDraft.current = null;
+        if (draftSaveTimer.current) {
+          clearTimeout(draftSaveTimer.current);
+          draftSaveTimer.current = null;
+        }
+        await persistDraft(pending.session, pending.snapshot);
+      }
+      await Promise.all([...activeDraftSaves.current]);
       await onCloseProject();
     } catch (error) {
       dispatch({ type: "operation-failed", error: errorMessage(error) });
@@ -155,6 +463,17 @@ export function Workspace({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-muted/20">
       <header className="flex h-16 shrink-0 items-center gap-4 border-b bg-background px-5">
+        {!historyOpen ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title="Show history"
+            onClick={() => setHistoryOpen(true)}
+          >
+            <PanelLeftOpen className="h-4 w-4" />
+          </Button>
+        ) : null}
         <OpenRiskLogo
           size={30}
           textSizeClassName="text-lg"
@@ -180,7 +499,7 @@ export function Workspace({
         <Button
           variant="outline"
           className="gap-2"
-          disabled={busy}
+          disabled={closing}
           onClick={() => setSettingsOpen(true)}
         >
           <Settings className="h-4 w-4" />
@@ -190,7 +509,11 @@ export function Workspace({
           variant="ghost"
           size="icon"
           title="Close project"
-          disabled={busy}
+          disabled={
+            closing ||
+            state.runningScanIds.length > 0 ||
+            state.draftSaveStatus === "saving"
+          }
           onClick={() => void closeProject()}
         >
           <LogOut className="h-4 w-4" />
@@ -198,24 +521,34 @@ export function Workspace({
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <InvestigationHistory
-          scans={state.scans}
-          selectedScanId={state.selectedScanId}
-          disabled={busy}
-          onNew={() => dispatch({ type: "new-investigation-selected" })}
-          onSelect={(scanId) => void selectScan(scanId)}
-        />
+        {historyOpen ? (
+          <InvestigationHistory
+            scans={state.scans}
+            selectedScanId={state.selectedScanId}
+            disabled={closing}
+            onNew={newInvestigation}
+            onSelect={(scanId) => void selectScan(scanId)}
+            onCollapse={() => setHistoryOpen(false)}
+            onRename={renameScan}
+            onArchive={archiveScan}
+            onReorder={reorderScans}
+          />
+        ) : null}
 
         <main className="min-w-0 flex-1 overscroll-contain overflow-y-auto px-6 py-8 lg:px-10">
-          {state.pending === "loading-result" ? (
+          {state.loadingScanId ? (
             <p className="py-16 text-center text-sm text-muted-foreground">
               Loading investigation…
             </p>
-          ) : state.view === "new" ? (
+          ) : state.view === "form" ? (
             <InvestigationForm
+              key={state.formGeneration}
               plugins={enabledPlugins}
-              running={state.pending === "running"}
+              draft={state.detail?.status === "Draft" ? state.detail : null}
+              saveStatus={state.draftSaveStatus}
+              running={false}
               error={state.error}
+              onDraftChange={scheduleDraftSave}
               onRun={runInvestigation}
             />
           ) : state.detail ? (
@@ -226,9 +559,11 @@ export function Workspace({
                 </div>
               ) : null}
               <ScanResultView
+                key={state.detail.id}
                 detail={state.detail}
                 pluginNameById={pluginNameById}
                 entrypointNameByKey={entrypointNameByKey}
+                inputNameByKey={inputNameByKey}
                 advancedMode={state.settings.projectSettings.advancedMode}
               />
             </div>

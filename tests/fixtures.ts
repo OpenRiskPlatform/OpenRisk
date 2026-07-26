@@ -131,6 +131,33 @@ export const completedScanDetail: ScanDetailRecord = {
   ],
 };
 
+export const draftScan: ScanSummaryRecord = {
+  ...completedScan,
+  id: "scan-draft-1",
+  status: "Draft",
+  preview: "Untitled",
+  resultCount: 0,
+};
+
+export const draftScanDetail: ScanDetailRecord = {
+  id: draftScan.id,
+  status: draftScan.status,
+  preview: draftScan.preview,
+  createdAt: draftScan.createdAt,
+  selectedPlugins: [
+    { pluginId: "demo", entrypointId: "person-search" },
+  ],
+  inputs: [
+    {
+      pluginId: "demo",
+      entrypointId: "person-search",
+      fieldName: "name",
+      value: { type: "string", value: "Grace Hopper" },
+    },
+  ],
+  results: [],
+};
+
 export function createClient(
   overrides: Partial<OpenRiskClient> = {},
 ): OpenRiskClient {
@@ -150,17 +177,17 @@ export function createClient(
       generatedAt: "2026-07-26T10:00:00Z",
       plugins: [],
     })),
-    createScan: vi.fn(async () => ({
-      ...completedScan,
-      status: "Draft",
-    })),
+    createScan: vi.fn(async () => draftScan),
     listScans: vi.fn(async () => [completedScan]),
     getScan: vi.fn(async () => completedScanDetail),
+    updateScanDraft: vi.fn(async () => draftScan),
     runScan: vi.fn(async () => completedScan),
+    updateScanPreview: vi.fn(async () => completedScan),
     setScanArchived: vi.fn(async () => ({
       ...completedScan,
       isArchived: true,
     })),
+    reorderScans: vi.fn(async () => [completedScan]),
     createPreviewProject: vi.fn(async () => undefined),
     getProjectLockStatus: vi.fn(async () => ({
       locked: false,

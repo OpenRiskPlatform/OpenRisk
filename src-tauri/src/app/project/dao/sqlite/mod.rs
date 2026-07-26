@@ -83,6 +83,14 @@ impl ProjectPersistence for SqliteProjectPersistence {
     async fn get_scan(&self, scan_id: &str) -> Result<ScanDetailRecord, PersistenceError> {
         scans_dao::get_scan(self, scan_id).await
     }
+    async fn update_scan_draft(
+        &self,
+        scan_id: &str,
+        selected_plugins: &[PluginEntrypointSelection],
+        inputs: &[ScanEntrypointInput],
+    ) -> Result<ScanSummaryRecord, PersistenceError> {
+        scans_dao::update_scan_draft(self, scan_id, selected_plugins, inputs).await
+    }
     async fn begin_scan_run(
         &self,
         scan_id: &str,

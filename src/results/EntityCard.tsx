@@ -228,14 +228,12 @@ function FriendlyEntityCard({ entity }: { entity: PluginEntity }) {
       ) : null}
 
       {hasSources ? (
-        <details className="mt-3 text-sm">
-          <summary className="cursor-pointer text-muted-foreground">
+        <section className="mt-4 border-t pt-3">
+          <h4 className="mb-2 text-xs font-medium text-muted-foreground">
             Sources
-          </summary>
-          <div className="mt-2 pl-4">
-            <ValueView value={entity.$sources} />
-          </div>
-        </details>
+          </h4>
+          <ValueView value={entity.$sources} />
+        </section>
       ) : null}
     </article>
   );

@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { Play, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,23 +15,29 @@ import type {
   PluginEntrypointSelection,
   PluginInputDef,
   PluginRecord,
+  ScanDetailRecord,
   ScanEntrypointInput,
+  SettingValue,
 } from "@/core/backend/bindings";
 import { PluginField } from "@/shared/fields/PluginField";
 import {
   buildScanInputs,
-  deriveScanPreview,
   type InvestigationValues,
 } from "./scanInput";
 
 interface InvestigationFormProps {
   plugins: PluginRecord[];
+  draft: ScanDetailRecord | null;
+  saveStatus: "idle" | "saving" | "saved";
   running: boolean;
   error: string | null;
+  onDraftChange: (
+    selectedPlugins: PluginEntrypointSelection[],
+    inputs: ScanEntrypointInput[],
+  ) => void;
   onRun: (
     selectedPlugins: PluginEntrypointSelection[],
     inputs: ScanEntrypointInput[],
-    preview: string,
   ) => Promise<void>;
 }
 
@@ -40,22 +46,64 @@ function valueFromDefault(definition: PluginInputDef) {
   return !value || value.type === "null" ? null : value.value;
 }
 
+function valueFromSetting(value: SettingValue) {
+  return value.type === "null" ? null : value.value;
+}
+
+function initialPluginId(draft: ScanDetailRecord | null) {
+  return (
+    draft?.selectedPlugins[0]?.pluginId ??
+    draft?.inputs[0]?.pluginId ??
+    ""
+  );
+}
+
+function initialEntrypointIds(draft: ScanDetailRecord | null) {
+  return Array.from(
+    new Set(draft?.selectedPlugins.map((item) => item.entrypointId) ?? []),
+  );
+}
+
+function initialValues(draft: ScanDetailRecord | null): InvestigationValues {
+  return Object.fromEntries(
+    (draft?.inputs ?? []).map((input) => [
+      input.fieldName,
+      valueFromSetting(input.value),
+    ]),
+  );
+}
+
 export function InvestigationForm({
   plugins,
+  draft,
+  saveStatus,
   running,
   error,
+  onDraftChange,
   onRun,
 }: InvestigationFormProps) {
-  const [pluginId, setPluginId] = useState("");
-  const [entrypointIds, setEntrypointIds] = useState<string[]>([]);
+  const [pluginId, setPluginId] = useState(() => initialPluginId(draft));
+  const [entrypointIds, setEntrypointIds] = useState(() =>
+    initialEntrypointIds(draft),
+  );
+  const firstAutosave = useRef(true);
+  const onDraftChangeRef = useRef(onDraftChange);
   const {
     control,
     getValues,
     handleSubmit,
     reset,
     setValue,
-    formState: { errors },
-  } = useForm<InvestigationValues>({ defaultValues: {} });
+    formState: { errors, isSubmitting },
+  } = useForm<InvestigationValues>({
+    defaultValues: initialValues(draft),
+  });
+  const watchedValues = useWatch({ control }) as InvestigationValues;
+  const formLocked = running || isSubmitting;
+
+  useEffect(() => {
+    onDraftChangeRef.current = onDraftChange;
+  }, [onDraftChange]);
 
   const plugin = plugins.find((item) => item.id === pluginId) ?? null;
 
@@ -78,6 +126,29 @@ export function InvestigationForm({
 
     return definitions;
   }, [entrypointIds, plugin]);
+
+  const valuesSnapshot = JSON.stringify(watchedValues);
+
+  useEffect(() => {
+    if (firstAutosave.current) {
+      firstAutosave.current = false;
+      return;
+    }
+
+    if (!plugin || entrypointIds.length === 0 || formLocked) {
+      return;
+    }
+
+    const values = JSON.parse(valuesSnapshot) as InvestigationValues;
+    const selectedPlugins = entrypointIds.map((entrypointId) => ({
+      pluginId: plugin.id,
+      entrypointId,
+    }));
+    onDraftChangeRef.current(
+      selectedPlugins,
+      buildScanInputs(plugin, entrypointIds, values),
+    );
+  }, [entrypointIds, formLocked, plugin, valuesSnapshot]);
 
   const selectPlugin = (nextPluginId: string) => {
     setPluginId(nextPluginId);
@@ -120,7 +191,6 @@ export function InvestigationForm({
     await onRun(
       selectedPlugins,
       buildScanInputs(plugin, entrypointIds, values),
-      deriveScanPreview(plugin, values),
     );
   });
 
@@ -132,8 +202,17 @@ export function InvestigationForm({
           <h1 className="text-2xl font-semibold">New investigation</h1>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Nothing is saved or executed until you press Run investigation.
+          Your progress is saved as a draft. Running starts only when you press
+          Run investigation.
         </p>
+        {saveStatus !== "idle" ? (
+          <p
+            role="status"
+            className="mt-2 text-xs text-muted-foreground"
+          >
+            {saveStatus === "saving" ? "Saving draft…" : "Draft saved"}
+          </p>
+        ) : null}
       </header>
 
       {plugins.length === 0 ? (
@@ -143,38 +222,42 @@ export function InvestigationForm({
       ) : (
         <form onSubmit={(event) => void submit(event)}>
           <section className="space-y-3 border-t py-6">
-              <h2 className="text-sm font-semibold">1. Source</h2>
-              <Select value={pluginId} onValueChange={selectPlugin} disabled={running}>
-                <SelectTrigger aria-label="Plugin">
-                  <SelectValue placeholder="Select a plugin" />
-                </SelectTrigger>
-                <SelectContent>
-                  {plugins.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <h2 className="text-sm font-semibold">1. Source</h2>
+            <Select
+              value={pluginId}
+              onValueChange={selectPlugin}
+              disabled={formLocked}
+            >
+              <SelectTrigger aria-label="Plugin">
+                <SelectValue placeholder="Select a plugin" />
+              </SelectTrigger>
+              <SelectContent>
+                {plugins.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-              {plugin?.status && plugin.metricValues.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  Status: {plugin.status}
-                </p>
-              ) : null}
+            {plugin?.status && plugin.metricValues.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Status: {plugin.status}
+              </p>
+            ) : null}
 
-              {plugin?.metricValues.length ? (
-                <p className="text-xs text-muted-foreground">
-                  {plugin.metricValues.map((metric) => (
-                    <span key={metric.name} className="mr-4">
-                      {metric.title}:{" "}
-                      {metric.value.type === "null"
-                        ? "—"
-                        : String(metric.value.value)}
-                    </span>
-                  ))}
-                </p>
-              ) : null}
+            {plugin?.metricValues.length ? (
+              <p className="text-xs text-muted-foreground">
+                {plugin.metricValues.map((metric) => (
+                  <span key={metric.name} className="mr-4">
+                    {metric.title}:{" "}
+                    {metric.value.type === "null"
+                      ? "—"
+                      : String(metric.value.value)}
+                  </span>
+                ))}
+              </p>
+            ) : null}
           </section>
 
           {plugin ? (
@@ -190,7 +273,7 @@ export function InvestigationForm({
                     >
                       <Checkbox
                         checked={checked}
-                        disabled={running}
+                        disabled={formLocked}
                         onCheckedChange={(value) =>
                           toggleEntrypoint(entrypoint.id, value === true)
                         }
@@ -247,7 +330,7 @@ export function InvestigationForm({
                                   id={fieldId}
                                   type={definition.type}
                                   value={field.value}
-                                  disabled={running}
+                                  disabled={formLocked}
                                   onChange={field.onChange}
                                   onBlur={field.onBlur}
                                 />
@@ -266,7 +349,7 @@ export function InvestigationForm({
                                   id={fieldId}
                                   type={definition.type}
                                   value={field.value}
-                                  disabled={running}
+                                  disabled={formLocked}
                                   placeholder={definition.title}
                                   onChange={field.onChange}
                                   onBlur={field.onBlur}
@@ -303,10 +386,10 @@ export function InvestigationForm({
             <Button
               type="submit"
               className="w-full gap-2"
-              disabled={running || !plugin || entrypointIds.length === 0}
+              disabled={formLocked || !plugin || entrypointIds.length === 0}
             >
               <Play className="h-4 w-4" />
-              {running ? "Running investigation…" : "Run investigation"}
+              {formLocked ? "Starting investigation…" : "Run investigation"}
             </Button>
           </div>
         </form>

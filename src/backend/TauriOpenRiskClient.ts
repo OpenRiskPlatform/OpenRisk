@@ -32,10 +32,16 @@ export const tauriOpenRiskClient: OpenRiskClient = {
   createScan: (preview) => unwrap(commands.createScan(preview)),
   listScans: () => unwrap(commands.listScans()),
   getScan: (scanId) => unwrap(commands.getScan(scanId)),
+  updateScanDraft: (scanId, selectedPlugins, inputs) =>
+    unwrap(commands.updateScanDraft(scanId, selectedPlugins, inputs)),
   runScan: (scanId, selectedPlugins, inputs) =>
     unwrap(commands.runScan(scanId, selectedPlugins, inputs)),
+  updateScanPreview: (scanId, preview) =>
+    unwrap(commands.updateScanPreview(scanId, preview)),
   setScanArchived: (scanId, archived) =>
     unwrap(commands.setScanArchived(scanId, archived)),
+  reorderScans: (orderedScanIds) =>
+    unwrap(commands.reorderScans(orderedScanIds)),
 
   createPreviewProject: async (destPath) => {
     await unwrap(commands.createPreviewProject(destPath));

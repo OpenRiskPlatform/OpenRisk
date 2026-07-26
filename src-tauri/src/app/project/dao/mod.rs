@@ -69,6 +69,13 @@ pub trait ProjectPersistence: Send + Sync {
     async fn list_scans(&self) -> Result<Vec<ScanSummaryRecord>, PersistenceError>;
     /// Fetch full details of a single scan including all plugin results.
     async fn get_scan(&self, scan_id: &str) -> Result<ScanDetailRecord, PersistenceError>;
+    /// Persist the current selection and inputs while the scan remains Draft.
+    async fn update_scan_draft(
+        &self,
+        scan_id: &str,
+        selected_plugins: &[PluginEntrypointSelection],
+        inputs: &[ScanEntrypointInput],
+    ) -> Result<ScanSummaryRecord, PersistenceError>;
     /// Mark a scan as Running, snapshot its inputs/selection, return execution context.
     async fn begin_scan_run(
         &self,

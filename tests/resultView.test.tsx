@@ -12,6 +12,10 @@ function renderResult(detail: ScanDetailRecord, advancedMode: boolean) {
       entrypointNameByKey={{
         "demo::person-search": "Person search",
         "demo::topic-report": "Topic report",
+        "demo::second-check": "Second check",
+      }}
+      inputNameByKey={{
+        "demo::person-search::name": "Full name",
       }}
       advancedMode={advancedMode}
     />,
@@ -61,7 +65,8 @@ describe("ScanResultView presentation modes", () => {
 
     renderResult(detail, false);
 
-    expect(screen.getAllByText("name")).toHaveLength(1);
+    expect(screen.getByText("Full name")).toBeInTheDocument();
+    expect(screen.queryByText("name")).not.toBeInTheDocument();
     expect(screen.getByText("birthDate")).toBeInTheDocument();
     expect(screen.getByText("pepStatus: false")).toBeInTheDocument();
     expect(screen.getByText("Score")).toBeInTheDocument();
@@ -137,5 +142,51 @@ describe("ScanResultView presentation modes", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("Details")).not.toBeInTheDocument();
     expect(screen.queryByText("topic:political")).not.toBeInTheDocument();
+  });
+
+  it("separates entrypoints into tabs", async () => {
+    const user = userEvent.setup();
+    const detail: ScanDetailRecord = {
+      ...completedScanDetail,
+      selectedPlugins: [
+        ...completedScanDetail.selectedPlugins,
+        { pluginId: "demo", entrypointId: "second-check" },
+      ],
+      results: [
+        ...completedScanDetail.results,
+        {
+          ...completedScanDetail.results[0],
+          entrypointId: "second-check",
+          output: {
+            ...completedScanDetail.results[0].output,
+            dataJson: JSON.stringify([
+              {
+                $entity: "entity.person",
+                $id: "demo:second",
+                $props: {
+                  name: [{ $type: "string", value: "Second result" }],
+                },
+              },
+            ]),
+          },
+        },
+      ],
+    };
+
+    renderResult(detail, false);
+
+    expect(screen.getByRole("tab", { name: "Person search" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.queryByText("Second result")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Second check" }));
+
+    expect(screen.getByText("Second result")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Second check" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 });

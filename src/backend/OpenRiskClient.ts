@@ -39,12 +39,19 @@ export interface OpenRiskClient {
   createScan(preview: string | null): Promise<ScanSummaryRecord>;
   listScans(): Promise<ScanSummaryRecord[]>;
   getScan(scanId: string): Promise<ScanDetailRecord>;
+  updateScanDraft(
+    scanId: string,
+    selectedPlugins: PluginEntrypointSelection[],
+    inputs: ScanEntrypointInput[],
+  ): Promise<ScanSummaryRecord>;
   runScan(
     scanId: string,
     selectedPlugins: PluginEntrypointSelection[],
     inputs: ScanEntrypointInput[],
   ): Promise<ScanSummaryRecord>;
+  updateScanPreview(scanId: string, preview: string): Promise<ScanSummaryRecord>;
   setScanArchived(scanId: string, archived: boolean): Promise<ScanSummaryRecord>;
+  reorderScans(orderedScanIds: string[]): Promise<ScanSummaryRecord[]>;
 
   createPreviewProject(destPath: string): Promise<void>;
   getProjectLockStatus(projectPath: string): Promise<ProjectLockStatus>;

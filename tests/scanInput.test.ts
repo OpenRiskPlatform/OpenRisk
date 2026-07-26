@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   buildScanInputs,
-  deriveScanPreview,
   toSettingValue,
 } from "@/investigations/scanInput";
 import { demoPlugin } from "./fixtures";
@@ -22,12 +21,6 @@ describe("scan input mapping", () => {
         value: { type: "string", value: "Ada Lovelace" },
       },
     ]);
-  });
-
-  it("derives the createScan preview without a rename command", () => {
-    expect(
-      deriveScanPreview(demoPlugin, { name: "  Ada   Lovelace  " }),
-    ).toBe("Ada Lovelace");
   });
 
   it("maps empty values to the backend null variant", () => {

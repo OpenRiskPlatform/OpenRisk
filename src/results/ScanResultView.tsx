@@ -1,11 +1,12 @@
-import { AlertTriangle, CheckCircle2, FileJson } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, FileJson } from "lucide-react";
 import type {
   LogEntry,
   ScanDetailRecord,
   ScanEntrypointInput,
   ScanPluginResultRecord,
 } from "@/core/backend/bindings";
-import { EntityCard } from "./EntityCard";
+import { EntityBrowser } from "./EntityBrowser";
 import { ResultBoundary } from "./ResultBoundary";
 import { formatDate } from "@/shared/formatDate";
 import { RiskTopicSummary } from "./RiskTopicSummary";
@@ -14,11 +15,13 @@ import {
   type ParsedPluginData,
   type PluginEntity,
 } from "./resultSchema";
+import { ScanStatusIndicator } from "@/investigations/ScanStatusIndicator";
 
 interface ScanResultViewProps {
   detail: ScanDetailRecord;
   pluginNameById: Record<string, string>;
   entrypointNameByKey: Record<string, string>;
+  inputNameByKey: Record<string, string>;
   advancedMode: boolean;
 }
 
@@ -131,15 +134,7 @@ function ResultData({
   }
 
   return (
-    <div className="space-y-3">
-      {entities.map((entity, index) => (
-        <EntityCard
-          key={`${entity.$entity}:${entity.$id}:${index}`}
-          entity={entity}
-          advancedMode={advancedMode}
-        />
-      ))}
-    </div>
+    <EntityBrowser entities={entities} advancedMode={advancedMode} />
   );
 }
 
@@ -158,6 +153,19 @@ function riskTopics(results: ParsedResult[]): PluginEntity[] {
   return topics;
 }
 
+function resultKey(pluginId: string, entrypointId: string) {
+  return `${pluginId}::${entrypointId}`;
+}
+
+function resultItemCount(results: ParsedResult[]) {
+  return results.reduce((count, item) => {
+    if (item.data?.kind === "entities") {
+      return count + item.data.entities.length;
+    }
+    return count + 1;
+  }, 0);
+}
+
 function dedupeInputs(inputs: ScanEntrypointInput[]): ScanEntrypointInput[] {
   const seen = new Set<string>();
   return inputs.filter((input) => {
@@ -174,31 +182,65 @@ export function ScanResultView({
   detail,
   pluginNameById,
   entrypointNameByKey,
+  inputNameByKey,
   advancedMode,
 }: ScanResultViewProps) {
-  const parsedResults: ParsedResult[] = detail.results.map((result) => ({
-    result,
-    data:
-      result.output.ok && result.output.dataJson
-        ? parsePluginData(result.output.dataJson)
-        : null,
-  }));
-  const topics = riskTopics(parsedResults);
+  const parsedResults = useMemo<ParsedResult[]>(
+    () =>
+      detail.results.map((result) => ({
+        result,
+        data:
+          result.output.ok && result.output.dataJson
+            ? parsePluginData(result.output.dataJson)
+            : null,
+      })),
+    [detail.results],
+  );
+  const groupKeys = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...detail.selectedPlugins.map((selection) =>
+            resultKey(selection.pluginId, selection.entrypointId),
+          ),
+          ...detail.results.map((result) =>
+            resultKey(result.pluginId, result.entrypointId),
+          ),
+        ]),
+      ),
+    [detail.results, detail.selectedPlugins],
+  );
+  const [activeKey, setActiveKey] = useState(groupKeys[0] ?? "");
+
+  useEffect(() => {
+    if (!groupKeys.includes(activeKey)) {
+      setActiveKey(groupKeys[0] ?? "");
+    }
+  }, [activeKey, groupKeys]);
+
+  const activeResults = parsedResults.filter(
+    ({ result }) =>
+      resultKey(result.pluginId, result.entrypointId) === activeKey,
+  );
+  const topics = riskTopics(activeResults);
   const visibleInputs = advancedMode
     ? detail.inputs
     : dedupeInputs(detail.inputs);
   const visibleResults = advancedMode
-    ? parsedResults
-    : parsedResults.filter(
+    ? activeResults
+    : activeResults.filter(
         ({ data }) =>
           data?.kind !== "entities" ||
           !data.entities.every(
             (entity) => entity.$entity === "entity.riskTopic",
           ),
       );
-  const completed = detail.status === "Completed";
-  const StatusIcon = completed ? CheckCircle2 : AlertTriangle;
-
+  const [activePluginId = "", activeEntrypointId = ""] =
+    activeKey.split("::");
+  const activePluginName =
+    pluginNameById[activePluginId] ?? activePluginId;
+  const activeEntrypointName =
+    entrypointNameByKey[activeKey] ?? activeEntrypointId;
   return (
     <div className="mx-auto w-full max-w-4xl">
       <header className="pb-7">
@@ -206,16 +248,7 @@ export function ScanResultView({
           <h1 className="text-2xl font-semibold">
             {detail.preview?.trim() || `Investigation ${detail.id.slice(0, 8)}`}
           </h1>
-          <span
-            className={
-              completed
-                ? "inline-flex items-center gap-1.5 text-sm text-emerald-700 dark:text-emerald-300"
-                : "inline-flex items-center gap-1.5 text-sm text-red-700 dark:text-red-300"
-            }
-          >
-            <StatusIcon className="h-4 w-4" />
-            {detail.status}
-          </span>
+          <ScanStatusIndicator status={detail.status} />
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
           {formatDate(detail.createdAt, {
@@ -241,7 +274,11 @@ export function ScanResultView({
                         : "break-words text-sm text-muted-foreground"
                     }
                   >
-                    {input.fieldName}
+                    {advancedMode
+                      ? input.fieldName
+                      : (inputNameByKey[
+                          `${input.pluginId}::${input.entrypointId}::${input.fieldName}`
+                        ] ?? input.fieldName)}
                     {advancedMode ? (
                       <span className="mt-1 block text-[10px]">
                         {input.pluginId} / {input.entrypointId}
@@ -259,62 +296,110 @@ export function ScanResultView({
         </section>
       ) : null}
 
-      {topics.length > 0 ? (
-        <section className="border-t py-6">
-          <h2 className="mb-4 text-sm font-semibold">
-            Risk topics ({topics.length})
-          </h2>
-          <RiskTopicSummary topics={topics} advancedMode={advancedMode} />
-        </section>
-      ) : null}
-
       {parsedResults.length === 0 ? (
-        <p className="border-t py-10 text-center text-sm text-muted-foreground">
-          The investigation has no plugin results.
+        <p className="border-t-2 border-foreground/10 py-10 text-center text-sm text-muted-foreground">
+          {detail.status === "Running"
+            ? "The investigation is running in the background. You can continue working elsewhere."
+            : "The investigation has no plugin results."}
         </p>
       ) : (
-        visibleResults.map(({ result, data }, resultIndex) => {
-          const key = `${result.pluginId}::${result.entrypointId}`;
-          const pluginName = pluginNameById[result.pluginId] ?? result.pluginId;
-          const entrypointName =
-            entrypointNameByKey[key] ?? result.entrypointId;
+        <section className="border-t-2 border-foreground/10 pt-6">
+          <header className="mb-4">
+            <h2 className="text-base font-semibold">Results</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {activePluginName} / {activeEntrypointName}
+            </p>
+          </header>
 
-          return (
-            <section
-              key={`${key}:${resultIndex}`}
-              className="border-t py-6"
-            >
-              <header className="mb-4">
-                <h2 className="flex items-center gap-2 text-sm font-semibold">
-                  {result.output.ok ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                  ) : (
-                    <AlertTriangle className="h-4 w-4 text-destructive" />
-                  )}
-                  <span>{pluginName}</span>
-                  <span className="text-muted-foreground">/</span>
-                  <span>{entrypointName}</span>
-                </h2>
-              </header>
-              <div>
-                <ResultBoundary rawOutput={result.output.dataJson}>
-                  {result.output.ok ? (
-                    <ResultData
-                      data={data}
-                      hiddenRiskTopics={topics.length > 0}
-                      advancedMode={advancedMode}
-                    />
-                  ) : (
-                    <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-                      {result.output.error ?? "Plugin execution failed."}
-                    </div>
-                  )}
-                </ResultBoundary>
-                {advancedMode ? <Logs logs={result.output.logs} /> : null}
+          <div
+            role="tablist"
+            aria-label="Investigation checks"
+            className="flex gap-1 overflow-x-auto border-b"
+          >
+            {groupKeys.map((key) => {
+              const [pluginId = "", entrypointId = ""] = key.split("::");
+              const results = parsedResults.filter(
+                ({ result }) =>
+                  resultKey(result.pluginId, result.entrypointId) === key,
+              );
+              const label = entrypointNameByKey[key] ?? entrypointId;
+              const pluginName = pluginNameById[pluginId] ?? pluginId;
+              const count = resultItemCount(results);
+              const failed = results.some(({ result }) => !result.output.ok);
+
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-label={label}
+                  aria-selected={activeKey === key}
+                  title={`${pluginName} / ${label}`}
+                  className={
+                    activeKey === key
+                      ? "shrink-0 border-b-2 border-primary px-3 py-2 text-sm font-medium text-foreground"
+                      : "shrink-0 border-b-2 border-transparent px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+                  }
+                  onClick={() => setActiveKey(key)}
+                >
+                  <span>{label}</span>
+                  {failed ? (
+                    <AlertTriangle className="ml-1.5 inline h-3.5 w-3.5 text-destructive" />
+                  ) : count > 0 ? (
+                    <span className="ml-1.5 text-xs text-muted-foreground">
+                      {count}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+
+          <div role="tabpanel" className="py-6">
+            {topics.length > 0 ? (
+              <div className={visibleResults.length > 0 ? "mb-7" : ""}>
+                <h3 className="mb-4 text-sm font-semibold">
+                  Risk topics ({topics.length})
+                </h3>
+                <RiskTopicSummary
+                  topics={topics}
+                  advancedMode={advancedMode}
+                />
               </div>
-            </section>
-          );
-        })
+            ) : null}
+
+            {activeResults.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                This check returned no results.
+              </p>
+            ) : (
+              visibleResults.map(({ result, data }, resultIndex) => (
+                <div
+                  key={`${activeKey}:${resultIndex}`}
+                  className="border-b py-6 first:pt-0 last:border-b-0 last:pb-0"
+                >
+                  <ResultBoundary rawOutput={result.output.dataJson}>
+                    {result.output.ok ? (
+                      <ResultData
+                        data={data}
+                        hiddenRiskTopics={topics.length > 0}
+                        advancedMode={advancedMode}
+                      />
+                    ) : (
+                      <div
+                        role="alert"
+                        className="border-y border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"
+                      >
+                        {result.output.error ?? "Plugin execution failed."}
+                      </div>
+                    )}
+                  </ResultBoundary>
+                  {advancedMode ? <Logs logs={result.output.logs} /> : null}
+                </div>
+              ))
+            )}
+          </div>
+        </section>
       )}
     </div>
   );

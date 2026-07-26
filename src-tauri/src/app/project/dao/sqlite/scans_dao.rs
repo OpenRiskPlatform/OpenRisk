@@ -4,7 +4,7 @@ use super::helpers::{conn_unavailable, load_scan_logs, project_id, project_setti
 use crate::app::project::session::SqliteProjectPersistence;
 use crate::app::project::types::*;
 use serde_json::Value;
-use sqlx::SqliteConnection;
+use sqlx::{Connection, SqliteConnection};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
@@ -516,11 +516,10 @@ pub(super) async fn create_scan(
     let project_id = project_id(&mut *conn).await?;
 
     let id = Uuid::new_v4().to_string();
-    let fallback = format!("New Scan {}", &id[..8]);
     let final_preview = preview
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty())
-        .unwrap_or(fallback);
+        .unwrap_or_else(|| "Untitled".to_string());
 
     sqlx::query!(
         r#"UPDATE Scan SET sort_order = sort_order + 1 WHERE project_id = ?1"#,
@@ -674,6 +673,41 @@ pub(super) async fn get_scan(
         inputs,
         results,
     })
+}
+
+pub(super) async fn update_scan_draft(
+    this: &SqliteProjectPersistence,
+    scan_id: &str,
+    selected_plugins: &[PluginEntrypointSelection],
+    inputs: &[ScanEntrypointInput],
+) -> Result<ScanSummaryRecord, PersistenceError> {
+    let mut guard = this.conn.lock().await;
+    let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
+    let project_id = project_id(&mut *conn).await?;
+    let mut transaction = conn.begin().await?;
+
+    load_scan_preview_if_draft(&mut transaction, scan_id).await?;
+
+    sqlx::query!(
+        r#"DELETE FROM ScanSelectedPlugin WHERE scan_id = ?1"#,
+        scan_id
+    )
+    .execute(&mut *transaction)
+    .await?;
+
+    sqlx::query!(
+        "DELETE FROM ScanEntrypointInput WHERE scan_id = ?1",
+        scan_id
+    )
+    .execute(&mut *transaction)
+    .await?;
+
+    let selected_revision_map =
+        persist_selected_plugins(&mut transaction, scan_id, &project_id, selected_plugins).await?;
+    persist_scan_inputs(&mut transaction, scan_id, inputs, &selected_revision_map).await?;
+
+    transaction.commit().await?;
+    fetch_scan_summary_by_id(&mut *conn, scan_id).await
 }
 
 pub(super) async fn begin_scan_run(
