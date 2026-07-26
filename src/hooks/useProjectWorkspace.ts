@@ -708,7 +708,18 @@ export function useProjectWorkspace(
         // Show a dismissable toast for plugins that ran and report a status
         const ranPluginIds = new Set(selectedPlugins.map((sel) => sel.pluginId));
         for (const plugin of freshSettings.plugins) {
-          if (plugin.status && ranPluginIds.has(plugin.id) && /used/i.test(plugin.status)) {
+          const trialEnabled = plugin.settingValues.some(
+            (setting) =>
+              setting.name === "trial" &&
+              setting.value.type === "boolean" &&
+              setting.value.value,
+          );
+          if (
+            plugin.status &&
+            ranPluginIds.has(plugin.id) &&
+            /used/i.test(plugin.status) &&
+            !trialEnabled
+          ) {
             toast.info(`${plugin.name}: ${plugin.status}`, {
               duration: 1 * 60 * 1000, // 1 minute
               dismissible: true,
