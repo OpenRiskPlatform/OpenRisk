@@ -1,0 +1,141 @@
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import type { ScanDetailRecord } from "@/core/backend/bindings";
+import { ScanResultView } from "@/results/ScanResultView";
+import { completedScanDetail } from "./fixtures";
+
+function renderResult(detail: ScanDetailRecord, advancedMode: boolean) {
+  return render(
+    <ScanResultView
+      detail={detail}
+      pluginNameById={{ demo: "Demo Registry" }}
+      entrypointNameByKey={{
+        "demo::person-search": "Person search",
+        "demo::topic-report": "Topic report",
+      }}
+      advancedMode={advancedMode}
+    />,
+  );
+}
+
+describe("ScanResultView presentation modes", () => {
+  it("deduplicates inputs and hides technical entity details in normal mode", () => {
+    const detail: ScanDetailRecord = {
+      ...completedScanDetail,
+      inputs: [
+        ...completedScanDetail.inputs,
+        { ...completedScanDetail.inputs[0], entrypointId: "second-check" },
+      ],
+      results: [
+        {
+          ...completedScanDetail.results[0],
+          output: {
+            ...completedScanDetail.results[0].output,
+            logs: [{ level: "info", message: "technical log" }],
+            dataJson: JSON.stringify([
+              {
+                $entity: "entity.person",
+                $id: "demo:ada",
+                $props: {
+                  name: [{ $type: "string", value: "Ada Lovelace" }],
+                  birthDate: [{ $type: "date", value: "1815-12-10" }],
+                  pepStatus: [{ $type: "boolean", value: false }],
+                  sanctioned: [{ $type: "boolean", value: false }],
+                },
+                $extra: [
+                  {
+                    $type: "object",
+                    value: { key: "Score", value: 0.95 },
+                  },
+                  {
+                    $type: "object",
+                    value: { key: "Dataset", value: "demo" },
+                  },
+                ],
+              },
+            ]),
+          },
+        },
+      ],
+    };
+
+    renderResult(detail, false);
+
+    expect(screen.getAllByText("name")).toHaveLength(1);
+    expect(screen.getByText("birthDate")).toBeInTheDocument();
+    expect(screen.getByText("pepStatus: false")).toBeInTheDocument();
+    expect(screen.getByText("Score")).toBeInTheDocument();
+    expect(screen.getByText("0.95")).toBeInTheDocument();
+    expect(screen.queryByText("key")).not.toBeInTheDocument();
+    expect(screen.queryByText("demo:ada")).not.toBeInTheDocument();
+    expect(screen.queryByText("$props")).not.toBeInTheDocument();
+    expect(screen.queryByText("technical log")).not.toBeInTheDocument();
+  });
+
+  it("shows technical containers and logs in Advanced mode", () => {
+    const detail: ScanDetailRecord = {
+      ...completedScanDetail,
+      results: [
+        {
+          ...completedScanDetail.results[0],
+          output: {
+            ...completedScanDetail.results[0].output,
+            logs: [{ level: "info", message: "technical log" }],
+          },
+        },
+      ],
+    };
+
+    renderResult(detail, true);
+
+    expect(screen.getByText("demo:ada")).toBeInTheDocument();
+    expect(screen.getByText("$props")).toBeInTheDocument();
+    expect(screen.getByText("technical log")).toBeInTheDocument();
+  });
+
+  it("renders risk topics as compact summaries in normal mode", () => {
+    const detail: ScanDetailRecord = {
+      ...completedScanDetail,
+      results: [
+        {
+          ...completedScanDetail.results[0],
+          entrypointId: "topic-report",
+          output: {
+            ...completedScanDetail.results[0].output,
+            dataJson: JSON.stringify([
+              {
+                $entity: "entity.riskTopic",
+                $id: "topic:political",
+                $props: {
+                  name: [{ $type: "string", value: "Ada Lovelace" }],
+                  topicId: [{ $type: "string", value: "political_activity" }],
+                  adverseActivityDetected: [
+                    { $type: "boolean", value: false },
+                  ],
+                  summary: [
+                    {
+                      $type: "string",
+                      value: "No relevant information was found.",
+                    },
+                  ],
+                },
+                $sources: [],
+              },
+            ]),
+          },
+        },
+      ],
+    };
+
+    renderResult(detail, false);
+
+    expect(screen.getByText("political_activity")).toBeInTheDocument();
+    expect(screen.getByText("adverseActivityDetected")).toBeInTheDocument();
+    expect(screen.getByText("false")).toBeInTheDocument();
+    expect(
+      screen.getByText("No relevant information was found."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Details")).not.toBeInTheDocument();
+    expect(screen.queryByText("topic:political")).not.toBeInTheDocument();
+  });
+});
