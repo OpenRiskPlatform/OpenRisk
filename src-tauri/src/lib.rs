@@ -34,6 +34,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::project::create_scan,
         commands::project::list_scans,
         commands::project::get_scan,
+        commands::project::update_scan_draft,
         commands::project::run_scan,
         commands::project::update_scan_preview,
         commands::project::set_scan_archived,

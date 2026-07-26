@@ -80,6 +80,11 @@ export const commands = {
 	 */
 	getScan: (scanId: string) => typedError<ScanDetailRecord, AppError>(__TAURI_INVOKE("get_scan", { scanId })),
 	/**
+	 *  Replace the selected entrypoints and inputs while keeping the scan in Draft status.
+	 *  #
+	 */
+	updateScanDraft: (scanId: string, selectedPlugins: PluginEntrypointSelection[], inputs: ScanEntrypointInput[]) => typedError<ScanSummaryRecord, AppError>(__TAURI_INVOKE("update_scan_draft", { scanId, selectedPlugins, inputs })),
+	/**
 	 *  Execute a scan: run the selected plugins and persist results.
 	 * 
 	 *  Plugin code is read from the project database, not from disk.
