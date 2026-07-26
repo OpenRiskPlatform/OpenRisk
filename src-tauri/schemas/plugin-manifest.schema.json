@@ -196,6 +196,7 @@
                         "integer",
                         "date",
                         "url",
+                        "country-code-iso-3166-1-alpha-2",
                         "registry-jurisdiction-code"
                     ]
                 },
@@ -215,6 +216,7 @@
                                 "date",
                                 "url",
                                 "enum",
+                                "country-code-iso-3166-1-alpha-2",
                                 "registry-jurisdiction-code"
                             ]
                         },
@@ -223,7 +225,7 @@
                             "items": {
                                 "type": "string"
                             },
-                            "description": "Enum values when name='enum'."
+                            "description": "Allowed values for enum-like fields."
                         }
                     },
                     "additionalProperties": false

@@ -19,6 +19,9 @@ impl PluginFieldType {
             PluginFieldType::String(FieldTypeString::Integer) => "integer",
             PluginFieldType::String(FieldTypeString::Date) => "date",
             PluginFieldType::String(FieldTypeString::Url) => "url",
+            PluginFieldType::String(FieldTypeString::CountryCodeIso31661Alpha2) => {
+                "country-code-iso-3166-1-alpha-2"
+            }
             PluginFieldType::String(FieldTypeString::RegistryJurisdictionCode) => {
                 crate::registry_jurisdiction::REGISTRY_JURISDICTION_CODE_TYPE_NAME
             }
@@ -47,6 +50,10 @@ impl PluginFieldType {
                 ..
             } => "url",
             PluginFieldType::Object {
+                name: FieldTypeObjectName::CountryCodeIso31661Alpha2,
+                ..
+            } => "country-code-iso-3166-1-alpha-2",
+            PluginFieldType::Object {
                 name: FieldTypeObjectName::RegistryJurisdictionCode,
                 ..
             } => crate::registry_jurisdiction::REGISTRY_JURISDICTION_CODE_TYPE_NAME,
@@ -57,12 +64,9 @@ impl PluginFieldType {
         }
     }
 
-    pub fn enum_values(&self) -> Option<&[String]> {
+    pub fn explicit_values(&self) -> Option<&[String]> {
         match self {
-            PluginFieldType::Object {
-                name: FieldTypeObjectName::Enum,
-                values,
-            } => Some(values.as_slice()),
+            PluginFieldType::Object { values, .. } if !values.is_empty() => Some(values.as_slice()),
             _ => None,
         }
     }
@@ -139,7 +143,7 @@ pub fn parse_manifest(json_str: &str) -> Result<OpenRiskPluginManifest, Manifest
 
 #[cfg(test)]
 mod tests {
-    use super::parse_manifest;
+    use super::{PluginFieldType, parse_manifest};
 
     #[test]
     fn parse_manifest_accepts_secret_setting_hint() {
@@ -175,5 +179,46 @@ mod tests {
         .expect("manifest with secret setting should parse");
 
         assert!(manifest.settings[0].secret);
+    }
+
+    #[test]
+    fn parse_manifest_accepts_restricted_country_code_input() {
+        let manifest = parse_manifest(
+            r#"{
+                "id": "country-test",
+                "version": "0.1.0",
+                "name": "Country Test",
+                "description": "Test plugin with country input",
+                "authors": [{ "name": "OpenRisk" }],
+                "license": "MIT",
+                "main": "index.ts",
+                "entrypoints": [
+                    {
+                        "id": "search",
+                        "name": "Search",
+                        "function": "search",
+                        "inputs": [
+                            {
+                                "name": "country",
+                                "type": {
+                                    "name": "country-code-iso-3166-1-alpha-2",
+                                    "values": ["SK", "CZ", "GB"]
+                                },
+                                "title": "Country",
+                                "optional": true
+                            }
+                        ]
+                    }
+                ]
+            }"#,
+        )
+        .expect("manifest with a restricted country input should parse");
+
+        let field_type: &PluginFieldType = &manifest.entrypoints[0].inputs[0].type_;
+        assert_eq!(field_type.name(), "country-code-iso-3166-1-alpha-2");
+        assert_eq!(
+            field_type.explicit_values(),
+            Some(["SK".to_string(), "CZ".to_string(), "GB".to_string()].as_slice())
+        );
     }
 }

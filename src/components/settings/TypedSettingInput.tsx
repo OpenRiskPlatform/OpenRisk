@@ -1,4 +1,5 @@
 import { Input } from "@/components/ui/input";
+import { CountryInput } from "@/components/settings/CountryInput";
 import { RegistryJurisdictionInput } from "@/components/settings/RegistryJurisdictionInput";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -30,6 +31,19 @@ export function TypedSettingInput({
     disabled = false,
     isSecret = false,
 }: TypedSettingInputProps) {
+    if (typeName === "country-code-iso-3166-1-alpha-2") {
+        return (
+            <CountryInput
+                value={value}
+                onChange={onChange}
+                options={options}
+                emptyAsNull={emptyAsNull}
+                placeholder={placeholder}
+                disabled={disabled}
+            />
+        );
+    }
+
     if (typeName === "registry-jurisdiction-code") {
         return (
             <RegistryJurisdictionInput

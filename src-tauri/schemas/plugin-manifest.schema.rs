@@ -46,6 +46,7 @@ pub mod error {
 #[doc = "        \"integer\","]
 #[doc = "        \"date\","]
 #[doc = "        \"url\","]
+#[doc = "        \"country-code-iso-3166-1-alpha-2\","]
 #[doc = "        \"registry-jurisdiction-code\""]
 #[doc = "      ]"]
 #[doc = "    },"]
@@ -65,11 +66,12 @@ pub mod error {
 #[doc = "            \"date\","]
 #[doc = "            \"url\","]
 #[doc = "            \"enum\","]
+#[doc = "            \"country-code-iso-3166-1-alpha-2\","]
 #[doc = "            \"registry-jurisdiction-code\""]
 #[doc = "          ]"]
 #[doc = "        },"]
 #[doc = "        \"values\": {"]
-#[doc = "          \"description\": \"Enum values when name='enum'.\","]
+#[doc = "          \"description\": \"Allowed values for enum-like fields.\","]
 #[doc = "          \"type\": \"array\","]
 #[doc = "          \"items\": {"]
 #[doc = "            \"type\": \"string\""]
@@ -88,7 +90,7 @@ pub enum FieldType {
     String(FieldTypeString),
     Object {
         name: FieldTypeObjectName,
-        #[doc = "Enum values when name='enum'."]
+        #[doc = "Allowed values for enum-like fields."]
         #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
         values: ::std::vec::Vec<::std::string::String>,
     },
@@ -118,6 +120,7 @@ impl ::std::convert::From<FieldTypeString> for FieldType {
 #[doc = "    \"date\","]
 #[doc = "    \"url\","]
 #[doc = "    \"enum\","]
+#[doc = "    \"country-code-iso-3166-1-alpha-2\","]
 #[doc = "    \"registry-jurisdiction-code\""]
 #[doc = "  ]"]
 #[doc = "}"]
@@ -150,6 +153,8 @@ pub enum FieldTypeObjectName {
     Url,
     #[serde(rename = "enum")]
     Enum,
+    #[serde(rename = "country-code-iso-3166-1-alpha-2")]
+    CountryCodeIso31661Alpha2,
     #[serde(rename = "registry-jurisdiction-code")]
     RegistryJurisdictionCode,
 }
@@ -168,6 +173,7 @@ impl ::std::fmt::Display for FieldTypeObjectName {
             Self::Date => f.write_str("date"),
             Self::Url => f.write_str("url"),
             Self::Enum => f.write_str("enum"),
+            Self::CountryCodeIso31661Alpha2 => f.write_str("country-code-iso-3166-1-alpha-2"),
             Self::RegistryJurisdictionCode => f.write_str("registry-jurisdiction-code"),
         }
     }
@@ -183,6 +189,7 @@ impl ::std::str::FromStr for FieldTypeObjectName {
             "date" => Ok(Self::Date),
             "url" => Ok(Self::Url),
             "enum" => Ok(Self::Enum),
+            "country-code-iso-3166-1-alpha-2" => Ok(Self::CountryCodeIso31661Alpha2),
             "registry-jurisdiction-code" => Ok(Self::RegistryJurisdictionCode),
             _ => Err("invalid value".into()),
         }
@@ -224,6 +231,7 @@ impl ::std::convert::TryFrom<::std::string::String> for FieldTypeObjectName {
 #[doc = "    \"integer\","]
 #[doc = "    \"date\","]
 #[doc = "    \"url\","]
+#[doc = "    \"country-code-iso-3166-1-alpha-2\","]
 #[doc = "    \"registry-jurisdiction-code\""]
 #[doc = "  ]"]
 #[doc = "}"]
@@ -254,6 +262,8 @@ pub enum FieldTypeString {
     Date,
     #[serde(rename = "url")]
     Url,
+    #[serde(rename = "country-code-iso-3166-1-alpha-2")]
+    CountryCodeIso31661Alpha2,
     #[serde(rename = "registry-jurisdiction-code")]
     RegistryJurisdictionCode,
 }
@@ -271,6 +281,7 @@ impl ::std::fmt::Display for FieldTypeString {
             Self::Integer => f.write_str("integer"),
             Self::Date => f.write_str("date"),
             Self::Url => f.write_str("url"),
+            Self::CountryCodeIso31661Alpha2 => f.write_str("country-code-iso-3166-1-alpha-2"),
             Self::RegistryJurisdictionCode => f.write_str("registry-jurisdiction-code"),
         }
     }
@@ -285,6 +296,7 @@ impl ::std::str::FromStr for FieldTypeString {
             "integer" => Ok(Self::Integer),
             "date" => Ok(Self::Date),
             "url" => Ok(Self::Url),
+            "country-code-iso-3166-1-alpha-2" => Ok(Self::CountryCodeIso31661Alpha2),
             "registry-jurisdiction-code" => Ok(Self::RegistryJurisdictionCode),
             _ => Err("invalid value".into()),
         }
