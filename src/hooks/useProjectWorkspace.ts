@@ -107,6 +107,64 @@ function toSettingValue(v: unknown): SettingValue {
   return { type: "string", value: String(v) };
 }
 
+function hasInputValue(value: unknown): boolean {
+  return (
+    value !== undefined &&
+    value !== null &&
+    (typeof value !== "string" || value.trim() !== "")
+  );
+}
+
+function buildScanInputs(
+  plugins: PluginRecord[] | undefined,
+  selectedPlugins: PluginEntrypointSelection[],
+  pluginInputs: Record<string, Record<string, unknown>>,
+): ScanEntrypointInput[] {
+  const sharedValues = new Map<string, unknown>();
+
+  for (const selection of selectedPlugins) {
+    const fields =
+      pluginInputs[`${selection.pluginId}::${selection.entrypointId}`] ?? {};
+    for (const [fieldName, value] of Object.entries(fields)) {
+      if (hasInputValue(value)) {
+        sharedValues.set(`${selection.pluginId}::${fieldName}`, value);
+      }
+    }
+  }
+
+  const inputs: ScanEntrypointInput[] = [];
+  for (const selection of selectedPlugins) {
+    const key = `${selection.pluginId}::${selection.entrypointId}`;
+    const fields = pluginInputs[key] ?? {};
+    const plugin = findPluginById(plugins, selection.pluginId);
+    const declaredFieldNames = (plugin?.inputDefs ?? [])
+      .filter((input) => input.entrypointId === selection.entrypointId)
+      .map((input) => input.name);
+    const fieldNames = new Set([...declaredFieldNames, ...Object.keys(fields)]);
+
+    for (const fieldName of fieldNames) {
+      const hasOwnValue = Object.prototype.hasOwnProperty.call(fields, fieldName);
+      const ownValue = fields[fieldName];
+      const value = hasInputValue(ownValue)
+        ? ownValue
+        : sharedValues.get(`${selection.pluginId}::${fieldName}`);
+
+      if (value === undefined && !hasOwnValue) {
+        continue;
+      }
+
+      inputs.push({
+        pluginId: selection.pluginId,
+        entrypointId: selection.entrypointId,
+        fieldName,
+        value: toSettingValue(value),
+      });
+    }
+  }
+
+  return inputs;
+}
+
 function parseStoredTimestamp(value: string): Date | null {
   if (!value) {
     return null;
@@ -636,19 +694,11 @@ export function useProjectWorkspace(
         setSelectedScanId(scanId);
       }
 
-      const inputs: ScanEntrypointInput[] = [];
-      for (const sel of selectedPlugins) {
-        const key = `${sel.pluginId}::${sel.entrypointId}`;
-        const fields = pluginInputs[key] ?? {};
-        for (const [fieldName, rawValue] of Object.entries(fields)) {
-          inputs.push({
-            pluginId: sel.pluginId,
-            entrypointId: sel.entrypointId,
-            fieldName,
-            value: toSettingValue(rawValue),
-          });
-        }
-      }
+      const inputs = buildScanInputs(
+        settingsData?.plugins,
+        selectedPlugins,
+        pluginInputs,
+      );
 
       const smartPreview = scanNameCandidate(
         settingsData?.plugins,
