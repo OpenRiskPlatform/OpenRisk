@@ -6,7 +6,7 @@ import type {
   ScanEntrypointInput,
   ScanPluginResultRecord,
 } from "@/core/backend/bindings";
-import { EntityBrowser } from "./EntityBrowser";
+import { EntityCard } from "./EntityCard";
 import { ResultBoundary } from "./ResultBoundary";
 import { formatDate } from "@/shared/formatDate";
 import { RiskTopicSummary } from "./RiskTopicSummary";
@@ -134,7 +134,15 @@ function ResultData({
   }
 
   return (
-    <EntityBrowser entities={entities} advancedMode={advancedMode} />
+    <div className={advancedMode ? "space-y-4" : ""}>
+      {entities.map((entity, index) => (
+        <EntityCard
+          key={`${entity.$entity}:${entity.$id}:${index}`}
+          entity={entity}
+          advancedMode={advancedMode}
+        />
+      ))}
+    </div>
   );
 }
 

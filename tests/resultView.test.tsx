@@ -193,8 +193,7 @@ describe("ScanResultView presentation modes", () => {
     );
   });
 
-  it("paginates large result sets instead of rendering every card", async () => {
-    const user = userEvent.setup();
+  it("renders the complete result list inside the active entrypoint tab", () => {
     const detail: ScanDetailRecord = {
       ...completedScanDetail,
       results: [
@@ -220,12 +219,9 @@ describe("ScanResultView presentation modes", () => {
 
     renderResult(detail, false);
 
-    expect(screen.getByText("25 results")).toBeInTheDocument();
-    expect(screen.queryByText("Result 21")).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Next" }));
-
-    expect(screen.getAllByText("Result 21").length).toBeGreaterThan(0);
-    expect(screen.getByText("Page 2 of 2")).toBeInTheDocument();
+    expect(screen.getByText("Result 1")).toBeInTheDocument();
+    expect(screen.getByText("Result 21")).toBeInTheDocument();
+    expect(screen.getByText("Result 25")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Next" })).not.toBeInTheDocument();
   });
 });

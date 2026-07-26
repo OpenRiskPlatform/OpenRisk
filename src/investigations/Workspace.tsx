@@ -50,7 +50,7 @@ interface DraftSession {
   queue: Promise<void>;
   lastHash: string | null;
   lastResult: PersistedDraft | null;
-  revealWhenSaved: boolean;
+  discarded: boolean;
 }
 
 interface PersistedDraft {
@@ -85,7 +85,7 @@ export function Workspace({
     queue: Promise.resolve(),
     lastHash: null,
     lastResult: null,
-    revealWhenSaved: false,
+    discarded: false,
   });
   const navigationRequest = useRef(0);
   const pendingDraft = useRef<PendingDraft | null>(null);
@@ -141,13 +141,14 @@ export function Workspace({
         .catch(() => undefined)
         .then(async () => {
           if (session.lastHash === hash && session.lastResult) {
-            dispatch({
-              type: "draft-saved",
-              summary: session.lastResult.summary,
-              detail: session.lastResult.detail,
-              activate: draftSession.current === session,
-              reveal: session.revealWhenSaved,
-            });
+            if (!session.discarded) {
+              dispatch({
+                type: "draft-saved",
+                summary: session.lastResult.summary,
+                detail: session.lastResult.detail,
+                activate: draftSession.current === session,
+              });
+            }
             return session.lastResult;
           }
 
@@ -174,13 +175,14 @@ export function Workspace({
           session.lastHash = hash;
           session.lastResult = result;
 
-          dispatch({
-            type: "draft-saved",
-            summary,
-            detail,
-            activate: draftSession.current === session,
-            reveal: session.revealWhenSaved,
-          });
+          if (!session.discarded) {
+            dispatch({
+              type: "draft-saved",
+              summary,
+              detail,
+              activate: draftSession.current === session,
+            });
+          }
           return result;
         });
 
@@ -255,18 +257,7 @@ export function Workspace({
     void saveDraftNow(pending.session, pending.snapshot);
   }, [saveDraftNow]);
 
-  const revealCurrentDraft = useCallback(() => {
-    const session = draftSession.current;
-    session.revealWhenSaved = true;
-    if (session.lastResult) {
-      dispatch({
-        type: "draft-saved",
-        summary: session.lastResult.summary,
-        detail: session.lastResult.detail,
-        activate: false,
-        reveal: true,
-      });
-    }
+  const flushCurrentDraft = useCallback(() => {
     flushScheduledDraft();
   }, [flushScheduledDraft]);
 
@@ -275,14 +266,14 @@ export function Workspace({
       return;
     }
 
-    revealCurrentDraft();
+    flushCurrentDraft();
     const request = ++navigationRequest.current;
     const session: DraftSession = {
       scanId: null,
       queue: Promise.resolve(),
       lastHash: null,
       lastResult: null,
-      revealWhenSaved: false,
+      discarded: false,
     };
     draftSession.current = session;
     dispatch({ type: "scan-loading", scanId });
@@ -365,14 +356,14 @@ export function Workspace({
   };
 
   const newInvestigation = () => {
-    revealCurrentDraft();
+    flushCurrentDraft();
     ++navigationRequest.current;
     draftSession.current = {
       scanId: null,
       queue: Promise.resolve(),
       lastHash: null,
       lastResult: null,
-      revealWhenSaved: false,
+      discarded: false,
     };
     dispatch({ type: "new-investigation-selected" });
   };
@@ -400,6 +391,11 @@ export function Workspace({
   };
 
   const archiveScan = async (scanId: string, archived: boolean) => {
+    const session = draftSession.current;
+    const discardingDraft = archived && session.scanId === scanId;
+    if (discardingDraft) {
+      session.discarded = true;
+    }
     try {
       dispatch({
         type: "scan-summary-updated",
@@ -409,6 +405,9 @@ export function Workspace({
         newInvestigation();
       }
     } catch (error) {
+      if (discardingDraft && draftSession.current === session) {
+        session.discarded = false;
+      }
       dispatch({ type: "operation-failed", error: errorMessage(error) });
     }
   };

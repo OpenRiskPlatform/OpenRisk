@@ -50,7 +50,7 @@ describe("Workspace investigation flow", () => {
         ],
       );
     });
-    expect(screen.queryByText("Untitled")).not.toBeInTheDocument();
+    expect(screen.getByText("Untitled")).toBeInTheDocument();
 
     await user.click(
       screen.getByRole("button", { name: "Run investigation" }),
@@ -193,6 +193,9 @@ describe("Workspace investigation flow", () => {
     );
 
     await user.click(screen.getByText("Untitled"));
+    await user.click(
+      screen.getByLabelText("Actions for Untitled"),
+    );
     await user.click(screen.getByRole("button", { name: "Rename Untitled" }));
     const nameInput = screen.getByLabelText("Investigation name");
     await user.clear(nameInput);
@@ -229,9 +232,8 @@ describe("Workspace investigation flow", () => {
       />,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Rename Ada Lovelace" }),
-    );
+    await user.click(screen.getByLabelText("Actions for Ada Lovelace"));
+    await user.click(screen.getByRole("button", { name: "Rename Ada Lovelace" }));
     const nameInput = screen.getByLabelText("Investigation name");
     await user.clear(nameInput);
     await user.type(nameInput, "Renamed case");
@@ -245,9 +247,8 @@ describe("Workspace investigation flow", () => {
     );
     expect(screen.getByText("Renamed case")).toBeInTheDocument();
 
-    await user.click(
-      screen.getByRole("button", { name: "Archive Renamed case" }),
-    );
+    await user.click(screen.getByLabelText("Actions for Renamed case"));
+    await user.click(screen.getByRole("button", { name: "Archive Renamed case" }));
     await waitFor(() =>
       expect(client.setScanArchived).toHaveBeenCalledWith(
         completedScan.id,
@@ -258,6 +259,7 @@ describe("Workspace investigation flow", () => {
 
     await user.click(screen.getByRole("button", { name: "Archived (1)" }));
     expect(screen.getByText("Renamed case")).toBeInTheDocument();
+    await user.click(screen.getByLabelText("Actions for Renamed case"));
     await user.click(
       screen.getByRole("button", { name: "Restore Renamed case" }),
     );
@@ -315,9 +317,17 @@ describe("Workspace investigation flow", () => {
       preview: "Second case",
       sortOrder: 1,
     };
+    const archivedScan = {
+      ...completedScan,
+      id: "scan-archived",
+      preview: "Archived case",
+      isArchived: true,
+      sortOrder: 2,
+    };
     const reordered = [
       { ...secondScan, sortOrder: 0 },
       { ...completedScan, sortOrder: 1 },
+      archivedScan,
     ];
     const client = createClient({
       reorderScans: vi.fn(async () => reordered),
@@ -327,21 +337,61 @@ describe("Workspace investigation flow", () => {
       <Workspace
         client={client}
         initialSettings={projectSettings}
-        initialScans={[completedScan, secondScan]}
+        initialScans={[completedScan, secondScan, archivedScan]}
         onCloseProject={async () => undefined}
       />,
     );
 
+    await user.click(screen.getByLabelText("Actions for Ada Lovelace"));
     await user.click(
-      screen.getByRole("button", { name: "Reorder Ada Lovelace" }),
+      screen.getByRole("button", { name: "Move Ada Lovelace down" }),
     );
-    await user.keyboard("{ArrowDown}");
 
     await waitFor(() =>
       expect(client.reorderScans).toHaveBeenCalledWith([
         secondScan.id,
         completedScan.id,
+        archivedScan.id,
       ]),
     );
+  });
+
+  it("archives an active saved Draft without restoring it from cache", async () => {
+    const user = userEvent.setup();
+    const client = createClient({
+      setScanArchived: vi.fn(async () => ({
+        ...draftScan,
+        isArchived: true,
+      })),
+    });
+
+    render(
+      <Workspace
+        client={client}
+        initialSettings={projectSettings}
+        initialScans={[]}
+        onCloseProject={async () => undefined}
+      />,
+    );
+
+    await user.click(screen.getByLabelText("Plugin"));
+    await user.click(screen.getByRole("option", { name: "Demo Registry" }));
+    await user.click(screen.getByRole("checkbox"));
+    await user.type(await screen.findByLabelText(/Name/), "Draft target");
+    await screen.findByText("Untitled");
+
+    await user.click(screen.getByLabelText("Actions for Untitled"));
+    await user.click(screen.getByRole("button", { name: "Archive Untitled" }));
+
+    await waitFor(() =>
+      expect(client.setScanArchived).toHaveBeenCalledWith(draftScan.id, true),
+    );
+    expect(screen.queryByText("Untitled")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "New investigation" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Archived (1)" }));
+    expect(screen.getByText("Untitled")).toBeInTheDocument();
   });
 });

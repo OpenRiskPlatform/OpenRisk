@@ -2,8 +2,10 @@ import { useMemo, useState } from "react";
 import {
   Archive,
   ArchiveRestore,
+  ArrowDown,
+  ArrowUp,
   Check,
-  GripVertical,
+  MoreHorizontal,
   PanelLeftClose,
   Pencil,
   Plus,
@@ -45,9 +47,12 @@ export function InvestigationHistory({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingPreview, setEditingPreview] = useState("");
   const [operatingId, setOperatingId] = useState<string | null>(null);
-  const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [menuId, setMenuId] = useState<string | null>(null);
   const archivedCount = scans.filter((scan) => scan.isArchived).length;
+  const activeScanIds = useMemo(
+    () => scans.filter((scan) => !scan.isArchived).map((scan) => scan.id),
+    [scans],
+  );
 
   const visibleScans = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -91,39 +96,23 @@ export function InvestigationHistory({
 
   const reorder = async (
     scanId: string,
-    targetScanId: string | null,
-    direction?: "up" | "down",
+    direction: "up" | "down",
   ) => {
-    const activeIds = scans
-      .filter((scan) => !scan.isArchived)
-      .map((scan) => scan.id);
-    const currentIndex = activeIds.indexOf(scanId);
+    const currentIndex = activeScanIds.indexOf(scanId);
     if (currentIndex < 0) {
       return;
     }
 
-    let nextActiveIds = [...activeIds];
-    if (direction) {
-      const nextIndex =
-        direction === "up" ? currentIndex - 1 : currentIndex + 1;
-      if (nextIndex < 0 || nextIndex >= nextActiveIds.length) {
-        return;
-      }
-      [nextActiveIds[currentIndex], nextActiveIds[nextIndex]] = [
-        nextActiveIds[nextIndex],
-        nextActiveIds[currentIndex],
-      ];
-    } else if (targetScanId && targetScanId !== scanId) {
-      nextActiveIds = nextActiveIds.filter((id) => id !== scanId);
-      const targetIndex = nextActiveIds.indexOf(targetScanId);
-      nextActiveIds.splice(
-        targetIndex < 0 ? nextActiveIds.length : targetIndex,
-        0,
-        scanId,
-      );
-    } else {
+    const nextIndex =
+      direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (nextIndex < 0 || nextIndex >= activeScanIds.length) {
       return;
     }
+    const nextActiveIds = [...activeScanIds];
+    [nextActiveIds[currentIndex], nextActiveIds[nextIndex]] = [
+      nextActiveIds[nextIndex],
+      nextActiveIds[currentIndex],
+    ];
 
     const archivedIds = scans
       .filter((scan) => scan.isArchived)
@@ -133,8 +122,6 @@ export function InvestigationHistory({
       await onReorder([...nextActiveIds, ...archivedIds]);
     } finally {
       setOperatingId(null);
-      setDraggedId(null);
-      setDragOverId(null);
     }
   };
 
@@ -195,26 +182,12 @@ export function InvestigationHistory({
               const preview =
                 scan.preview?.trim() || `Investigation ${scan.id.slice(0, 8)}`;
               const operating = operatingId === scan.id;
+              const activeIndex = activeScanIds.indexOf(scan.id);
+              const canMoveUp = activeIndex > 0;
+              const canMoveDown =
+                activeIndex >= 0 && activeIndex < activeScanIds.length - 1;
               return (
-                <li
-                  key={scan.id}
-                  className={cn(
-                    "group",
-                    dragOverId === scan.id && "border-t-2 border-t-primary",
-                  )}
-                  onDragOver={(event) => {
-                    if (draggedId && draggedId !== scan.id) {
-                      event.preventDefault();
-                      setDragOverId(scan.id);
-                    }
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    if (draggedId) {
-                      void reorder(draggedId, scan.id);
-                    }
-                  }}
-                >
+                <li key={scan.id} className="group relative">
                   {editingId === scan.id ? (
                     <form
                       className="flex items-center gap-1 border-l-2 border-l-primary bg-muted/60 p-2"
@@ -263,7 +236,7 @@ export function InvestigationHistory({
                   ) : (
                     <div
                       className={cn(
-                        "flex border-l-2 border-transparent hover:bg-muted/50",
+                        "flex min-h-16 border-l-2 border-transparent hover:bg-muted/50",
                         selected && "border-l-primary bg-muted/60",
                       )}
                     >
@@ -271,9 +244,9 @@ export function InvestigationHistory({
                         type="button"
                         disabled={disabled}
                         onClick={() => onSelect(scan.id)}
-                        className="min-w-0 flex-1 px-3 py-2.5 text-left disabled:pointer-events-none disabled:opacity-50"
+                        className="min-w-0 flex-1 px-3 py-2 text-left disabled:pointer-events-none disabled:opacity-50"
                       >
-                        <div className="flex items-start gap-3">
+                        <div className="flex items-start gap-2.5">
                           <ScanStatusIndicator
                             status={scan.status}
                             showLabel={false}
@@ -296,85 +269,97 @@ export function InvestigationHistory({
                           </div>
                         </div>
                       </button>
-                      <div
+                      <details
+                        open={menuId === scan.id}
+                        onToggle={(event) => {
+                          if (event.currentTarget.open) {
+                            setMenuId(scan.id);
+                          } else {
+                            setMenuId((current) =>
+                              current === scan.id ? null : current,
+                            );
+                          }
+                        }}
                         className={cn(
-                          "flex shrink-0 items-center pr-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
+                          "relative flex shrink-0 items-center pr-2 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
                           selected && "opacity-100",
                         )}
                       >
-                        {!scan.isArchived ? (
-                          <Button
+                        <summary
+                          className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground [&::-webkit-details-marker]:hidden"
+                          aria-label={`Actions for ${preview}`}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </summary>
+                        <div className="absolute right-2 top-10 z-20 w-40 rounded-md border bg-popover p-1 shadow-md">
+                          {!scan.isArchived ? (
+                            <>
+                              <button
+                                type="button"
+                                disabled={disabled || operating || !canMoveUp}
+                                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent disabled:opacity-40"
+                                aria-label={`Move ${preview} up`}
+                                onClick={() => {
+                                  setMenuId(null);
+                                  void reorder(scan.id, "up");
+                                }}
+                              >
+                                <ArrowUp className="h-3.5 w-3.5" />
+                                Move up
+                              </button>
+                              <button
+                                type="button"
+                                disabled={
+                                  disabled || operating || !canMoveDown
+                                }
+                                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent disabled:opacity-40"
+                                aria-label={`Move ${preview} down`}
+                                onClick={() => {
+                                  setMenuId(null);
+                                  void reorder(scan.id, "down");
+                                }}
+                              >
+                                <ArrowDown className="h-3.5 w-3.5" />
+                                Move down
+                              </button>
+                              <div className="my-1 border-t" />
+                            </>
+                          ) : null}
+                          <button
                             type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 cursor-grab focus:opacity-100 active:cursor-grabbing"
-                            draggable={!disabled && !operating}
                             disabled={disabled || operating}
-                            aria-label={`Reorder ${preview}`}
-                            title="Drag to reorder. Use Up or Down arrow with the keyboard."
-                            onDragStart={(event) => {
-                              event.dataTransfer.effectAllowed = "move";
-                              event.dataTransfer.setData(
-                                "text/plain",
-                                scan.id,
-                              );
-                              setDraggedId(scan.id);
-                            }}
-                            onDragEnd={() => {
-                              setDraggedId(null);
-                              setDragOverId(null);
-                            }}
-                            onKeyDown={(event) => {
-                              if (
-                                event.key === "ArrowUp" ||
-                                event.key === "ArrowDown"
-                              ) {
-                                event.preventDefault();
-                                void reorder(
-                                  scan.id,
-                                  null,
-                                  event.key === "ArrowUp" ? "up" : "down",
-                                );
-                              }
+                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent disabled:opacity-40"
+                            aria-label={`Rename ${preview}`}
+                            onClick={() => {
+                              setMenuId(null);
+                              setEditingId(scan.id);
+                              setEditingPreview(preview);
                             }}
                           >
-                            <GripVertical className="h-3.5 w-3.5" />
-                          </Button>
-                        ) : null}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 focus:opacity-100"
-                          disabled={disabled || operating}
-                          aria-label={`Rename ${preview}`}
-                          onClick={() => {
-                            setEditingId(scan.id);
-                            setEditingPreview(preview);
-                          }}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 focus:opacity-100"
-                          disabled={
-                            disabled || operating || scan.status === "Running"
-                          }
-                          aria-label={`${scan.isArchived ? "Restore" : "Archive"} ${preview}`}
-                          onClick={() =>
-                            void archive(scan.id, !scan.isArchived)
-                          }
-                        >
-                          {scan.isArchived ? (
-                            <ArchiveRestore className="h-3.5 w-3.5" />
-                          ) : (
-                            <Archive className="h-3.5 w-3.5" />
-                          )}
-                        </Button>
-                      </div>
+                            <Pencil className="h-3.5 w-3.5" />
+                            Rename
+                          </button>
+                          <button
+                            type="button"
+                            disabled={
+                              disabled || operating || scan.status === "Running"
+                            }
+                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent disabled:opacity-40"
+                            aria-label={`${scan.isArchived ? "Restore" : "Archive"} ${preview}`}
+                            onClick={() => {
+                              setMenuId(null);
+                              void archive(scan.id, !scan.isArchived);
+                            }}
+                          >
+                            {scan.isArchived ? (
+                              <ArchiveRestore className="h-3.5 w-3.5" />
+                            ) : (
+                              <Archive className="h-3.5 w-3.5" />
+                            )}
+                            {scan.isArchived ? "Restore" : "Archive"}
+                          </button>
+                        </div>
+                      </details>
                     </div>
                   )}
                 </li>

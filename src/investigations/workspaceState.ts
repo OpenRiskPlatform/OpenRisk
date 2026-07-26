@@ -27,7 +27,6 @@ export type WorkspaceAction =
       summary: ScanSummaryRecord;
       detail: ScanDetailRecord;
       activate: boolean;
-      reveal: boolean;
     }
   | {
       type: "run-started";
@@ -135,11 +134,7 @@ export function workspaceReducer(
     case "draft-saved":
       return {
         ...state,
-        scans:
-          action.reveal ||
-          state.scans.some((scan) => scan.id === action.summary.id)
-            ? upsertScan(state.scans, action.summary)
-            : state.scans,
+        scans: upsertScan(state.scans, action.summary),
         ...(action.activate
           ? {
               view: "form" as const,
