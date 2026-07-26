@@ -30,11 +30,6 @@ function entityTitle(entity: PluginEntity) {
   return entity.$id || "Result";
 }
 
-interface IndexedEntity {
-  entity: PluginEntity;
-  index: number;
-}
-
 export function EntityBrowser({
   entities,
   advancedMode,

@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { ScanDetailRecord } from "@/core/backend/bindings";
 import { ScanResultView } from "@/results/ScanResultView";
@@ -98,7 +99,8 @@ describe("ScanResultView presentation modes", () => {
     expect(screen.getByText("technical log")).toBeInTheDocument();
   });
 
-  it("renders risk topics as compact summaries in normal mode", () => {
+  it("renders risk topics as compact summaries in normal mode", async () => {
+    const user = userEvent.setup();
     const detail: ScanDetailRecord = {
       ...completedScanDetail,
       results: [
@@ -133,6 +135,7 @@ describe("ScanResultView presentation modes", () => {
     };
 
     renderResult(detail, false);
+    await user.click(screen.getByRole("tab", { name: "Topic report" }));
 
     expect(screen.getByText("political_activity")).toBeInTheDocument();
     expect(screen.getByText("adverseActivityDetected")).toBeInTheDocument();
@@ -188,5 +191,41 @@ describe("ScanResultView presentation modes", () => {
       "aria-selected",
       "true",
     );
+  });
+
+  it("paginates large result sets instead of rendering every card", async () => {
+    const user = userEvent.setup();
+    const detail: ScanDetailRecord = {
+      ...completedScanDetail,
+      results: [
+        {
+          ...completedScanDetail.results[0],
+          output: {
+            ...completedScanDetail.results[0].output,
+            dataJson: JSON.stringify(
+              Array.from({ length: 25 }, (_, index) => ({
+                $entity: "entity.person",
+                $id: `demo:person-${index + 1}`,
+                $props: {
+                  name: [
+                    { $type: "string", value: `Result ${index + 1}` },
+                  ],
+                },
+              })),
+            ),
+          },
+        },
+      ],
+    };
+
+    renderResult(detail, false);
+
+    expect(screen.getByText("25 results")).toBeInTheDocument();
+    expect(screen.queryByText("Result 21")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getAllByText("Result 21").length).toBeGreaterThan(0);
+    expect(screen.getByText("Page 2 of 2")).toBeInTheDocument();
   });
 });

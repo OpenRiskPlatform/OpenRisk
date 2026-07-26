@@ -380,6 +380,16 @@ export function Workspace({
   const renameScan = async (scanId: string, preview: string) => {
     try {
       const summary = await client.updateScanPreview(scanId, preview);
+      const session = draftSession.current;
+      if (session.scanId === scanId && session.lastResult) {
+        session.lastResult = {
+          summary,
+          detail: {
+            ...session.lastResult.detail,
+            preview: summary.preview,
+          },
+        };
+      }
       dispatch({
         type: "scan-summary-updated",
         summary,
