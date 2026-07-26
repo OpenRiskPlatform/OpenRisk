@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import type { PluginRecord } from "@/core/backend/bindings";
 import type { OpenRiskClient } from "@/backend/OpenRiskClient";
 import { PluginField } from "@/shared/fields/PluginField";
+import { displayName } from "@/shared/humanizeIdentifier";
 import {
   toSettingValue,
   type InvestigationValues,
@@ -98,6 +99,7 @@ export function PluginSettingsForm({
       {plugin.settingDefs.map((definition) => {
         const fieldId = `setting-${plugin.id}-${definition.name}`;
         const isBoolean = definition.type.name === "boolean";
+        const fieldName = displayName(definition.title, definition.name);
         return (
           <div
             key={definition.name}
@@ -113,13 +115,13 @@ export function PluginSettingsForm({
                   (value !== null &&
                     value !== undefined &&
                     String(value).trim() !== "") ||
-                  `${definition.title} is required`,
+                  `${fieldName} is required`,
               }}
               render={({ field }) => (
                 <>
                   {isBoolean ? (
                     <div className="flex min-h-9 items-center justify-between gap-4">
-                      <Label htmlFor={fieldId}>{definition.title}</Label>
+                      <Label htmlFor={fieldId}>{fieldName}</Label>
                       <PluginField
                         id={fieldId}
                         type={definition.type}
@@ -132,7 +134,7 @@ export function PluginSettingsForm({
                   ) : (
                     <>
                       <Label htmlFor={fieldId}>
-                        {definition.title}
+                        {fieldName}
                         {definition.required ? (
                           <span className="ml-1 text-destructive">*</span>
                         ) : null}
@@ -143,7 +145,7 @@ export function PluginSettingsForm({
                         value={field.value}
                         secret={definition.secret}
                         disabled={readOnly || pending}
-                        placeholder={definition.title}
+                        placeholder={fieldName}
                         onChange={field.onChange}
                         onBlur={field.onBlur}
                       />

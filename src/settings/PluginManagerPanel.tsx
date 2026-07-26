@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { displayName } from "@/shared/humanizeIdentifier";
 import { pluginVersionAction } from "./pluginVersions";
 
 const REGISTRY_BASE =
@@ -195,45 +196,50 @@ export function PluginManagerPanel({
           </p>
         ) : (
           <ul className="border-t">
-            {settings.plugins.map((plugin) => (
-              <li
-                key={plugin.id}
-                className="grid gap-3 border-b py-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{plugin.name}</p>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {plugin.manifest.description || plugin.id}
-                  </p>
-                  <p className="mt-1 truncate text-xs text-muted-foreground">
-                    v{plugin.version}
-                    {plugin.status ? ` · ${plugin.status}` : ""}
-                  </p>
-                </div>
-                <Switch
-                  aria-label={`Enable ${plugin.name}`}
-                  checked={plugin.enabled}
-                  disabled={readOnly || pendingAction !== null}
-                  onCheckedChange={() =>
-                    void runAction(`toggle:${plugin.id}`, () =>
-                      client.setPluginEnabled(plugin.id, !plugin.enabled),
-                    )
-                  }
-                />
-                {plugin.enabled && onConfigurePlugin ? (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Configure ${plugin.name}`}
-                    onClick={() => onConfigurePlugin(plugin.id)}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                ) : (
-                  <span className="h-9 w-9" />
-                )}
-              </li>
-            ))}
+            {settings.plugins.map((plugin) => {
+              const pluginName = displayName(plugin.name, plugin.id);
+              return (
+                <li
+                  key={plugin.id}
+                  className="grid gap-3 border-b py-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">
+                      {pluginName}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {plugin.manifest.description || plugin.id}
+                    </p>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                      v{plugin.version}
+                      {plugin.status ? ` · ${plugin.status}` : ""}
+                    </p>
+                  </div>
+                  <Switch
+                    aria-label={`Enable ${pluginName}`}
+                    checked={plugin.enabled}
+                    disabled={readOnly || pendingAction !== null}
+                    onCheckedChange={() =>
+                      void runAction(`toggle:${plugin.id}`, () =>
+                        client.setPluginEnabled(plugin.id, !plugin.enabled),
+                      )
+                    }
+                  />
+                  {plugin.enabled && onConfigurePlugin ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Configure ${pluginName}`}
+                      onClick={() => onConfigurePlugin(plugin.id)}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <span className="h-9 w-9" />
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )
       ) : null}
@@ -262,6 +268,7 @@ export function PluginManagerPanel({
         ) : (
           <ul className="border-t">
             {registry.map((plugin) => {
+              const pluginName = displayName(plugin.name, plugin.id);
               const installed = settings.plugins.find(
                 (item) => item.id === plugin.id,
               );
@@ -286,7 +293,7 @@ export function PluginManagerPanel({
                   className="grid gap-3 border-b py-4 sm:grid-cols-[minmax(0,1fr)_10.5rem_auto] sm:items-center"
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-medium">{plugin.name}</p>
+                    <p className="text-sm font-medium">{pluginName}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {plugin.description}
                     </p>
@@ -322,7 +329,7 @@ export function PluginManagerPanel({
                       }))
                     }
                   >
-                    <SelectTrigger aria-label={`${plugin.name} version`}>
+                    <SelectTrigger aria-label={`${pluginName} version`}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

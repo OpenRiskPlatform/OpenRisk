@@ -24,8 +24,6 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   Archive,
   ArchiveRestore,
-  ArrowDown,
-  ArrowUp,
   Check,
   GripVertical,
   MoreHorizontal,
@@ -169,23 +167,6 @@ export function InvestigationHistory({
     }
   };
 
-  const reorder = async (scanId: string, direction: "up" | "down") => {
-    const currentIndex = activeScanIds.indexOf(scanId);
-    if (currentIndex < 0) {
-      return;
-    }
-
-    const nextIndex =
-      direction === "up" ? currentIndex - 1 : currentIndex + 1;
-    if (nextIndex < 0 || nextIndex >= activeScanIds.length) {
-      return;
-    }
-    await persistOrder(
-      scanId,
-      arrayMove(activeScanIds, currentIndex, nextIndex),
-    );
-  };
-
   const finishDrag = (event: DragEndEvent) => {
     const scanId = String(event.active.id);
     const targetId = event.over ? String(event.over.id) : null;
@@ -271,10 +252,6 @@ export function InvestigationHistory({
               const preview =
                 scan.preview?.trim() || `Investigation ${scan.id.slice(0, 8)}`;
               const operating = operatingId === scan.id;
-              const activeIndex = activeScanIds.indexOf(scan.id);
-              const canMoveUp = activeIndex > 0;
-              const canMoveDown =
-                activeIndex >= 0 && activeIndex < activeScanIds.length - 1;
               return (
                 <SortableHistoryItem
                   key={scan.id}
@@ -300,7 +277,7 @@ export function InvestigationHistory({
                         autoFocus
                         value={editingPreview}
                         disabled={operating}
-                        aria-label="Investigation name"
+                        aria-label="New investigation name"
                         className="h-8 min-w-0"
                         onChange={(event) =>
                           setEditingPreview(event.target.value)
@@ -406,39 +383,6 @@ export function InvestigationHistory({
                           <MoreHorizontal className="h-4 w-4" />
                         </summary>
                         <div className="absolute right-2 top-10 z-20 w-40 rounded-md border bg-popover p-1 shadow-md">
-                          {!scan.isArchived ? (
-                            <>
-                              <button
-                                type="button"
-                                disabled={disabled || operating || !canMoveUp}
-                                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent disabled:opacity-40"
-                                aria-label={`Move ${preview} up`}
-                                onClick={() => {
-                                  setMenuId(null);
-                                  void reorder(scan.id, "up");
-                                }}
-                              >
-                                <ArrowUp className="h-3.5 w-3.5" />
-                                Move up
-                              </button>
-                              <button
-                                type="button"
-                                disabled={
-                                  disabled || operating || !canMoveDown
-                                }
-                                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent disabled:opacity-40"
-                                aria-label={`Move ${preview} down`}
-                                onClick={() => {
-                                  setMenuId(null);
-                                  void reorder(scan.id, "down");
-                                }}
-                              >
-                                <ArrowDown className="h-3.5 w-3.5" />
-                                Move down
-                              </button>
-                              <div className="my-1 border-t" />
-                            </>
-                          ) : null}
                           <button
                             type="button"
                             disabled={disabled || operating}

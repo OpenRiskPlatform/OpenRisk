@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PluginSettingsForm } from "@/plugins/PluginSettingsForm";
+import { displayName } from "@/shared/humanizeIdentifier";
 import { GeneralSettingsPanel } from "./GeneralSettingsPanel";
 import { PluginManagerPanel } from "./PluginManagerPanel";
 import { SecuritySettingsPanel } from "./SecuritySettingsPanel";
@@ -64,7 +65,9 @@ export function SettingsDialog({
     ) : plugin ? (
       <div className="mx-auto w-full max-w-2xl space-y-6">
         <header>
-          <h2 className="text-xl font-semibold">{plugin.name}</h2>
+          <h2 className="text-xl font-semibold">
+            {displayName(plugin.name, plugin.id)}
+          </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Plugin options are written only after Save settings.
           </p>

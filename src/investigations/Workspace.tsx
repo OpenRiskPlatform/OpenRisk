@@ -26,6 +26,7 @@ import { OpenRiskLogo } from "@/components/ui/OpenRiskLogo";
 import { ScanResultView } from "@/results/ScanResultView";
 import { applyTheme } from "@/app/theme";
 import { SettingsDialog } from "@/settings/SettingsDialog";
+import { displayName } from "@/shared/humanizeIdentifier";
 import { InvestigationForm } from "./InvestigationForm";
 import { InvestigationHistory } from "./InvestigationHistory";
 import {
@@ -41,12 +42,14 @@ interface WorkspaceProps {
 }
 
 interface DraftSnapshot {
+  preview: string;
   selectedPlugins: PluginEntrypointSelection[];
   inputs: ScanEntrypointInput[];
 }
 
 interface DraftSession {
   scanId: string | null;
+  savedPreview: string | null;
   queue: Promise<void>;
   lastHash: string | null;
   lastResult: PersistedDraft | null;
@@ -67,6 +70,10 @@ function draftHash(snapshot: DraftSnapshot) {
   return JSON.stringify(snapshot);
 }
 
+function normalizedPreview(preview: string | null | undefined) {
+  return preview?.trim() || "Untitled";
+}
+
 export function Workspace({
   client,
   initialSettings,
@@ -82,6 +89,7 @@ export function Workspace({
   const [closing, setClosing] = useState(false);
   const draftSession = useRef<DraftSession>({
     scanId: null,
+    savedPreview: null,
     queue: Promise.resolve(),
     lastHash: null,
     lastResult: null,
@@ -95,7 +103,10 @@ export function Workspace({
   const pluginNameById = useMemo(
     () =>
       Object.fromEntries(
-        state.settings.plugins.map((plugin) => [plugin.id, plugin.name]),
+        state.settings.plugins.map((plugin) => [
+          plugin.id,
+          displayName(plugin.name, plugin.id),
+        ]),
       ),
     [state.settings.plugins],
   );
@@ -106,7 +117,7 @@ export function Workspace({
         state.settings.plugins.flatMap((plugin) =>
           plugin.entrypoints.map((entrypoint) => [
             `${plugin.id}::${entrypoint.id}`,
-            entrypoint.name,
+            displayName(entrypoint.name, entrypoint.id),
           ]),
         ),
       ),
@@ -119,7 +130,7 @@ export function Workspace({
         state.settings.plugins.flatMap((plugin) =>
           plugin.inputDefs.map((input) => [
             `${plugin.id}::${input.entrypointId}::${input.name}`,
-            input.title,
+            displayName(input.title, input.name),
           ]),
         ),
       ),
@@ -152,16 +163,35 @@ export function Workspace({
             return session.lastResult;
           }
 
+          const requestedPreview = normalizedPreview(snapshot.preview);
+          let previewSummary: ScanSummaryRecord | null = null;
+
           if (!session.scanId) {
-            const created = await client.createScan(null);
+            const created = await client.createScan(
+              snapshot.preview.trim() || null,
+            );
             session.scanId = created.id;
+            session.savedPreview = normalizedPreview(created.preview);
+            previewSummary = created;
           }
 
-          const summary = await client.updateScanDraft(
+          if (session.savedPreview !== requestedPreview) {
+            previewSummary = await client.updateScanPreview(
+              session.scanId,
+              requestedPreview,
+            );
+            session.savedPreview = normalizedPreview(previewSummary.preview);
+          }
+
+          const draftSummary = await client.updateScanDraft(
             session.scanId,
             snapshot.selectedPlugins,
             snapshot.inputs,
           );
+          const summary = previewSummary
+            ? { ...draftSummary, preview: previewSummary.preview }
+            : draftSummary;
+          session.savedPreview = normalizedPreview(summary.preview);
           const detail: ScanDetailRecord = {
             id: summary.id,
             status: "Draft",
@@ -221,6 +251,7 @@ export function Workspace({
 
   const scheduleDraftSave = useCallback(
     (
+      preview: string,
       selectedPlugins: PluginEntrypointSelection[],
       inputs: ScanEntrypointInput[],
     ) => {
@@ -230,7 +261,7 @@ export function Workspace({
 
       const pending = {
         session: formSession,
-        snapshot: { selectedPlugins, inputs },
+        snapshot: { preview, selectedPlugins, inputs },
       };
       pendingDraft.current = pending;
       draftSaveTimer.current = setTimeout(() => {
@@ -270,6 +301,7 @@ export function Workspace({
     const request = ++navigationRequest.current;
     const session: DraftSession = {
       scanId: null,
+      savedPreview: null,
       queue: Promise.resolve(),
       lastHash: null,
       lastResult: null,
@@ -285,6 +317,7 @@ export function Workspace({
       }
       if (detail.status === "Draft") {
         session.scanId = detail.id;
+        session.savedPreview = normalizedPreview(detail.preview);
       }
       dispatch({ type: "scan-loaded", detail });
     } catch (error) {
@@ -295,6 +328,7 @@ export function Workspace({
   };
 
   const runInvestigation = async (
+    preview: string,
     selectedPlugins: PluginEntrypointSelection[],
     inputs: ScanEntrypointInput[],
   ) => {
@@ -311,6 +345,7 @@ export function Workspace({
       }
       dispatch({ type: "draft-save-started" });
       const saved = await persistDraft(session, {
+        preview,
         selectedPlugins,
         inputs,
       });
@@ -360,6 +395,7 @@ export function Workspace({
     ++navigationRequest.current;
     draftSession.current = {
       scanId: null,
+      savedPreview: null,
       queue: Promise.resolve(),
       lastHash: null,
       lastResult: null,
@@ -372,6 +408,9 @@ export function Workspace({
     try {
       const summary = await client.updateScanPreview(scanId, preview);
       const session = draftSession.current;
+      if (session.scanId === scanId) {
+        session.savedPreview = normalizedPreview(summary.preview);
+      }
       if (session.scanId === scanId && session.lastResult) {
         session.lastResult = {
           summary,

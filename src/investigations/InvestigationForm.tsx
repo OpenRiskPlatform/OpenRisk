@@ -3,6 +3,7 @@ import { Controller, useForm, useWatch } from "react-hook-form";
 import { Play, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -20,6 +21,7 @@ import type {
   SettingValue,
 } from "@/core/backend/bindings";
 import { PluginField } from "@/shared/fields/PluginField";
+import { displayName } from "@/shared/humanizeIdentifier";
 import {
   buildScanInputs,
   type InvestigationValues,
@@ -32,10 +34,12 @@ interface InvestigationFormProps {
   running: boolean;
   error: string | null;
   onDraftChange: (
+    preview: string,
     selectedPlugins: PluginEntrypointSelection[],
     inputs: ScanEntrypointInput[],
   ) => void;
   onRun: (
+    preview: string,
     selectedPlugins: PluginEntrypointSelection[],
     inputs: ScanEntrypointInput[],
   ) => Promise<void>;
@@ -82,10 +86,14 @@ export function InvestigationForm({
   onDraftChange,
   onRun,
 }: InvestigationFormProps) {
+  const [investigationName, setInvestigationName] = useState(
+    () => draft?.preview ?? "",
+  );
   const [pluginId, setPluginId] = useState(() => initialPluginId(draft));
   const [entrypointIds, setEntrypointIds] = useState(() =>
     initialEntrypointIds(draft),
   );
+  const loadedDraftId = useRef(draft?.id ?? null);
   const firstAutosave = useRef(true);
   const onDraftChangeRef = useRef(onDraftChange);
   const {
@@ -104,6 +112,12 @@ export function InvestigationForm({
   useEffect(() => {
     onDraftChangeRef.current = onDraftChange;
   }, [onDraftChange]);
+
+  useEffect(() => {
+    if (loadedDraftId.current && draft?.id === loadedDraftId.current) {
+      setInvestigationName(draft.preview ?? "");
+    }
+  }, [draft?.id, draft?.preview]);
 
   const plugin = plugins.find((item) => item.id === pluginId) ?? null;
 
@@ -135,20 +149,36 @@ export function InvestigationForm({
       return;
     }
 
-    if (!plugin || entrypointIds.length === 0 || formLocked) {
+    if (
+      formLocked ||
+      (!investigationName.trim() &&
+        (!plugin || entrypointIds.length === 0))
+    ) {
       return;
     }
 
     const values = JSON.parse(valuesSnapshot) as InvestigationValues;
-    const selectedPlugins = entrypointIds.map((entrypointId) => ({
-      pluginId: plugin.id,
-      entrypointId,
-    }));
+    const selectedPlugins =
+      plugin && entrypointIds.length > 0
+        ? entrypointIds.map((entrypointId) => ({
+            pluginId: plugin.id,
+            entrypointId,
+          }))
+        : [];
     onDraftChangeRef.current(
+      investigationName,
       selectedPlugins,
-      buildScanInputs(plugin, entrypointIds, values),
+      plugin
+        ? buildScanInputs(plugin, entrypointIds, values)
+        : [],
     );
-  }, [entrypointIds, formLocked, plugin, valuesSnapshot]);
+  }, [
+    entrypointIds,
+    formLocked,
+    investigationName,
+    plugin,
+    valuesSnapshot,
+  ]);
 
   const selectPlugin = (nextPluginId: string) => {
     setPluginId(nextPluginId);
@@ -189,6 +219,7 @@ export function InvestigationForm({
     }));
 
     await onRun(
+      investigationName,
       selectedPlugins,
       buildScanInputs(plugin, entrypointIds, values),
     );
@@ -215,6 +246,20 @@ export function InvestigationForm({
         ) : null}
       </header>
 
+      <div className="space-y-2 border-t pt-6">
+        <Label htmlFor="investigation-name">Investigation name</Label>
+        <Input
+          id="investigation-name"
+          value={investigationName}
+          disabled={formLocked}
+          placeholder="Untitled"
+          onChange={(event) => setInvestigationName(event.target.value)}
+        />
+        <p className="text-xs text-muted-foreground">
+          This name is set only by you and does not change with search inputs.
+        </p>
+      </div>
+
       {plugins.length === 0 ? (
         <p className="border-t py-10 text-center text-sm text-muted-foreground">
           No enabled plugins. Open Settings to install or enable one.
@@ -234,7 +279,7 @@ export function InvestigationForm({
               <SelectContent>
                 {plugins.map((item) => (
                   <SelectItem key={item.id} value={item.id}>
-                    {item.name}
+                    {displayName(item.name, item.id)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -250,7 +295,7 @@ export function InvestigationForm({
               <p className="text-xs text-muted-foreground">
                 {plugin.metricValues.map((metric) => (
                   <span key={metric.name} className="mr-4">
-                    {metric.title}:{" "}
+                    {displayName(metric.title, metric.name)}:{" "}
                     {metric.value.type === "null"
                       ? "—"
                       : String(metric.value.value)}
@@ -266,6 +311,10 @@ export function InvestigationForm({
               <div>
                 {plugin.entrypoints.map((entrypoint) => {
                   const checked = entrypointIds.includes(entrypoint.id);
+                  const entrypointName = displayName(
+                    entrypoint.name,
+                    entrypoint.id,
+                  );
                   return (
                     <label
                       key={entrypoint.id}
@@ -280,7 +329,7 @@ export function InvestigationForm({
                       />
                       <span>
                         <span className="block text-sm font-medium">
-                          {entrypoint.name}
+                          {entrypointName}
                         </span>
                         {entrypoint.description ? (
                           <span className="mt-0.5 block text-xs text-muted-foreground">
@@ -302,6 +351,10 @@ export function InvestigationForm({
                 {inputDefinitions.map((definition) => {
                   const fieldId = `input-${definition.name}`;
                   const isBoolean = definition.type.name === "boolean";
+                  const fieldName = displayName(
+                    definition.title,
+                    definition.name,
+                  );
                   return (
                     <div
                       key={definition.name}
@@ -317,14 +370,14 @@ export function InvestigationForm({
                             (value !== null &&
                               value !== undefined &&
                               String(value).trim() !== "") ||
-                            `${definition.title} is required`,
+                            `${fieldName} is required`,
                         }}
                         render={({ field }) => (
                           <>
                             {isBoolean ? (
                               <div className="flex min-h-9 items-center justify-between gap-4">
                                 <Label htmlFor={fieldId}>
-                                  {definition.title}
+                                  {fieldName}
                                 </Label>
                                 <PluginField
                                   id={fieldId}
@@ -338,7 +391,7 @@ export function InvestigationForm({
                             ) : (
                               <>
                                 <Label htmlFor={fieldId}>
-                                  {definition.title}
+                                  {fieldName}
                                   {!definition.optional ? (
                                     <span className="ml-1 text-destructive">
                                       *
@@ -350,7 +403,7 @@ export function InvestigationForm({
                                   type={definition.type}
                                   value={field.value}
                                   disabled={formLocked}
-                                  placeholder={definition.title}
+                                  placeholder={fieldName}
                                   onChange={field.onChange}
                                   onBlur={field.onBlur}
                                 />

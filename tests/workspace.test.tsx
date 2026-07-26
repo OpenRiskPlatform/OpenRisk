@@ -70,6 +70,73 @@ describe("Workspace investigation flow", () => {
     });
   });
 
+  it("saves a manually chosen name when a new investigation is created", async () => {
+    const user = userEvent.setup();
+    let currentSummary = draftScan;
+    const createScan = vi.fn(async (preview: string | null) => {
+      currentSummary = {
+        ...draftScan,
+        preview: preview ?? "Untitled",
+      };
+      return currentSummary;
+    });
+    const updateScanPreview = vi.fn(async (_scanId: string, preview: string) => {
+      currentSummary = { ...currentSummary, preview };
+      return currentSummary;
+    });
+    const updateScanDraft = vi.fn(async () => currentSummary);
+    const client = createClient({
+      createScan,
+      updateScanPreview,
+      updateScanDraft,
+    });
+
+    render(
+      <Workspace
+        client={client}
+        initialSettings={projectSettings}
+        initialScans={[]}
+        onCloseProject={async () => undefined}
+      />,
+    );
+
+    const investigationName = screen.getByLabelText("Investigation name");
+    await user.type(investigationName, "Vendor review");
+
+    await waitFor(() => {
+      expect(createScan).toHaveBeenCalledWith("Vendor review");
+      expect(updateScanDraft).toHaveBeenCalledWith(draftScan.id, [], []);
+    });
+    expect(screen.getByText("Vendor review")).toBeInTheDocument();
+
+    await user.clear(investigationName);
+    await user.type(investigationName, "Manual case name");
+    await waitFor(() =>
+      expect(updateScanPreview).toHaveBeenCalledWith(
+        draftScan.id,
+        "Manual case name",
+      ),
+    );
+
+    await user.click(screen.getByLabelText("Plugin"));
+    await user.click(screen.getByRole("option", { name: "Demo Registry" }));
+    await user.click(screen.getByRole("checkbox"));
+    await user.type(
+      await screen.findByLabelText(/^Name/),
+      "Different target",
+    );
+    await waitFor(() =>
+      expect(updateScanDraft).toHaveBeenLastCalledWith(
+        draftScan.id,
+        [{ pluginId: "demo", entrypointId: "person-search" }],
+        expect.any(Array),
+      ),
+    );
+
+    expect(screen.getByText("Manual case name")).toBeInTheDocument();
+    expect(updateScanPreview).toHaveBeenCalledTimes(1);
+  });
+
   it("loads a history result only after the user selects it", async () => {
     const user = userEvent.setup();
     const client = createClient({
@@ -201,7 +268,7 @@ describe("Workspace investigation flow", () => {
       screen.getByLabelText("Actions for Untitled"),
     );
     await user.click(screen.getByRole("button", { name: "Rename Untitled" }));
-    const nameInput = screen.getByLabelText("Investigation name");
+    const nameInput = screen.getByLabelText("New investigation name");
     await user.clear(nameInput);
     await user.type(nameInput, "Manual case name");
     await user.click(screen.getByRole("button", { name: "Save name" }));
@@ -238,7 +305,7 @@ describe("Workspace investigation flow", () => {
 
     await user.click(screen.getByLabelText("Actions for Ada Lovelace"));
     await user.click(screen.getByRole("button", { name: "Rename Ada Lovelace" }));
-    const nameInput = screen.getByLabelText("Investigation name");
+    const nameInput = screen.getByLabelText("New investigation name");
     await user.clear(nameInput);
     await user.type(nameInput, "Renamed case");
     await user.click(screen.getByRole("button", { name: "Save name" }));
@@ -311,53 +378,6 @@ describe("Workspace investigation flow", () => {
     expect(
       vi.mocked(client.updateScanDraft).mock.invocationCallOrder[0],
     ).toBeLessThan(onCloseProject.mock.invocationCallOrder[0]);
-  });
-
-  it("persists scan reordering from the actions menu", async () => {
-    const user = userEvent.setup();
-    const secondScan = {
-      ...completedScan,
-      id: "scan-2",
-      preview: "Second case",
-      sortOrder: 1,
-    };
-    const archivedScan = {
-      ...completedScan,
-      id: "scan-archived",
-      preview: "Archived case",
-      isArchived: true,
-      sortOrder: 2,
-    };
-    const reordered = [
-      { ...secondScan, sortOrder: 0 },
-      { ...completedScan, sortOrder: 1 },
-      archivedScan,
-    ];
-    const client = createClient({
-      reorderScans: vi.fn(async () => reordered),
-    });
-
-    render(
-      <Workspace
-        client={client}
-        initialSettings={projectSettings}
-        initialScans={[completedScan, secondScan, archivedScan]}
-        onCloseProject={async () => undefined}
-      />,
-    );
-
-    await user.click(screen.getByLabelText("Actions for Ada Lovelace"));
-    await user.click(
-      screen.getByRole("button", { name: "Move Ada Lovelace down" }),
-    );
-
-    await waitFor(() =>
-      expect(client.reorderScans).toHaveBeenCalledWith([
-        secondScan.id,
-        completedScan.id,
-        archivedScan.id,
-      ]),
-    );
   });
 
   it("persists scan reordering after pointer drag and drop", async () => {

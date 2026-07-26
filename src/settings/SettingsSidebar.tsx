@@ -1,6 +1,7 @@
 import { LockKeyhole, PackagePlus, Settings } from "lucide-react";
 import type { PluginRecord } from "@/core/backend/bindings";
 import { cn } from "@/lib/utils";
+import { displayName } from "@/shared/humanizeIdentifier";
 
 export type SettingsCategory =
   | "general"
@@ -81,7 +82,9 @@ export function SettingsSidebar({
                       : "text-muted-foreground hover:bg-accent/70 hover:text-foreground",
                   )}
                 >
-                  <span className="truncate">{plugin.name}</span>
+                  <span className="truncate">
+                    {displayName(plugin.name, plugin.id)}
+                  </span>
                 </button>
               ))
             )}

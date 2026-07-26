@@ -9,6 +9,7 @@ import type {
 import { EntityCard } from "./EntityCard";
 import { ResultBoundary } from "./ResultBoundary";
 import { formatDate } from "@/shared/formatDate";
+import { humanizeIdentifier } from "@/shared/humanizeIdentifier";
 import { RiskTopicSummary } from "./RiskTopicSummary";
 import {
   parsePluginData,
@@ -246,9 +247,10 @@ export function ScanResultView({
   const [activePluginId = "", activeEntrypointId = ""] =
     activeKey.split("::");
   const activePluginName =
-    pluginNameById[activePluginId] ?? activePluginId;
+    pluginNameById[activePluginId] ?? humanizeIdentifier(activePluginId);
   const activeEntrypointName =
-    entrypointNameByKey[activeKey] ?? activeEntrypointId;
+    entrypointNameByKey[activeKey] ??
+    humanizeIdentifier(activeEntrypointId);
   return (
     <div className="mx-auto w-full max-w-4xl">
       <header className="pb-7">
@@ -270,36 +272,36 @@ export function ScanResultView({
         <section className="border-t py-6">
           <h2 className="mb-3 text-sm font-semibold">Search details</h2>
           <dl>
-              {visibleInputs.map((input, index) => (
-                <div
-                  key={`${input.pluginId}:${input.entrypointId}:${input.fieldName}:${index}`}
-                  className="grid gap-1 border-b border-border/70 py-2.5 last:border-b-0 sm:grid-cols-[11rem_minmax(0,1fr)]"
+            {visibleInputs.map((input, index) => (
+              <div
+                key={`${input.pluginId}:${input.entrypointId}:${input.fieldName}:${index}`}
+                className="grid gap-1 border-b border-border/70 py-2.5 last:border-b-0 sm:grid-cols-[11rem_minmax(0,1fr)]"
+              >
+                <dt
+                  className={
+                    advancedMode
+                      ? "break-all font-mono text-xs text-muted-foreground"
+                      : "break-words text-sm text-muted-foreground"
+                  }
                 >
-                  <dt
-                    className={
-                      advancedMode
-                        ? "break-all font-mono text-xs text-muted-foreground"
-                        : "break-words text-sm text-muted-foreground"
-                    }
-                  >
-                    {advancedMode
-                      ? input.fieldName
-                      : (inputNameByKey[
+                  {advancedMode
+                    ? input.fieldName
+                    : (inputNameByKey[
                           `${input.pluginId}::${input.entrypointId}::${input.fieldName}`
-                        ] ?? input.fieldName)}
-                    {advancedMode ? (
-                      <span className="mt-1 block text-[10px]">
-                        {input.pluginId} / {input.entrypointId}
-                      </span>
-                    ) : null}
-                  </dt>
-                  <dd className="break-words text-sm">
-                    {input.value.type === "null"
-                      ? "null"
-                      : String(input.value.value)}
-                  </dd>
-                </div>
-              ))}
+                      ] ?? humanizeIdentifier(input.fieldName))}
+                  {advancedMode ? (
+                    <span className="mt-1 block text-[10px]">
+                      {input.pluginId} / {input.entrypointId}
+                    </span>
+                  ) : null}
+                </dt>
+                <dd className="break-words text-sm">
+                  {input.value.type === "null"
+                    ? "null"
+                    : String(input.value.value)}
+                </dd>
+              </div>
+            ))}
           </dl>
         </section>
       ) : null}
@@ -330,8 +332,11 @@ export function ScanResultView({
                 ({ result }) =>
                   resultKey(result.pluginId, result.entrypointId) === key,
               );
-              const label = entrypointNameByKey[key] ?? entrypointId;
-              const pluginName = pluginNameById[pluginId] ?? pluginId;
+              const label =
+                entrypointNameByKey[key] ??
+                humanizeIdentifier(entrypointId);
+              const pluginName =
+                pluginNameById[pluginId] ?? humanizeIdentifier(pluginId);
               const count = resultItemCount(results);
               const failed = results.some(({ result }) => !result.output.ok);
 
