@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "preview": "vite preview",
     "tauri": "tauri",
+    "version:app": "npm version --no-git-tag-version",
     "precommit:backend": "node scripts/precommit-backend.mjs",
     "udeps:backend": "node scripts/udeps-backend.mjs",
     "prepare": "husky"

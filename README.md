@@ -12,6 +12,30 @@ Rust is pinned via `rust-toolchain.toml`, so if you use `rustup`, the correct co
 
 `src-tauri/Cargo.toml` also sets `rust-version = "1.94"` so Cargo fails early with a clear error when using an older compiler.
 
+## App version
+
+The application version has one source of truth: the root `package.json`.
+Tauri reads it through `src-tauri/tauri.conf.json`, so bundles and GitHub
+releases use the same value.
+
+Set an exact version:
+
+```bash
+npm run version:app -- 0.2.0
+```
+
+Or increment it using SemVer:
+
+```bash
+npm run version:app -- patch
+npm run version:app -- minor
+npm run version:app -- major
+```
+
+The command updates both `package.json` and `package-lock.json` without creating
+a Git commit or tag. The version in `src-tauri/Cargo.toml` is the internal Rust
+crate version and does not control the packaged application version.
+
 ## Backend quality checks (Rust only)
 
 A backend-only CI workflow is defined in `.github/workflows/backend-rust-checks.yml` under workflow name `Backend` and runs as named jobs:
