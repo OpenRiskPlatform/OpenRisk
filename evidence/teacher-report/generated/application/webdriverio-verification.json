@@ -1,0 +1,31 @@
+{
+  "testedBinary": "src-tauri/target-wdio/debug/openrisk",
+  "browser": "WebKitGTK 605.1.15",
+  "project": "/tmp/openrisk-wdio-verification.orproj",
+  "pluginFixture": "evidence/fixtures/verification-plugin",
+  "realBackendCommands": [
+    "create_project",
+    "update_project_settings",
+    "upsert_project_plugin_from_dir",
+    "set_plugin_enabled",
+    "set_plugin_setting",
+    "create_scan",
+    "run_scan",
+    "close_project"
+  ],
+  "documentScroll": {
+    "scrollY": 0,
+    "innerHeight": 588,
+    "contentClientHeight": 523,
+    "documentScrollHeight": 588,
+    "bodyScrollHeight": 588,
+    "contentScrollHeight": 1866
+  },
+  "checks": {
+    "actualTauriWebView": true,
+    "actualRustBackend": true,
+    "actualPluginRuntime": true,
+    "pepRcaBadgeVisible": true,
+    "documentScrollContained": true
+  }
+}

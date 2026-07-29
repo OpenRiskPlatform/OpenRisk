@@ -74,6 +74,13 @@ pub fn run() {
         tauri_builder = tauri_builder.plugin(tauri_plugin_mcp_bridge::init());
     }
 
+    #[cfg(feature = "wdio-evidence")]
+    {
+        tauri_builder = tauri_builder
+            .plugin(tauri_plugin_wdio::init())
+            .plugin(tauri_plugin_wdio_webdriver::init());
+    }
+
     tauri_builder
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

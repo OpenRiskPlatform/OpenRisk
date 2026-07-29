@@ -1,0 +1,133 @@
+{
+  "id": "verification-plugin",
+  "version": "1.0.0",
+  "name": "Verification Plugin",
+  "description": "Deterministic local plugin used only for application evidence.",
+  "authors": [
+    {
+      "name": "OpenRiskPlatform"
+    }
+  ],
+  "license": "MIT",
+  "main": "index.ts",
+  "entrypoints": [
+    {
+      "id": "pep-rca",
+      "name": "PEP & Sanctions",
+      "description": "Returns a deterministic PEP RCA record.",
+      "function": "pepRca",
+      "inputs": [
+        {
+          "name": "target",
+          "type": "string",
+          "optional": false,
+          "title": "Target Name",
+          "description": "Person name used for verification."
+        }
+      ]
+    },
+    {
+      "id": "country-screening",
+      "name": "Country Screening",
+      "description": "Exercises the ISO country input.",
+      "function": "emptyResult",
+      "inputs": [
+        {
+          "name": "target",
+          "type": "string",
+          "optional": false,
+          "title": "Target Name",
+          "description": "Person name used for verification."
+        },
+        {
+          "name": "country",
+          "type": {
+            "name": "country-code-iso-3166-1-alpha-2",
+            "values": [
+              "US",
+              "AU",
+              "NZ",
+              "GB",
+              "DE",
+              "CZ",
+              "SK",
+              "IT",
+              "AT",
+              "BE",
+              "BG",
+              "HR",
+              "CY",
+              "DK",
+              "EE",
+              "FI",
+              "FR",
+              "GR",
+              "HU",
+              "IE",
+              "LV",
+              "LT",
+              "LU",
+              "MT",
+              "NL",
+              "PL",
+              "PT",
+              "RO",
+              "SI",
+              "ES",
+              "SE"
+            ]
+          },
+          "optional": true,
+          "title": "Country",
+          "description": "Country used for the verification search."
+        }
+      ]
+    },
+    {
+      "id": "topic-report",
+      "name": "Topic Report",
+      "description": "Additional entrypoint for overflow verification.",
+      "function": "emptyResult",
+      "inputs": []
+    },
+    {
+      "id": "social-media",
+      "name": "Social Media",
+      "description": "Additional entrypoint for overflow verification.",
+      "function": "emptyResult",
+      "inputs": []
+    },
+    {
+      "id": "unit-analysis",
+      "name": "Unit Analysis",
+      "description": "Additional entrypoint for overflow verification.",
+      "function": "emptyResult",
+      "inputs": []
+    },
+    {
+      "id": "rpo",
+      "name": "RPO",
+      "description": "Additional entrypoint for overflow verification.",
+      "function": "emptyResult",
+      "inputs": []
+    },
+    {
+      "id": "entity-recognition",
+      "name": "Entity Recognition",
+      "description": "Additional entrypoint for overflow verification.",
+      "function": "emptyResult",
+      "inputs": []
+    }
+  ],
+  "settings": [
+    {
+      "name": "api_token",
+      "type": "string",
+      "title": "API Token",
+      "description": "Deterministic secret used to verify masked settings.",
+      "secret": true,
+      "required": true,
+      "default": null
+    }
+  ]
+}

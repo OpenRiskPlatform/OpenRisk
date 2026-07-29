@@ -1,0 +1,52 @@
+{
+  "app": {
+    "security": {
+      "capabilities": [
+        {
+          "identifier": "wdio-evidence",
+          "description": "Test-only capability for WebdriverIO evidence collection",
+          "windows": ["main"],
+          "permissions": [
+            "shell:allow-open",
+            "core:default",
+            "dialog:default",
+            "fs:default",
+            "fs:write-files",
+            "opener:default",
+            {
+              "identifier": "opener:allow-open-path",
+              "allow": [
+                { "path": "**" },
+                { "path": "$APPDATA/**" },
+                { "path": "$APPCONFIG/**" },
+                { "path": "$APPLOCALDATA/**" },
+                { "path": "$HOME/**" },
+                { "path": "$TEMP/**" },
+                { "path": "/Users/**" },
+                { "path": "/tmp/**" },
+                { "path": "/var/**" }
+              ]
+            },
+            {
+              "identifier": "fs:scope",
+              "allow": [
+                { "path": "$HOME/**" },
+                { "path": "$DESKTOP/**" },
+                { "path": "$DOCUMENT/**" },
+                { "path": "$DOWNLOAD/**" },
+                { "path": "$PUBLIC/**" },
+                { "path": "$TEMP/**" }
+              ]
+            },
+            "mcp-bridge:default",
+            "store:allow-load",
+            "store:allow-set",
+            "store:default",
+            "wdio:default",
+            "wdio-webdriver:default"
+          ]
+        }
+      ]
+    }
+  }
+}
