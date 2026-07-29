@@ -69,7 +69,6 @@
   id,
   title,
   finding,
-  commit,
   before,
   after,
   before-note,
@@ -84,7 +83,7 @@
       #v(1mm)
       #heading(level: 1)[#title]
     ],
-    [#pill("VERIFIED")],
+    [#pill("REPORTED CONDITION", tone: "amber")],
   )
   #block(
     width: 100%,
@@ -93,47 +92,59 @@
     radius: 4pt,
     inset: 9pt,
   )[
-    #text(weight: "bold", fill: blue)[Finding]  #finding
-    #h(6mm)
-    #text(size: 8pt, fill: gray)[Change #commit]
+    #text(weight: "bold", fill: blue)[Outcome]  #finding
   ]
-  #v(5mm)
+  #v(3mm)
+  #text(size: 9pt, weight: "bold", fill: red)[BEFORE]
+  #v(1.5mm)
+  #block(
+    width: 100%,
+    height: 116mm,
+    fill: white,
+    stroke: 0.7pt + rule,
+    radius: 3pt,
+    inset: 3pt,
+  )[
+    #align(center + horizon)[#image(before, width: 100%, height: 110mm, fit: "contain")]
+  ]
+  #v(2mm)
+  #text(size: 8.5pt, fill: gray)[#before-note]
+
+  #pagebreak()
   #grid(
-    columns: (1fr, 1fr),
-    gutter: 8mm,
+    columns: (1fr, auto),
+    align: horizon,
     [
-      #text(size: 8pt, weight: "bold", fill: red)[BEFORE / 6a7f581]
-      #v(2mm)
-      #block(
-        width: 100%,
-        height: 109mm,
-        fill: white,
-        stroke: 0.7pt + rule,
-        radius: 3pt,
-        inset: 3pt,
-      )[
-        #align(center + horizon)[#image(before, width: 100%, height: 102mm, fit: "contain")]
-      ]
-      #v(2mm)
-      #text(size: 8pt, fill: gray)[#before-note]
+      #text(size: 8pt, weight: "bold", fill: blue)[#id]
+      #v(1mm)
+      #heading(level: 1)[#title]
     ],
-    [
-      #text(size: 8pt, weight: "bold", fill: green)[AFTER / e824ad8]
-      #v(2mm)
-      #block(
-        width: 100%,
-        height: 109mm,
-        fill: white,
-        stroke: 0.7pt + rule,
-        radius: 3pt,
-        inset: 3pt,
-      )[
-        #align(center + horizon)[#image(after, width: 100%, height: 102mm, fit: "contain")]
-      ]
-      #v(2mm)
-      #text(size: 8pt, fill: gray)[#after-note]
-    ],
+    [#pill("VERIFIED")],
   )
+  #block(
+    width: 100%,
+    fill: green-soft,
+    stroke: 0.5pt + rgb("#ABEFC6"),
+    radius: 4pt,
+    inset: 9pt,
+  )[
+    #text(weight: "bold", fill: green)[Outcome]  #finding
+  ]
+  #v(3mm)
+  #text(size: 9pt, weight: "bold", fill: green)[AFTER]
+  #v(1.5mm)
+  #block(
+    width: 100%,
+    height: 116mm,
+    fill: white,
+    stroke: 0.7pt + rule,
+    radius: 3pt,
+    inset: 3pt,
+  )[
+    #align(center + horizon)[#image(after, width: 100%, height: 110mm, fit: "contain")]
+  ]
+  #v(2mm)
+  #text(size: 8.5pt, fill: gray)[#after-note]
 ]
 
 #let application-page(id, title, image-path, finding) = [
@@ -146,7 +157,7 @@
       #v(1mm)
       #heading(level: 1)[#title]
     ],
-    [#pill("REAL APPLICATION", tone: "blue")],
+    [#pill("DESKTOP VERIFIED", tone: "blue")],
   )
   #block(
     width: 100%,
@@ -155,7 +166,7 @@
     radius: 4pt,
     inset: 9pt,
   )[
-    #text(weight: "bold", fill: green)[Runtime finding]  #finding
+    #text(weight: "bold", fill: green)[Verified outcome]  #finding
   ]
   #v(5mm)
   #block(
@@ -185,9 +196,9 @@
   [
     #text(size: 12pt, weight: "bold", fill: blue)[OPENRISK PLATFORM]
     #v(2mm)
-    #text(size: 32pt, weight: "bold", fill: navy)[Corrective Action]
+    #text(size: 32pt, weight: "bold", fill: navy)[Executive Corrective]
     #linebreak()
-    #text(size: 32pt, weight: "bold", fill: navy)[Verification Dossier]
+    #text(size: 32pt, weight: "bold", fill: navy)[Action Report]
   ],
 )
 #v(11mm)
@@ -198,53 +209,53 @@
   gutter: 18mm,
   [
     #text(size: 15pt, fill: gray)[
-      Controlled before/after evidence and real desktop-application verification
-      for the reported usability and result-presentation defects.
+      A management-level account of the reported issues, the user-facing
+      corrections, and the evidence supporting release readiness.
     ]
     #v(10mm)
     #grid(
       columns: (1fr, 1fr, 1fr),
       gutter: 5mm,
       block(fill: surface, radius: 4pt, inset: 10pt)[
-        #text(size: 23pt, weight: "bold", fill: blue)[14/14]
+        #text(size: 23pt, weight: "bold", fill: blue)[7]
         #linebreak()
-        #text(size: 8pt, fill: gray)[Historical checks passed]
+        #text(size: 8pt, fill: gray)[Visual corrections verified]
       ],
       block(fill: surface, radius: 4pt, inset: 10pt)[
-        #text(size: 23pt, weight: "bold", fill: green)[3/3]
+        #text(size: 23pt, weight: "bold", fill: green)[3]
         #linebreak()
-        #text(size: 8pt, fill: gray)[Tauri checks passed]
+        #text(size: 8pt, fill: gray)[Desktop workflows confirmed]
       ],
       block(fill: surface, radius: 4pt, inset: 10pt)[
-        #text(size: 23pt, weight: "bold", fill: navy)[7]
+        #text(size: 23pt, weight: "bold", fill: amber)[2]
         #linebreak()
-        #text(size: 8pt, fill: gray)[Visual comparisons]
+        #text(size: 8pt, fill: gray)[Follow-up checks identified]
       ],
     )
   ],
   [
     #block(fill: navy, radius: 5pt, inset: 13pt)[
       #set text(fill: white)
-      #text(size: 8pt, weight: "bold")[EVIDENCE RANGE]
+      #text(size: 8pt, weight: "bold")[ASSESSMENT]
       #v(3mm)
-      #text(size: 9pt)[Baseline]
+      #text(size: 9pt)[Audience]
       #linebreak()
-      #text(weight: "bold")[6a7f581]
+      #text(weight: "bold")[Executive / project]
       #v(3mm)
-      #text(size: 9pt)[Fixed state]
+      #text(size: 9pt)[Evidence format]
       #linebreak()
-      #text(weight: "bold")[e824ad8]
+      #text(weight: "bold")[Before / after]
       #v(3mm)
       #text(size: 9pt)[Prepared]
       #linebreak()
-      #text(weight: "bold")[28 July 2026]
+      #text(weight: "bold")[29 July 2026]
     ]
   ],
 )
 #v(17mm)
 #text(size: 8.5pt, fill: gray)[
-  Evidence is generated from source-controlled historical revisions and a deterministic
-  local verification plugin. Teacher-provided screenshots are not used as baseline material.
+  This report focuses on visible outcomes, user impact, and remaining acceptance work.
+  Detailed technical test artifacts are retained separately for the development team.
 ]
 
 // Restore running header/footer.
@@ -266,10 +277,24 @@
 
 = Executive Summary
 
-The verification covers the corrective changes built on top of the release baseline.
-Seven defects have controlled visual comparisons. Three representative workflows were
-also exercised in the real Tauri application, including Rust persistence and plugin
-execution. The report does not treat screenshots alone as runtime proof.
+Seven reported usability and result-presentation issues were corrected and verified
+through controlled before/after comparisons. Three representative workflows were also
+confirmed in the desktop application. The assessed corrections improve clarity,
+reduce misleading feedback, and make investigation results easier to understand.
+
+#v(3mm)
+#block(
+  width: 100%,
+  fill: green-soft,
+  stroke: 0.6pt + rgb("#75E0A7"),
+  radius: 4pt,
+  inset: 9pt,
+)[
+  #text(weight: "bold", fill: green)[Management conclusion]
+  The tested visual and workflow corrections are suitable for release. Final acceptance
+  still requires a Windows taskbar check, while the number of Adversea matches remains
+  dependent on the external data provider.
+]
 
 #v(4mm)
 #table(
@@ -280,26 +305,25 @@ execution. The report does not treat screenshots alone as runtime proof.
   table.header(
     [#text(fill: white, weight: "bold")[Reported area]],
     [#text(fill: white, weight: "bold")[Status]],
-    [#text(fill: white, weight: "bold")[Primary evidence]],
+    [#text(fill: white, weight: "bold")[Verification]],
   ),
-  [Trial charge notification], [#pill("VERIFIED")], [Historical Playwright],
-  [API token input border], [#pill("VERIFIED")], [Playwright + WebDriverIO],
-  [Application bottom whitespace], [#pill("VERIFIED")], [Playwright + WebDriverIO],
-  [PEP relative/associate status], [#pill("VERIFIED")], [Playwright + real plugin run],
-  [Shared target for combined entrypoints], [#pill("VERIFIED")], [Historical Playwright],
-  [Country selection usability], [#pill("VERIFIED")], [Playwright + WebDriverIO],
-  [Adverse activity emphasis in PDF], [#pill("VERIFIED")], [Generated PDF comparison],
-  [Windows taskbar icon contrast], [#pill("IMPLEMENTED", tone: "blue")], [Source assets; Windows retest required],
-  [Multiple Adversea matches], [#pill("OPEN", tone: "amber")], [Provider-dependent observation],
+  [Trial charge notification], [#pill("VERIFIED")], [Before/after comparison],
+  [API token field], [#pill("VERIFIED")], [Comparison and desktop check],
+  [Application bottom whitespace], [#pill("VERIFIED")], [Comparison and desktop check],
+  [PEP relative/associate status], [#pill("VERIFIED")], [Comparison and result check],
+  [Shared search target], [#pill("VERIFIED")], [Combined-search check],
+  [Country selection usability], [#pill("VERIFIED")], [Comparison and desktop check],
+  [Adverse activity emphasis in PDF], [#pill("VERIFIED")], [Exported PDF comparison],
+  [Windows taskbar icon contrast], [#pill("IMPLEMENTED", tone: "blue")], [Windows package check pending],
+  [Multiple Adversea matches], [#pill("OPEN", tone: "amber")], [Provider confirmation required],
 )
 
 #v(5mm)
 == Scope Boundary
 
-The historical comparison uses deterministic Tauri IPC fixtures to isolate frontend
-behavior at two Git revisions. The application verification uses a real debug binary,
-real SQLite project creation, real Rust commands, and the real plugin runtime. It avoids
-external API calls so the evidence remains repeatable and does not consume credentials.
+The report verifies the behavior controlled by OpenRisk. External service availability
+and the number of records returned by a provider are outside this acceptance boundary.
+Repeatable local data was used where external calls would make the comparison unstable.
 
 = Verification Method
 
@@ -307,20 +331,20 @@ external API calls so the evidence remains repeatable and does not consume crede
   columns: (1fr, 1fr),
   gutter: 8mm,
   block(fill: surface, radius: 4pt, inset: 10pt)[
-    #text(size: 11pt, weight: "bold", fill: blue)[A / Historical reconstruction]
+    #text(size: 11pt, weight: "bold", fill: blue)[A / Controlled comparison]
     #v(2mm)
-    Baseline `6a7f581` and fixed state `e824ad8` were checked out into isolated
-    worktrees. The same deterministic dataset and viewport were run against both.
-    Playwright recorded screenshots, videos, traces, and generated PDF output.
+    The reported and corrected versions were reviewed under the same conditions,
+    using the same data, screen size, and light theme. This makes the visible
+    difference attributable to the correction.
     #v(3mm)
     #pill("14/14 PASSED")
   ],
   block(fill: surface, radius: 4pt, inset: 10pt)[
-    #text(size: 11pt, weight: "bold", fill: green)[B / Desktop application]
+    #text(size: 11pt, weight: "bold", fill: green)[B / Desktop workflow check]
     #v(2mm)
-    WebDriverIO started `src-tauri/target-wdio/debug/openrisk` through the embedded
-    Tauri WebDriver. A temporary project and local verification plugin exercised
-    persistence, manifest loading, plugin execution, result rendering, and settings.
+    Representative tasks were completed in the desktop application to confirm
+    that the corrections work within normal project, search, result, and
+    settings workflows.
     #v(3mm)
     #pill("3/3 PASSED")
   ],
@@ -332,151 +356,140 @@ external API calls so the evidence remains repeatable and does not consume crede
   inset: 6pt,
   stroke: 0.4pt + rule,
   fill: (_, row) => if calc.even(row) { surface } else { white },
-  [Capture theme], [Light, normalized consistently across all report screenshots],
-  [Historical browser], [Chromium via Playwright 1.59.1],
-  [Desktop WebView], [WebKitGTK 605.1.15 through WebDriverIO],
-  [Desktop backend], [Tauri v2 application with the real Rust command layer],
-  [Plugin execution], [Local deterministic TypeScript plugin, no network calls],
-  [Artifacts], [PNG, WebM, Playwright HTML report, trace data, JSON runtime metrics, PDF],
+  [Visual consistency], [All screenshots use the light theme and the same comparison conditions],
+  [Application coverage], [Projects, combined searches, results, settings, and PDF output],
+  [Test data], [Repeatable local scenarios that do not depend on provider availability],
+  [Supporting evidence], [Screenshots, recordings, automated results, and generated PDF output],
 )
 
 #v(5mm)
-The desktop test invoked `create_project`, `update_project_settings`,
-`upsert_project_plugin_from_dir`, `set_plugin_enabled`, `set_plugin_setting`,
-`create_scan`, `run_scan`, and `close_project`. This verifies more than a browser-only
-render while keeping external services out of the test boundary.
+The following pages present the reported condition and corrected result at full
+page width. Each comparison is followed by selected confirmation from the desktop
+application where this adds useful assurance.
 
 #evidence-page(
   "EV-01",
   "Trial charge notification",
-  [Trial-mode scans no longer display a misleading `0.10 EUR` charge notification.],
-  [dd65257],
+  [Trial users are no longer shown a misleading `0.10 EUR` charge.],
   "generated/before/trial-charge-notification.png",
   "generated/after/trial-charge-notification.png",
-  [The baseline displays the charge toast even though trial mode is active.],
-  [The same trial scenario completes without the paid-usage notification.],
+  [A charge appears even though the user is operating within the free trial.],
+  [The trial search completes without suggesting that the user has been charged.],
 )
 
 #evidence-page(
   "EV-02",
   "API token input border",
-  [The secret-setting input now has consistent left and right borders and a safe inset from its scroll viewport.],
-  [9d29577],
+  [The API token field is fully visible and visually consistent on every side.],
   "generated/before/api-token-border.png",
   "generated/after/api-token-border.png",
-  [The left edge appears clipped where the input meets the settings viewport.],
-  [The full input outline is visible; the real-app test also confirms equal computed border widths.],
+  [The left edge of the field appears clipped in the settings window.],
+  [The complete field outline is visible and aligned with the surrounding settings.],
 )
 
 #evidence-page(
   "EV-03",
   "Application scroll containment",
-  [Overflow is contained inside the scan workspace instead of scrolling the document and exposing an empty bottom region.],
-  [3a412b0],
+  [Long search forms scroll within the workspace without moving the whole application or exposing empty space.],
   "generated/before/document-scroll-containment.png",
   "generated/after/document-scroll-containment.png",
-  [The document moves when the selected entrypoints exceed the available height.],
-  [The application chrome remains fixed while the central workspace owns vertical scrolling.],
+  [The entire application can move when several search options exceed the available height.],
+  [Navigation and the application frame stay fixed while only the working area scrolls.],
 )
 
 #evidence-page(
   "EV-04",
-  "Shared target across entrypoints",
-  [A value entered once for a shared field is propagated to every selected entrypoint that declares that field.],
-  [cddc3a8],
+  "Shared target across selected checks",
+  [A search target entered once is reused across all selected checks that need it.],
   "generated/before/shared-entrypoint-target.png",
   "generated/after/shared-entrypoint-target.png",
-  [Combined execution reports that `target` is missing for one selected entrypoint.],
-  [The same combined selection completes without a required-target error.],
+  [A combined search can report that the target is missing even though the user entered it.],
+  [The same combined search accepts the entered target and proceeds normally.],
 )
 
 #evidence-page(
   "EV-05",
   "PEP relative and close associate",
-  [The person card distinguishes a direct PEP from a PEP relative or close associate and shows the relationship in place.],
-  [3284915],
+  [Results now distinguish a direct PEP from a relative or close associate and show the known relationship.],
   "generated/before/pep-rca-status.png",
   "generated/after/pep-rca-status.png",
-  [RCA information is not represented as a prominent domain status.],
-  [The card displays `PEP: RCA` and the related person with relationship.],
+  [The relationship to a politically exposed person is not clearly visible.],
+  [The result clearly shows `PEP: RCA`, the related person, and the relationship.],
 )
 
 #evidence-page(
   "EV-06",
   "Human-friendly country selection",
-  [ISO 3166-1 alpha-2 values are presented through an alphabetized, searchable list of English country names.],
-  [d7d4269],
+  [Country codes are presented as an alphabetized, searchable list of readable country names.],
   "generated/before/country-selector.png",
   "generated/after/country-selector.png",
-  [The user must interpret and scan raw country codes.],
-  [The user searches readable names while the plugin still receives the strict ISO code.],
+  [The user must interpret and scan a list of technical country codes.],
+  [The user can search and select a country by its normal English name.],
 )
 
 #evidence-page(
   "EV-07",
   "Adverse activity emphasis in PDF",
-  [Confirmed adverse activity is visually emphasized in exported evidence, not only represented as a boolean row.],
-  [a4739ce],
+  [Confirmed adverse activity is prominently highlighted in exported PDF reports.],
   "generated/before/adverse-activity-crop.png",
   "generated/after/adverse-activity-crop.png",
-  [The positive finding is visually indistinguishable from ordinary properties.],
-  [A red heading and `ADVERSE ACTIVITY DETECTED` banner make the hit immediately visible.],
+  [A positive finding is difficult to distinguish from ordinary report details.],
+  [A red heading and warning banner make the adverse finding immediately visible.],
 )
 
 #application-page(
   "APP-01",
-  "RCA result in the real Tauri application",
+  "RCA result in the desktop application",
   "generated/application/webdriverio-fixed-rca.png",
-  [A scan produced by the real plugin runtime renders `PEP: RCA`, `Robert Fico`, and `spouse` in the person result card.],
+  [A completed search clearly presents `PEP: RCA`, the related person, and the relationship in the result.],
 )
 
 #application-page(
   "APP-02",
-  "Fixed workspace scrolling in WebKitGTK",
+  "Stable application scrolling",
   "generated/application/webdriverio-fixed-scroll.png",
-  [With seven entrypoints enabled, the document remains at `scrollY = 0`; the inner content region scrolls from 1169 px to 1866 px.],
+  [With several search options enabled, the application frame remains fixed and the working area scrolls normally.],
 )
 
 #application-page(
   "APP-03",
-  "Masked secret setting in the real application",
+  "Protected API token setting",
   "generated/application/webdriverio-fixed-secret-setting.png",
-  [The backend-provided `secret` metadata renders a populated password input with symmetric borders and a positive left inset.],
+  [The saved API token remains masked while the input outline stays complete and clearly visible.],
 )
 
 #pagebreak()
-= Traceability
+= Delivery Assessment
 
 #table(
-  columns: (1fr, 1.7fr, 2.6fr),
+  columns: (2fr, 2.5fr, 1fr),
   inset: 6pt,
   stroke: 0.4pt + rule,
   fill: (_, row) => if row == 0 { navy } else if calc.odd(row) { surface } else { white },
   table.header(
-    [#text(fill: white, weight: "bold")[Commit]],
-    [#text(fill: white, weight: "bold")[Change]],
-    [#text(fill: white, weight: "bold")[Verification]],
+    [#text(fill: white, weight: "bold")[Reported issue]],
+    [#text(fill: white, weight: "bold")[Delivered outcome]],
+    [#text(fill: white, weight: "bold")[Status]],
   ),
-  [3a412b0], [Prevent document scrolling], [EV-03, APP-02],
-  [9d29577], [Preserve settings input border], [EV-02, APP-03],
-  [3284915], [Display PEP RCA status], [EV-05, APP-01],
-  [dd65257], [Suppress trial charge toast], [EV-01],
-  [cddc3a8], [Propagate shared entrypoint inputs], [EV-04],
-  [264ad05], [Improve taskbar icon contrast], [Source review; Windows runtime pending],
-  [d7d4269], [Searchable country select], [EV-06, application control check],
-  [a4739ce], [Highlight adverse activity in PDF], [EV-07],
-  [e824ad8], [Persist draft inputs], [Supporting scan-state reliability change],
+  [Misleading trial charge], [No paid-use message during the free trial], [#pill("VERIFIED")],
+  [Clipped API token field], [Complete, aligned, masked input], [#pill("VERIFIED")],
+  [Empty space below application], [Scrolling remains inside the work area], [#pill("VERIFIED")],
+  [Missing PEP relationship status], [RCA status and relationship shown clearly], [#pill("VERIFIED")],
+  [Combined search target error], [One target supports all selected checks], [#pill("VERIFIED")],
+  [Unfriendly country list], [Searchable list of readable country names], [#pill("VERIFIED")],
+  [Unclear adverse PDF result], [Positive finding receives prominent warning], [#pill("VERIFIED")],
+  [Low-contrast Windows icon], [Higher-contrast icon prepared], [#pill("CHECK", tone: "amber")],
+  [Unexpected number of matches], [Provider behavior isolated for follow-up], [#pill("OPEN", tone: "amber")],
 )
 
 #v(6mm)
 == Evidence Integrity
 
-- Historical screenshots were generated from the two identified Git revisions using the same fixture.
+- Before and after screenshots were generated independently under the same conditions.
 - All report screenshots use the light theme.
-- The real application verification created a disposable project at `/tmp/openrisk-wdio-verification.orproj`.
-- The test plugin is checked in under `evidence/fixtures/verification-plugin` and performs no HTTP requests.
-- Machine-readable runtime measurements are stored in `generated/application/webdriverio-verification.json`.
-- Playwright videos and the self-contained HTML report are retained under `generated/playwright-results` and `generated/playwright-html`.
+- Representative results were confirmed inside the desktop application.
+- Repeatable local data was used so provider availability could not change the outcome.
+- Supporting recordings and machine-readable test results are retained for audit.
 
 #v(5mm)
 == Limitations and Remaining Work
@@ -490,9 +503,9 @@ render while keeping external services out of the test boundary.
 )[
   #text(weight: "bold", fill: amber)[Windows taskbar icon]
   #linebreak()
-  The icon assets changed in commit `264ad05`, but this NixOS verification host cannot
-  produce a Windows taskbar capture. Final acceptance should include one screenshot from
-  the next signed Windows package.
+  A higher-contrast icon has been prepared, but this verification environment cannot
+  produce a Windows taskbar capture. Final acceptance should include one screenshot
+  from the next signed Windows package.
 ]
 
 #v(4mm)
@@ -505,10 +518,9 @@ render while keeping external services out of the test boundary.
 )[
   #text(weight: "bold", fill: amber)[Multiple Adversea matches]
   #linebreak()
-  This observation is not represented as a completed corrective action in the tested
-  change range. The number of returned candidates depends on the external endpoint
-  response and requires a provider-backed contract test or confirmed multi-result API
-  fixture before it can be closed.
+  The number of returned candidates depends on the external provider. This item
+  requires confirmation using a provider response that contains multiple matches
+  before it can be closed.
 ]
 
 #v(6mm)
@@ -521,10 +533,10 @@ render while keeping external services out of the test boundary.
   radius: 5pt,
   inset: 12pt,
 )[
-  #text(size: 14pt, weight: "bold", fill: green)[Verification passed]
+  #text(size: 14pt, weight: "bold", fill: green)[Ready for the tested scope]
   #v(2mm)
-  The reproducible historical suite passed `14/14` checks and the real Tauri application
-  suite passed `3/3` checks. The evidence supports the listed frontend, result-display,
-  PDF, settings, and layout corrections, subject to the two explicitly stated
-  platform/provider limitations.
+  The evidence supports the listed corrections to notifications, settings, layout,
+  search inputs, result presentation, and PDF output. No blocking issue was found in
+  the tested desktop workflows. The Windows icon and provider-dependent match count
+  remain explicit follow-up items.
 ]
