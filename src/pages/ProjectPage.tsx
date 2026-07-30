@@ -87,7 +87,7 @@ export function ProjectPage({ projectDir }: ProjectPageProps) {
       onGoBack={() => void goBack()}
       hasPlugins={hasPlugins}
     >
-      <div className="min-h-full bg-muted/[0.18] px-16 py-10 lg:px-24 xl:px-32">
+      <div className="h-full overflow-y-auto overscroll-contain bg-muted/[0.18] px-16 py-10 lg:px-24 xl:px-32">
         <div className="flex w-full flex-col gap-6">
           {!projectDir ? (
             <Card>

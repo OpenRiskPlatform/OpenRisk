@@ -100,7 +100,7 @@ export function ProjectScanHistorySidebar({
     };
 
     return (
-        <aside className={`shrink-0 border-l bg-background flex flex-col h-full transition-all duration-200 ${sidebarOpen ? "w-80" : "w-10"}`}>
+        <aside className={`flex h-full min-h-0 max-h-full shrink-0 flex-col overflow-hidden border-l bg-background transition-all duration-200 ${sidebarOpen ? "w-80" : "w-10"}`}>
             {/* Top strip – panel title + collapse toggle */}
             <div className={`flex items-center py-3 border-b shrink-0 ${sidebarOpen ? "justify-between px-4" : "justify-center"}`}>
                 {sidebarOpen ? (
@@ -150,7 +150,7 @@ export function ProjectScanHistorySidebar({
                     )}
                 </div>
             ) : (
-                <ScrollArea className="flex-1">
+                <ScrollArea className="min-h-0 flex-1">
                     <div className="flex flex-col gap-3 py-3">
 
                         {/* ── Favorites section ── */}

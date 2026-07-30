@@ -256,6 +256,23 @@ pub async fn get_scan(
     project.get_scan(&scan_id).await.map_err(AppError::from)
 }
 
+/// Replace the selected entrypoints and inputs while keeping the scan in Draft status.
+/// #
+#[tauri::command]
+#[specta::specta]
+pub async fn update_scan_draft(
+    scan_id: String,
+    selected_plugins: Vec<PluginEntrypointSelection>,
+    inputs: Vec<ScanEntrypointInput>,
+    state: tauri::State<'_, ProjectState>,
+) -> Result<ScanSummaryRecord, AppError> {
+    let project = get_open_project(&state).await?;
+    project
+        .update_scan_draft(&scan_id, &selected_plugins, &inputs)
+        .await
+        .map_err(AppError::from)
+}
+
 /// Execute a scan: run the selected plugins and persist results.
 ///
 /// Plugin code is read from the project database, not from disk.

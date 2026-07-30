@@ -52,6 +52,8 @@ async function registerFont(doc: jsPDF): Promise<void> {
 }
 
 const PRIMARY = [30, 64, 175] as [number, number, number];
+const DANGER = [185, 28, 28] as [number, number, number];
+const DANGER_BG = [254, 226, 226] as [number, number, number];
 const MUTED = [100, 116, 139] as [number, number, number];
 const CARD_HEAD = [241, 245, 249] as [number, number, number];
 const ALT_ROW = [248, 250, 252] as [number, number, number];
@@ -201,6 +203,11 @@ function entityDisplayName(entity: DataModelEntity) {
   return entity.$id;
 }
 
+function entityHasAdverseActivity(entity: DataModelEntity): boolean {
+  const adverseActivity = entity.$props?.adverseActivityDetected?.[0];
+  return adverseActivity?.value === true;
+}
+
 function entityRows(entity: DataModelEntity): string[][] {
   const rows: string[][] = [];
 
@@ -253,13 +260,32 @@ function renderEntityCard(
     startY = 40;
   }
 
+  const isAdverse = entityHasAdverseActivity(entity);
+
   doc.setFont(FONT_NAME, "bold");
   doc.setFontSize(11);
-  doc.setTextColor(...PRIMARY);
+  doc.setTextColor(...(isAdverse ? DANGER : PRIMARY));
   doc.text(`${index}. ${entityDisplayName(entity)}`, 40, startY);
 
+  if (isAdverse) {
+    doc.setFillColor(...DANGER_BG);
+    doc.roundedRect(
+      40,
+      startY + 7,
+      doc.internal.pageSize.width - 80,
+      18,
+      2,
+      2,
+      "F",
+    );
+    doc.setFont(FONT_NAME, "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(...DANGER);
+    doc.text("ADVERSE ACTIVITY DETECTED", 47, startY + 19);
+  }
+
   autoTable(doc, {
-    startY: startY + 16,
+    startY: startY + (isAdverse ? 32 : 16),
     head: [["Property", "Value"]],
     body: entityRows(entity),
     headStyles: {

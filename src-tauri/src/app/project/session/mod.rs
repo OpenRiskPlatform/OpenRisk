@@ -491,15 +491,19 @@ impl SqliteProjectPersistence {
                     .unwrap_or_else(|_| "{\"name\":\"string\"}".to_string());
                 let enum_values = resolved_type_values(
                     &type_str,
-                    input.type_.enum_values().map(|v| v.to_vec()).or_else(|| {
-                        input.validation.as_ref().and_then(|v| {
-                            if v.enum_.is_empty() {
-                                None
-                            } else {
-                                Some(v.enum_.clone())
-                            }
-                        })
-                    }),
+                    input
+                        .type_
+                        .explicit_values()
+                        .map(|v| v.to_vec())
+                        .or_else(|| {
+                            input.validation.as_ref().and_then(|v| {
+                                if v.enum_.is_empty() {
+                                    None
+                                } else {
+                                    Some(v.enum_.clone())
+                                }
+                            })
+                        }),
                 );
                 let enum_values_json =
                     enum_values.map(|v| serde_json::to_string(&v).unwrap_or_default());
@@ -536,15 +540,19 @@ impl SqliteProjectPersistence {
                 .unwrap_or_else(|_| "{\"name\":\"string\"}".to_string());
             let enum_values = resolved_type_values(
                 &type_str,
-                setting.type_.enum_values().map(|v| v.to_vec()).or_else(|| {
-                    setting.validation.as_ref().and_then(|v| {
-                        if v.enum_.is_empty() {
-                            None
-                        } else {
-                            Some(v.enum_.clone())
-                        }
-                    })
-                }),
+                setting
+                    .type_
+                    .explicit_values()
+                    .map(|v| v.to_vec())
+                    .or_else(|| {
+                        setting.validation.as_ref().and_then(|v| {
+                            if v.enum_.is_empty() {
+                                None
+                            } else {
+                                Some(v.enum_.clone())
+                            }
+                        })
+                    }),
             );
             let enum_values_json =
                 enum_values.map(|v| serde_json::to_string(&v).unwrap_or_default());
@@ -577,8 +585,10 @@ impl SqliteProjectPersistence {
             let type_str = metric.type_.name().to_string();
             let type_json = serde_json::to_string(&metric.type_.to_json_value())
                 .unwrap_or_else(|_| "{\"name\":\"string\"}".to_string());
-            let enum_values =
-                resolved_type_values(&type_str, metric.type_.enum_values().map(|v| v.to_vec()));
+            let enum_values = resolved_type_values(
+                &type_str,
+                metric.type_.explicit_values().map(|v| v.to_vec()),
+            );
             let enum_values_json =
                 enum_values.map(|v| serde_json::to_string(&v).unwrap_or_default());
             sqlx::query!(

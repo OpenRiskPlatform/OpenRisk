@@ -98,7 +98,7 @@ export function SearchPage({ projectDir, routeScanId }: SearchPageProps) {
           </Card>
         ) : (
           <>
-            <div className="flex min-w-0 flex-1 overflow-auto">
+            <div className="flex min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
               <ProjectScanPanel
                 selectedScan={workspace.selectedScan}
                 scanDetail={workspace.scanDetail}

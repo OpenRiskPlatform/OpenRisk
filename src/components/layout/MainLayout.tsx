@@ -71,7 +71,7 @@ export function MainLayout({
   }, []);
 
   return (
-    <div className="h-screen flex flex-col bg-background">
+    <div className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-background">
       <header data-app-chrome className="shrink-0 border-b bg-background text-foreground">
         <div className="px-6 h-16 flex items-center justify-between">
           <button
@@ -96,9 +96,9 @@ export function MainLayout({
         </div>
       </header>
 
-      <div className="flex flex-1 min-h-0">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <Sidebar projectDir={projectDir} selectedScanId={selectedScanId} onQuitClick={() => setExitOpen(true)} hasPlugins={hasPlugins} />
-        <main className="flex-1 min-h-0 overflow-auto overscroll-none">{children}</main>
+        <main className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</main>
       </div>
 
       <SettingsDialog

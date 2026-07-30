@@ -259,7 +259,7 @@ export function SettingsDialog({ open, onOpenChange, projectDir }: SettingsDialo
                 )}
 
                 {projectDir && !settingsLoading && !settingsError && activePlugin && (
-                  <div className="flex-1 min-h-0 overflow-y-auto pr-2">
+                  <div className="flex-1 min-h-0 overflow-y-auto py-1 pl-1 pr-2">
                     <PluginSettingsCard
                       key={activePlugin.id}
                       plugin={activePlugin}
