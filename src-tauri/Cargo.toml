@@ -12,9 +12,18 @@ rust-version = "1.94"
 name = "openrisk_lib"
 crate-type = [
   "staticlib",
-  # "cdylib",
+  "cdylib",
   "rlib",
 ]
+
+[features]
+default = []
+native-bindgen = ["uniffi/cli"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+required-features = ["native-bindgen"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -61,6 +70,10 @@ reqwest = { version = "0.12", default-features = false, features = [
 specta = { version = "=2.0.0-rc.24", features = ["derive", "serde_json"] }
 specta-typescript = "0.0.11"
 tauri-specta = { version = "=2.0.0-rc.24", features = ["derive", "typescript"] }
+thiserror = "2.0"
 libsqlite3-sys = { version = "0.30", features = [
   "bundled-sqlcipher-vendored-openssl",
+] }
+uniffi = { version = "0.32.0", default-features = false, features = [
+  "tokio",
 ] }

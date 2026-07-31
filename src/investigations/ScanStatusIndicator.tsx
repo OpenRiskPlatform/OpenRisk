@@ -1,6 +1,5 @@
 import {
   AlertTriangle,
-  CheckCircle2,
   FilePenLine,
   LoaderCircle,
 } from "lucide-react";
@@ -14,7 +13,7 @@ interface ScanStatusIndicatorProps {
 
 const presentations = {
   Completed: {
-    icon: CheckCircle2,
+    icon: null,
     className: "text-emerald-700 dark:text-emerald-300",
   },
   Running: {
@@ -41,18 +40,25 @@ export function ScanStatusIndicator({
     presentations.Failed;
   const Icon = presentation.icon;
 
+  if (!Icon && !showLabel) {
+    return null;
+  }
+
   return (
     <span
+      aria-label={showLabel ? undefined : status}
       className={cn(
         "inline-flex items-center gap-1.5 text-sm",
         presentation.className,
         className,
       )}
     >
-      <Icon
-        aria-hidden="true"
-        className={cn("h-4 w-4", status === "Running" && "animate-spin")}
-      />
+      {Icon ? (
+        <Icon
+          aria-hidden="true"
+          className={cn("h-4 w-4", status === "Running" && "animate-spin")}
+        />
+      ) : null}
       {showLabel ? status : null}
     </span>
   );

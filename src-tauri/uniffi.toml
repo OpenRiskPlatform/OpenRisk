@@ -1,0 +1,5 @@
+[bindings.swift]
+module_name = "OpenRiskCore"
+ffi_module_name = "OpenRiskCoreFFI"
+generate_immutable_records = true
+omit_localized_error_conformance = false

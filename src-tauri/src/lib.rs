@@ -1,5 +1,6 @@
 mod app;
 mod commands;
+mod native_api;
 mod plugin_manifest;
 mod registry_jurisdiction;
 
@@ -8,6 +9,8 @@ use std::sync::Arc;
 use specta_typescript::Typescript;
 use sqlx::migrate::Migrator;
 use tauri_specta::{Builder, collect_commands};
+
+uniffi::setup_scaffolding!();
 
 pub(crate) static EMBEDDED_MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 

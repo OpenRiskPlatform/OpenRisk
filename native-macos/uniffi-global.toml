@@ -1,0 +1,2 @@
+[crate-roots]
+openrisk_lib = "../src-tauri"
