@@ -1,2 +1,2 @@
 [env]
-DATABASE_URL = "sqlite://.sqlx/schema.db"
+DATABASE_URL = "sqlite://crates/openrisk-core/.sqlx/schema.db"

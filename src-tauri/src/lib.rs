@@ -1,24 +1,16 @@
-mod app;
 mod commands;
-mod native_api;
-mod plugin_manifest;
-mod registry_jurisdiction;
 
 use std::sync::Arc;
 
+use openrisk_core::project::SqliteProjectPersistence;
 use specta_typescript::Typescript;
-use sqlx::migrate::Migrator;
 use tauri_specta::{Builder, collect_commands};
-
-uniffi::setup_scaffolding!();
-
-pub(crate) static EMBEDDED_MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 
 /// Tauri-managed state holding the currently-open project, if any.
 ///
 /// Stored as `Arc` so command handlers can clone the pointer and release the
 /// state mutex before doing async work on the project.
-pub type ProjectState = tokio::sync::Mutex<Option<Arc<app::project::SqliteProjectPersistence>>>;
+pub type ProjectState = tokio::sync::Mutex<Option<Arc<SqliteProjectPersistence>>>;
 
 fn specta_builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new().commands(collect_commands![
@@ -63,7 +55,7 @@ pub fn run() {
 
     let mut tauri_builder = tauri::Builder::default()
         .manage(tokio::sync::Mutex::new(
-            None::<Arc<app::project::SqliteProjectPersistence>>,
+            None::<Arc<SqliteProjectPersistence>>,
         ))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -86,7 +78,7 @@ pub fn run() {
 mod tests {
     use super::*;
 
-    /// Run `cargo test export_bindings -- --nocapture` to regenerate
+    /// Run `cargo test -p openrisk-tauri export_bindings -- --nocapture` to regenerate
     /// `src/core/backend/bindings.ts` without launching the full app.
     #[test]
     fn export_bindings() {

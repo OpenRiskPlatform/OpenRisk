@@ -8,7 +8,7 @@
 //! — call it with `password: Some(...)` to authenticate and open in one step.
 
 use crate::ProjectState;
-use crate::app::project::{ProjectLockStatus, ProjectPersistence, SqliteProjectPersistence};
+use openrisk_core::project::{ProjectLockStatus, ProjectPersistence, SqliteProjectPersistence};
 use std::path::PathBuf;
 
 /// Probe the lock status of a project file *without* opening it.

@@ -94,7 +94,7 @@ if (!nightlyRustc) {
 
 const status = run(
   "rustup",
-  ["run", "nightly", "cargo", "udeps", "--all-targets"],
+  ["run", "nightly", "cargo", "udeps", "--workspace", "--all-targets"],
   {
     env: {
       ...process.env,

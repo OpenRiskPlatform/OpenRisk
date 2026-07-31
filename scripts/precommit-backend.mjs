@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import fs from "node:fs";
-import os from "node:os";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
@@ -70,22 +69,23 @@ function shouldRunChecks(files) {
 
   const rust =
     matches(/^src-tauri\/.*\.rs$/) ||
-    inSet("src-tauri/Cargo.toml") ||
+    matches(/^src-tauri\/(?:.*\/)?Cargo\.toml$/) ||
     inSet("src-tauri/Cargo.lock") ||
     inSet("rust-toolchain.toml");
 
   const manifestSync =
-    inSet("src-tauri/schemas/plugin-manifest.schema.json") ||
-    inSet("src-tauri/schemas/plugin-manifest.schema.rs");
+    inSet("src-tauri/crates/openrisk-core/schemas/plugin-manifest.schema.json") ||
+    inSet("src-tauri/crates/openrisk-core/schemas/plugin-manifest.schema.rs");
 
   const clientSync =
     matches(/^src-tauri\/src\/.*\.rs$/) ||
-    inSet("src-tauri/Cargo.toml") ||
+    matches(/^src-tauri\/crates\/openrisk-core\/src\/.*\.rs$/) ||
+    matches(/^src-tauri\/(?:.*\/)?Cargo\.toml$/) ||
     inSet("src/core/backend/bindings.ts");
 
   const deadDeps =
     matches(/^src-tauri\/.*\.rs$/) ||
-    inSet("src-tauri/Cargo.toml") ||
+    matches(/^src-tauri\/(?:.*\/)?Cargo\.toml$/) ||
     inSet("src-tauri/Cargo.lock");
 
   return { rust, manifestSync, clientSync, deadDeps };
@@ -210,9 +210,12 @@ function checkTypifyGeneratedFile() {
     process.exit(1);
   }
 
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openrisk-typify-"));
+  const tempRoot = path.join(backendDir, "target", "precommit");
+  fs.mkdirSync(tempRoot, { recursive: true });
+  const tempDir = fs.mkdtempSync(path.join(tempRoot, "typify-"));
   const generatedPath = path.join(tempDir, "plugin-manifest.schema.rs");
-  const committedPath = path.join(backendDir, "schemas", "plugin-manifest.schema.rs");
+  const schemaDir = path.join(backendDir, "crates", "openrisk-core", "schemas");
+  const committedPath = path.join(schemaDir, "plugin-manifest.schema.rs");
 
   try {
     runBackend(
@@ -220,7 +223,7 @@ function checkTypifyGeneratedFile() {
         "cargo-typify",
         "typify",
         "--no-builder",
-        "schemas/plugin-manifest.schema.json",
+        "crates/openrisk-core/schemas/plugin-manifest.schema.json",
         "-o",
         generatedPath,
       ],
@@ -232,10 +235,10 @@ function checkTypifyGeneratedFile() {
 
     if (committed !== generated) {
       console.error(
-        "[pre-commit] ERROR: src-tauri/schemas/plugin-manifest.schema.rs is out of date.",
+        "[pre-commit] ERROR: openrisk-core plugin manifest types are out of date.",
       );
       console.error(
-        "[pre-commit] Run: cd src-tauri && cargo typify --no-builder schemas/plugin-manifest.schema.json -o schemas/plugin-manifest.schema.rs",
+        "[pre-commit] Run: cd src-tauri && cargo typify --no-builder crates/openrisk-core/schemas/plugin-manifest.schema.json -o crates/openrisk-core/schemas/plugin-manifest.schema.rs",
       );
       spawnSync(
         "git",
@@ -265,8 +268,8 @@ function checkBindingsGeneratedFile() {
   const hadOriginal = fs.existsSync(bindingsPath);
   const original = hadOriginal ? fs.readFileSync(bindingsPath) : null;
 
-  runBackend(["cargo", "test", "export_bindings", "--", "--nocapture"], {
-    label: "cargo test export_bindings (check-only)",
+  runBackend(["cargo", "test", "-p", "openrisk-tauri", "export_bindings", "--", "--nocapture"], {
+    label: "cargo test -p openrisk-tauri export_bindings (check-only)",
   });
 
   const diffProbe = spawnSync(
@@ -290,7 +293,7 @@ function checkBindingsGeneratedFile() {
       "[pre-commit] ERROR: src/core/backend/bindings.ts is out of date.",
     );
     console.error(
-      "[pre-commit] Run: cd src-tauri && cargo test export_bindings -- --nocapture and commit src/core/backend/bindings.ts",
+      "[pre-commit] Run: cd src-tauri && cargo test -p openrisk-tauri export_bindings -- --nocapture and commit src/core/backend/bindings.ts",
     );
     run(
       "git",
@@ -312,6 +315,7 @@ if (checks.rust) {
   runBackend([
     "cargo",
     "clippy",
+    "--workspace",
     "--all-targets",
     "--all-features",
     "--",

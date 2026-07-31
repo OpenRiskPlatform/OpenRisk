@@ -10,11 +10,11 @@ This template should help get you started developing with Tauri, React and Types
 
 Rust is pinned via `rust-toolchain.toml`, so if you use `rustup`, the correct compiler/tooling is selected automatically in this repo.
 
-`src-tauri/Cargo.toml` also sets `rust-version = "1.94"` so Cargo fails early with a clear error when using an older compiler.
+The Rust workspace in `src-tauri/Cargo.toml` also sets `rust-version = "1.94"` so Cargo fails early with a clear error when using an older compiler.
 
 ## App version
 
-The application version has one source of truth: the root `package.json`.
+The packaged application version has one source of truth: the root `package.json`.
 Tauri reads it through `src-tauri/tauri.conf.json`, so bundles and GitHub
 releases use the same value.
 
@@ -33,8 +33,18 @@ npm run version:app -- major
 ```
 
 The command updates both `package.json` and `package-lock.json` without creating
-a Git commit or tag. The version in `src-tauri/Cargo.toml` is the internal Rust
-crate version and does not control the packaged application version.
+a Git commit or tag. The workspace crate version in `src-tauri/Cargo.toml` is
+internal and does not control the packaged application version.
+
+## Rust workspace
+
+- `src-tauri/crates/openrisk-core` — shared business logic, persistence, and plugin runtime.
+- `src-tauri/src` — thin Tauri commands and desktop bootstrap.
+- `src-tauri/crates/openrisk-uniffi` — native Swift/UniFFI boundary.
+- `src-tauri/tools/uniffi-bindgen` — pinned binding generator tool.
+
+Both React/Tauri and SwiftUI call the same `openrisk-core` use cases. Core must
+not depend on Tauri or UniFFI.
 
 ## Backend quality checks (Rust only)
 
@@ -79,7 +89,7 @@ TypeScript bindings for all Tauri commands are auto-generated via [tauri-specta]
 ### Regenerate after changing Rust commands
 
 ```bash
-cd src-tauri && cargo test export_bindings
+cd src-tauri && cargo test -p openrisk-tauri export_bindings
 ```
 
 This runs a Rust unit test that writes `src/core/backend/bindings.ts`. No app launch needed.
@@ -94,15 +104,15 @@ Bindings are also regenerated automatically every time the app starts in **debug
 
 ## Plugin Manifest Types
 
-Plugin manifest contract is defined in `src-tauri/schemas/plugin-manifest.schema.json`.
+Plugin manifest contract is defined in `src-tauri/crates/openrisk-core/schemas/plugin-manifest.schema.json`.
 
-- `src-tauri/schemas/plugin-manifest.schema.rs` is generated from that schema via `cargo typify`.
-- `src-tauri/src/plugin_manifest.rs` uses generated types and performs runtime JSON Schema validation.
+- `src-tauri/crates/openrisk-core/schemas/plugin-manifest.schema.rs` is generated from that schema via `cargo typify`.
+- `openrisk-core/src/plugin_manifest.rs` uses generated types and performs runtime JSON Schema validation.
 
 ### Regenerate generated Rust types after schema changes
 
 ```bash
-cd src-tauri && cargo typify --no-builder schemas/plugin-manifest.schema.json -o schemas/plugin-manifest.schema.rs
+cd src-tauri && cargo typify --no-builder crates/openrisk-core/schemas/plugin-manifest.schema.json -o crates/openrisk-core/schemas/plugin-manifest.schema.rs
 ```
 
-Do not edit `src-tauri/schemas/plugin-manifest.schema.rs` manually.
+Do not edit `src-tauri/crates/openrisk-core/schemas/plugin-manifest.schema.rs` manually.

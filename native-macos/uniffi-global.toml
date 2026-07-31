@@ -1,2 +1,2 @@
 [crate-roots]
-openrisk_lib = "../src-tauri"
+openrisk_uniffi = "../src-tauri/crates/openrisk-uniffi"

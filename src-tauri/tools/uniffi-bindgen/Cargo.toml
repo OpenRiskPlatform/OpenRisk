@@ -1,0 +1,10 @@
+[package]
+name = "openrisk-uniffi-bindgen"
+version.workspace = true
+description = "Pinned UniFFI binding generator for OpenRisk"
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+uniffi = { workspace = true, features = ["cli"] }

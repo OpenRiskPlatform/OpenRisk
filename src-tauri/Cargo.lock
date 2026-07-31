@@ -4940,7 +4940,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "openrisk"
+name = "openrisk-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -4952,11 +4952,21 @@ dependencies = [
  "rusqlite",
  "rustyscript",
  "serde",
- "serde_bytes",
  "serde_json",
  "specta",
- "specta-typescript",
  "sqlx",
+ "tokio",
+ "uuid",
+ "zip",
+]
+
+[[package]]
+name = "openrisk-tauri"
+version = "0.1.0"
+dependencies = [
+ "openrisk-core",
+ "specta",
+ "specta-typescript",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
@@ -4966,11 +4976,25 @@ dependencies = [
  "tauri-plugin-shell",
  "tauri-plugin-store",
  "tauri-specta",
+ "tokio",
+]
+
+[[package]]
+name = "openrisk-uniffi"
+version = "0.1.0"
+dependencies = [
+ "openrisk-core",
+ "serde_json",
  "thiserror 2.0.18",
  "tokio",
  "uniffi",
- "uuid",
- "zip",
+]
+
+[[package]]
+name = "openrisk-uniffi-bindgen"
+version = "0.1.0"
+dependencies = [
+ "uniffi",
 ]
 
 [[package]]

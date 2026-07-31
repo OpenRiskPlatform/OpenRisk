@@ -251,6 +251,7 @@ export type PluginRecord = {
 	settingValues: PluginSettingValue[],
 };
 
+// Complete remote plugin registry response.
 export type PluginRegistryRecord = {
 	generatedAt: string,
 	plugins: RegistryPluginRecord[],
@@ -309,11 +310,13 @@ export type ProjectSummary = {
 	is_preview: boolean,
 };
 
+// Author metadata from the remote OpenRisk plugin registry.
 export type RegistryAuthorRecord = {
 	name: string,
 	email: string | null,
 };
 
+// One installable plugin published in the remote OpenRisk registry.
 export type RegistryPluginRecord = {
 	id: string,
 	name: string,

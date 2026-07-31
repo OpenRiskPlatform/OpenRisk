@@ -43,19 +43,20 @@ jobs:
           filters: |
             rust:
               - 'src-tauri/**/*.rs'
-              - 'src-tauri/Cargo.toml'
+              - 'src-tauri/**/Cargo.toml'
               - 'src-tauri/Cargo.lock'
               - 'rust-toolchain.toml'
             manifest_sync:
-              - 'src-tauri/schemas/plugin-manifest.schema.json'
-              - 'src-tauri/schemas/plugin-manifest.schema.rs'
+              - 'src-tauri/crates/openrisk-core/schemas/plugin-manifest.schema.json'
+              - 'src-tauri/crates/openrisk-core/schemas/plugin-manifest.schema.rs'
             client_sync:
               - 'src-tauri/src/**/*.rs'
-              - 'src-tauri/Cargo.toml'
+              - 'src-tauri/crates/openrisk-core/src/**/*.rs'
+              - 'src-tauri/**/Cargo.toml'
               - 'src/core/backend/bindings.ts'
             dead_deps:
               - 'src-tauri/**/*.rs'
-              - 'src-tauri/Cargo.toml'
+              - 'src-tauri/**/Cargo.toml'
               - 'src-tauri/Cargo.lock'
 
       - name: Print scope
@@ -114,10 +115,10 @@ jobs:
           shared-key: ${{ format('backend-rust-{0}-{1}', runner.os, hashFiles('src-tauri/Cargo.lock')) }}
 
       - name: cargo check
-        run: cargo check --all-targets --all-features
+        run: cargo check --workspace --all-targets --all-features
 
       - name: cargo clippy (-D warnings)
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
       - name: Verify checks are non-mutating (clean git tree)
         run: |
@@ -196,10 +197,10 @@ jobs:
             exit 1
           fi
 
-          cargo-typify typify --no-builder schemas/plugin-manifest.schema.json -o "$tmp_file"
+          cargo-typify typify --no-builder crates/openrisk-core/schemas/plugin-manifest.schema.json -o "$tmp_file"
 
-          if ! diff -u schemas/plugin-manifest.schema.rs "$tmp_file"; then
-            echo "::error title=Generated schema out of date::Run: cd src-tauri && cargo typify --no-builder schemas/plugin-manifest.schema.json -o schemas/plugin-manifest.schema.rs and commit the result."
+          if ! diff -u crates/openrisk-core/schemas/plugin-manifest.schema.rs "$tmp_file"; then
+            echo "::error title=Generated schema out of date::Run: cd src-tauri && cargo typify --no-builder crates/openrisk-core/schemas/plugin-manifest.schema.json -o crates/openrisk-core/schemas/plugin-manifest.schema.rs and commit the result."
             exit 1
           fi
 
@@ -254,7 +255,7 @@ jobs:
           shared-key: ${{ format('backend-rust-{0}-{1}', runner.os, hashFiles('src-tauri/Cargo.lock')) }}
 
       - name: Run export_bindings generator test
-        run: cargo test export_bindings -- --nocapture
+        run: cargo test -p openrisk-tauri export_bindings -- --nocapture
 
       - name: Ensure generated backend bindings are committed
         run: |
@@ -322,7 +323,7 @@ jobs:
       - name: cargo udeps (nightly)
         run: |
           export RUSTC="$(rustup which --toolchain nightly rustc)"
-          rustup run nightly cargo udeps --all-targets
+          rustup run nightly cargo udeps --workspace --all-targets
 
       - name: Verify checks are non-mutating (clean git tree)
         run: |

@@ -8,13 +8,15 @@ use super::plugins::{
 use super::types::{
     LogEntry, PLUGIN_STATUS_METRIC_NAME, PersistenceError, PluginEntrypointSelection,
     PluginFieldTypeDef, PluginMetricDef, PluginMetricValue, PluginOutput, PluginRecord,
-    PluginSettingValue, ScanEntrypointInput, ScanPluginResultRecord, ScanSummaryRecord,
-    SettingValue,
+    PluginRegistryRecord, PluginSettingValue, ScanEntrypointInput, ScanPluginResultRecord,
+    ScanSummaryRecord, SettingValue,
 };
 use serde_json::{Map, Value};
 use std::path::Path;
 
 const DATA_MODEL_V1_VERSION: &str = "0.0.1";
+const PLUGIN_REGISTRY_URL: &str =
+    "https://raw.githubusercontent.com/OpenRiskPlatform/plugins/main/plugins.json";
 
 // ---------------------------------------------------------------------------
 // Scan execution
@@ -73,7 +75,7 @@ pub async fn run_scan(
                 let plugin_inputs = Value::Object(input_map);
                 let entrypoint_fn = load_data.entrypoint_function.clone();
 
-                let result = tauri::async_runtime::spawn_blocking(move || {
+                let result = tokio::task::spawn_blocking(move || {
                     crate::app::plugin::execute_plugin_code_with_settings(
                         code,
                         plugin_inputs,
@@ -156,7 +158,7 @@ pub async fn refresh_plugin_metrics(
     }
     let plugin_settings = Value::Object(settings_map);
 
-    let result = tauri::async_runtime::spawn_blocking(move || {
+    let result = tokio::task::spawn_blocking(move || {
         crate::app::plugin::execute_plugin_code_with_settings(
             code,
             Value::Object(Map::new()),
@@ -181,6 +183,33 @@ pub async fn refresh_plugin_metrics(
 // ---------------------------------------------------------------------------
 // Plugin management
 // ---------------------------------------------------------------------------
+
+/// Fetch installable plugin metadata through the backend HTTP client.
+pub async fn get_plugin_registry() -> Result<PluginRegistryRecord, PersistenceError> {
+    let client = reqwest::Client::builder()
+        .user_agent("OpenRisk/1.0")
+        .build()
+        .map_err(|error| PersistenceError::Http(format!("Failed to build HTTP client: {error}")))?;
+
+    let response = client
+        .get(PLUGIN_REGISTRY_URL)
+        .send()
+        .await
+        .map_err(|error| {
+            PersistenceError::Http(format!("Failed to fetch plugin registry: {error}"))
+        })?
+        .error_for_status()
+        .map_err(|error| {
+            PersistenceError::Http(format!("Plugin registry request failed: {error}"))
+        })?;
+
+    response
+        .json::<PluginRegistryRecord>()
+        .await
+        .map_err(|error| {
+            PersistenceError::Http(format!("Invalid plugin registry payload: {error}"))
+        })
+}
 
 /// Register or refresh a plugin from a directory on disk into the project.
 pub async fn upsert_plugin_from_dir(

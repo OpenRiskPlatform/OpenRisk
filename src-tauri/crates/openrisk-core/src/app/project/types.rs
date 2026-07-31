@@ -216,6 +216,40 @@ pub struct PluginRecord {
     pub setting_values: Vec<PluginSettingValue>,
 }
 
+/// Author metadata from the remote OpenRisk plugin registry.
+#[derive(Debug, Clone, Deserialize, Serialize, Type)]
+pub struct RegistryAuthorRecord {
+    pub name: String,
+    pub email: Option<String>,
+}
+
+/// One installable plugin published in the remote OpenRisk registry.
+#[derive(Debug, Clone, Deserialize, Serialize, Type)]
+pub struct RegistryPluginRecord {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    #[serde(default)]
+    pub versions: Vec<String>,
+    #[serde(default)]
+    pub path: String,
+    pub description: String,
+    #[serde(default)]
+    pub authors: Vec<RegistryAuthorRecord>,
+    #[serde(default)]
+    pub license: String,
+    #[serde(default)]
+    pub main: String,
+}
+
+/// Complete remote plugin registry response.
+#[derive(Debug, Clone, Deserialize, Serialize, Type)]
+pub struct PluginRegistryRecord {
+    #[serde(rename = "generatedAt", alias = "generated_at")]
+    pub generated_at: String,
+    pub plugins: Vec<RegistryPluginRecord>,
+}
+
 // ---------------------------------------------------------------------------
 // Project settings payload
 // ---------------------------------------------------------------------------

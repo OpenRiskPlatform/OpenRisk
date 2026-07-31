@@ -1,0 +1,26 @@
+[package]
+name = "openrisk-core"
+version.workspace = true
+description = "Shared OpenRisk business logic, persistence, and plugin runtime"
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[build-dependencies]
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+[dependencies]
+async-trait.workspace = true
+jsonschema.workspace = true
+libsqlite3-sys.workspace = true
+once_cell.workspace = true
+regress.workspace = true
+reqwest.workspace = true
+rustyscript.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+specta.workspace = true
+sqlx.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+zip.workspace = true

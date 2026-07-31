@@ -8,11 +8,13 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::app::project::{
+use openrisk_core::project::{
     PluginEntrypointSelection, PluginInputDef, PluginRecord, ProjectPersistence, ProjectSummary,
     ScanDetailRecord, ScanEntrypointInput, ScanPluginResultRecord, ScanSummaryRecord, SettingValue,
     SqliteProjectPersistence, service,
 };
+
+uniffi::setup_scaffolding!();
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum NativeOpenRiskError {

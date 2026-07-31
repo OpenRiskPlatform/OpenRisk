@@ -1,0 +1,18 @@
+[package]
+name = "openrisk-uniffi"
+version.workspace = true
+description = "UniFFI adapter for native OpenRisk clients"
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "openrisk_uniffi"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+openrisk-core = { path = "../openrisk-core" }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+uniffi = { workspace = true, features = ["tokio"] }

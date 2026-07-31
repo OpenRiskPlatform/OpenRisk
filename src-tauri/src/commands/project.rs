@@ -1,48 +1,13 @@
 //! Tauri command handlers for project and scan operations.
 
 use crate::ProjectState;
-use crate::app::project::{
-    AppError, PluginEntrypointSelection, PluginRecord, ProjectPersistence, ProjectSettingsPayload,
-    ProjectSettingsRecord, ProjectSummary, ScanDetailRecord, ScanEntrypointInput,
-    ScanSummaryRecord, SettingValue, SqliteProjectPersistence, service,
+use openrisk_core::project::{
+    AppError, PluginEntrypointSelection, PluginRecord, PluginRegistryRecord, ProjectPersistence,
+    ProjectSettingsPayload, ProjectSettingsRecord, ProjectSummary, ScanDetailRecord,
+    ScanEntrypointInput, ScanSummaryRecord, SettingValue, SqliteProjectPersistence, service,
 };
-use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::Arc;
-
-const PLUGIN_REGISTRY_URL: &str =
-    "https://raw.githubusercontent.com/OpenRiskPlatform/plugins/main/plugins.json";
-
-#[derive(Debug, Clone, Deserialize, serde::Serialize, specta::Type)]
-pub struct RegistryAuthorRecord {
-    pub name: String,
-    pub email: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize, serde::Serialize, specta::Type)]
-pub struct RegistryPluginRecord {
-    pub id: String,
-    pub name: String,
-    pub version: String,
-    #[serde(default)]
-    pub versions: Vec<String>,
-    #[serde(default)]
-    pub path: String,
-    pub description: String,
-    #[serde(default)]
-    pub authors: Vec<RegistryAuthorRecord>,
-    #[serde(default)]
-    pub license: String,
-    #[serde(default)]
-    pub main: String,
-}
-
-#[derive(Debug, Clone, Deserialize, serde::Serialize, specta::Type)]
-pub struct PluginRegistryRecord {
-    #[serde(rename = "generatedAt", alias = "generated_at")]
-    pub generated_at: String,
-    pub plugins: Vec<RegistryPluginRecord>,
-}
 
 async fn get_open_project(
     state: &tauri::State<'_, ProjectState>,
@@ -343,25 +308,7 @@ pub async fn reorder_scans(
 #[tauri::command]
 #[specta::specta]
 pub async fn get_plugin_registry() -> Result<PluginRegistryRecord, AppError> {
-    let client = reqwest::Client::builder()
-        .user_agent("OpenRisk/1.0")
-        .build()
-        .map_err(|e| AppError::Internal(format!("Failed to build HTTP client: {}", e)))?;
-
-    let response = client
-        .get(PLUGIN_REGISTRY_URL)
-        .send()
-        .await
-        .map_err(|e| AppError::Internal(format!("Failed to fetch plugin registry: {}", e)))?;
-
-    let response = response
-        .error_for_status()
-        .map_err(|e| AppError::Internal(format!("Plugin registry request failed: {}", e)))?;
-
-    response
-        .json::<PluginRegistryRecord>()
-        .await
-        .map_err(|e| AppError::Internal(format!("Invalid plugin registry payload: {}", e)))
+    service::get_plugin_registry().await.map_err(AppError::from)
 }
 
 /// Export the currently open project as a read-only preview copy at `dest_path`.

@@ -1,7 +1,9 @@
 # OpenRisk native macOS POC
 
-This target is an incremental SwiftUI client over the same Rust project
-persistence and plugin runtime used by the Tauri application.
+This target is an incremental SwiftUI client over `openrisk-core`, the same
+Rust project persistence and plugin runtime used by the Tauri application.
+Its native boundary lives in the separate `openrisk-uniffi` adapter crate, so
+the Swift client does not link the Tauri runtime.
 
 The proof of concept supports the complete primary workflow:
 

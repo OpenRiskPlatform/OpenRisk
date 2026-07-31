@@ -26,12 +26,11 @@ mkdir -p \
 
 pushd "$TAURI_DIR" >/dev/null
 
-cargo build --lib --features native-bindgen
+cargo build -p openrisk-uniffi
 
 cargo run \
-  --features native-bindgen \
-  --bin uniffi-bindgen \
-  -- generate "$RUST_TARGET_DIR/debug/libopenrisk_lib.dylib" \
+  -p openrisk-uniffi-bindgen \
+  -- generate "$RUST_TARGET_DIR/debug/libopenrisk_uniffi.dylib" \
   --language swift \
   --out-dir "$GENERATED_DIR" \
   --config "$ROOT_DIR/native-macos/uniffi-global.toml"
@@ -40,7 +39,7 @@ popd >/dev/null
 
 BINDINGS_FILE="$GENERATED_DIR/OpenRiskCore.swift"
 MODULE_MAP="$GENERATED_DIR/OpenRiskCoreFFI.modulemap"
-RUST_LIBRARY="$RUST_TARGET_DIR/debug/libopenrisk_lib.dylib"
+RUST_LIBRARY="$RUST_TARGET_DIR/debug/libopenrisk_uniffi.dylib"
 
 xcrun swiftc \
   -parse-as-library \
@@ -52,26 +51,26 @@ xcrun swiftc \
   "$ROOT_DIR"/native-macos/Sources/OpenRiskMac/*.swift \
   -Xcc "-fmodule-map-file=$MODULE_MAP" \
   -L "$RUST_TARGET_DIR/debug" \
-  -lopenrisk_lib \
+  -lopenrisk_uniffi \
   -framework AppKit \
   -framework SwiftUI \
   -framework UniformTypeIdentifiers \
   -Xlinker -rpath \
   -Xlinker "@executable_path/../Frameworks"
 
-cp "$RUST_LIBRARY" "$APP_CONTENTS/Frameworks/libopenrisk_lib.dylib"
+cp "$RUST_LIBRARY" "$APP_CONTENTS/Frameworks/libopenrisk_uniffi.dylib"
 
 LINKED_RUST_LIBRARY="$(
   otool -L "$APP_CONTENTS/MacOS/OpenRiskMac" |
-    awk '/libopenrisk_lib\.dylib/ { print $1; exit }'
+    awk '/libopenrisk_uniffi\.dylib/ { print $1; exit }'
 )"
 install_name_tool \
   -change "$LINKED_RUST_LIBRARY" \
-  "@rpath/libopenrisk_lib.dylib" \
+  "@rpath/libopenrisk_uniffi.dylib" \
   "$APP_CONTENTS/MacOS/OpenRiskMac"
 install_name_tool \
-  -id "@rpath/libopenrisk_lib.dylib" \
-  "$APP_CONTENTS/Frameworks/libopenrisk_lib.dylib"
+  -id "@rpath/libopenrisk_uniffi.dylib" \
+  "$APP_CONTENTS/Frameworks/libopenrisk_uniffi.dylib"
 
 sed "s/__APP_VERSION__/$APP_VERSION/g" \
   "$ROOT_DIR/native-macos/Info.plist.in" > "$APP_CONTENTS/Info.plist"

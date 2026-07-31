@@ -1,41 +1,32 @@
-[package]
-name = "openrisk"
+[workspace]
+members = [
+  ".",
+  "crates/openrisk-core",
+  "crates/openrisk-uniffi",
+  "tools/uniffi-bindgen",
+]
+default-members = ["."]
+resolver = "3"
+
+[workspace.package]
 version = "0.1.0"
-description = "A Tauri App"
 authors = ["Tim 14", "Illia Chaban <ic-it@mail.com>"]
 edition = "2024"
 rust-version = "1.94"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[lib]
-name = "openrisk_lib"
-crate-type = [
-  "staticlib",
-  "cdylib",
-  "rlib",
-]
-
-[features]
-default = []
-native-bindgen = ["uniffi/cli"]
-
-[[bin]]
-name = "uniffi-bindgen"
-path = "src/bin/uniffi-bindgen.rs"
-required-features = ["native-bindgen"]
-
-[build-dependencies]
-tauri-build = { version = "2", features = [] }
-rusqlite = { version = "0.32", features = ["bundled"] }
-
-[dependencies]
-tauri = { version = "2.10", features = [] }
-tauri-plugin-shell = "2.3.1"
-tauri-plugin-store = "2"
-tauri-plugin-fs = "2"
-tauri-plugin-opener = "2"
-tauri-plugin-mcp-bridge = "0.10"
+[workspace.dependencies]
+async-trait = "0.1"
+jsonschema = "0.18"
+libsqlite3-sys = { version = "0.30", features = [
+  "bundled-sqlcipher-vendored-openssl",
+] }
+once_cell = "1.21"
+regress = "0.9"
+reqwest = { version = "0.12", default-features = false, features = [
+  "rustls-tls",
+  "rustls-tls-native-roots",
+  "json",
+] }
 rustyscript = { version = "0.12.3", features = [
   "safe_extensions",
   "http",
@@ -43,15 +34,7 @@ rustyscript = { version = "0.12.3", features = [
 ] }
 serde = "=1.0.219"
 serde_json = "=1.0.120"
-serde_bytes = "=0.11.15"
-jsonschema = "0.18"
-regress = "0.9"
-uuid = { version = "1", features = ["v4"] }
-async-trait = "0.1"
-# For ubuntu -> aarch64-unknown-linux-gnu cross-compilation.
-# If you feel the compilation is too slow, you can remove this dependency,
-# and build aarch64-unknown-linux-gnu target on the matched machine (don't cross-compile)
-tauri-plugin-dialog = "2.6.2"
+specta = { version = "=2.0.0-rc.24", features = ["derive", "serde_json"] }
 sqlx = { version = "0.8.6", default-features = false, features = [
   "runtime-tokio-rustls",
   "sqlite",
@@ -59,21 +42,42 @@ sqlx = { version = "0.8.6", default-features = false, features = [
   "macros",
   "derive",
 ] }
-once_cell = "1.21"
-tokio = { version = "1", features = ["sync"] }
-zip = { version = "2", default-features = false, features = ["deflate"] }
-reqwest = { version = "0.12", default-features = false, features = [
-  "rustls-tls",
-  "rustls-tls-native-roots",
-  "json",
-] }
-specta = { version = "=2.0.0-rc.24", features = ["derive", "serde_json"] }
-specta-typescript = "0.0.11"
-tauri-specta = { version = "=2.0.0-rc.24", features = ["derive", "typescript"] }
 thiserror = "2.0"
-libsqlite3-sys = { version = "0.30", features = [
-  "bundled-sqlcipher-vendored-openssl",
-] }
-uniffi = { version = "0.32.0", default-features = false, features = [
-  "tokio",
-] }
+tokio = { version = "1", features = ["rt", "sync"] }
+uniffi = { version = "0.32.0", default-features = false }
+uuid = { version = "1", features = ["v4"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[package]
+name = "openrisk-tauri"
+version.workspace = true
+description = "OpenRisk Tauri desktop adapter"
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+default-run = "openrisk"
+
+[lib]
+name = "openrisk_tauri_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "openrisk"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+openrisk-core = { path = "crates/openrisk-core" }
+specta.workspace = true
+specta-typescript = "0.0.11"
+tauri = { version = "2.10", features = [] }
+tauri-plugin-dialog = "2.6.2"
+tauri-plugin-fs = "2"
+tauri-plugin-mcp-bridge = "0.10"
+tauri-plugin-opener = "2"
+tauri-plugin-shell = "2.3.1"
+tauri-plugin-store = "2"
+tauri-specta = { version = "=2.0.0-rc.24", features = ["derive", "typescript"] }
+tokio.workspace = true
