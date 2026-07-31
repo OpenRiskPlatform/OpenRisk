@@ -13,14 +13,12 @@ APP_VERSION="$(node -p "require('$ROOT_DIR/package.json').version")"
 SWIFT_MODULE_CACHE="$NATIVE_TARGET_DIR/swift-module-cache"
 PROFILE="debug"
 CARGO_PROFILE_ARGS=()
-SWIFT_OPTIMIZATION_ARGS=()
 
 case "${1:-}" in
   "") ;;
   --release)
     PROFILE="release"
     CARGO_PROFILE_ARGS=(--release)
-    SWIFT_OPTIMIZATION_ARGS=(-O -whole-module-optimization)
     ;;
   *)
     echo "Usage: $0 [--release]" >&2
@@ -72,23 +70,28 @@ popd >/dev/null
 BINDINGS_FILE="$GENERATED_DIR/OpenRiskCore.swift"
 MODULE_MAP="$GENERATED_DIR/OpenRiskCoreFFI.modulemap"
 
-xcrun swiftc \
-  -parse-as-library \
-  "${SWIFT_OPTIMIZATION_ARGS[@]}" \
-  -sdk "$MACOS_SDK" \
-  -target "$(uname -m)-apple-macosx14.0" \
-  -module-cache-path "$SWIFT_MODULE_CACHE" \
-  -o "$APP_CONTENTS/MacOS/OpenRiskMac" \
-  "$BINDINGS_FILE" \
-  "$ROOT_DIR"/native-macos/Sources/OpenRiskMac/*.swift \
-  -Xcc "-fmodule-map-file=$MODULE_MAP" \
-  -L "$RUST_PROFILE_DIR" \
-  -lopenrisk_uniffi \
-  -framework AppKit \
-  -framework SwiftUI \
-  -framework UniformTypeIdentifiers \
-  -Xlinker -rpath \
+SWIFT_COMPILER_ARGS=(-parse-as-library)
+if [[ "$PROFILE" == "release" ]]; then
+  SWIFT_COMPILER_ARGS+=(-O -whole-module-optimization)
+fi
+SWIFT_COMPILER_ARGS+=(
+  -sdk "$MACOS_SDK"
+  -target "$(uname -m)-apple-macosx14.0"
+  -module-cache-path "$SWIFT_MODULE_CACHE"
+  -o "$APP_CONTENTS/MacOS/OpenRiskMac"
+  "$BINDINGS_FILE"
+  "$ROOT_DIR"/native-macos/Sources/OpenRiskMac/*.swift
+  -Xcc "-fmodule-map-file=$MODULE_MAP"
+  -L "$RUST_PROFILE_DIR"
+  -lopenrisk_uniffi
+  -framework AppKit
+  -framework SwiftUI
+  -framework UniformTypeIdentifiers
+  -Xlinker -rpath
   -Xlinker "@executable_path/../Frameworks"
+)
+
+xcrun swiftc "${SWIFT_COMPILER_ARGS[@]}"
 
 cp "$RUST_LIBRARY" "$APP_CONTENTS/Frameworks/libopenrisk_uniffi.dylib"
 
