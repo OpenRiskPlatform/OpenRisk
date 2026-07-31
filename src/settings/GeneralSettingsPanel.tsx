@@ -64,7 +64,7 @@ export function GeneralSettingsPanel({
     }
 
     await run("name", async () => {
-      await client.updateProjectSettings(nextName, null, null);
+      await client.updateProjectSettings(nextName, null, null, null);
       await reload();
       setMessage("Project name saved.");
     });
@@ -75,14 +75,14 @@ export function GeneralSettingsPanel({
       return;
     }
     await run("theme", async () => {
-      await client.updateProjectSettings(null, theme, null);
+      await client.updateProjectSettings(null, theme, null, null);
       await reload();
     });
   };
 
   const changeAdvancedMode = async (advancedMode: boolean) => {
     await run("advanced", async () => {
-      await client.updateProjectSettings(null, null, advancedMode);
+      await client.updateProjectSettings(null, null, advancedMode, null);
       await reload();
     });
   };
@@ -166,8 +166,8 @@ export function GeneralSettingsPanel({
           <div>
             <Label htmlFor="advanced-mode">Advanced mode</Label>
             <p className="mt-1 max-w-lg text-xs text-muted-foreground">
-              Show entity IDs, raw field containers, logs, and other technical
-              details in investigation results.
+              Show technical result details and unlock additional project
+              settings.
             </p>
           </div>
           <Switch

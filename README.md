@@ -50,8 +50,8 @@ not depend on Tauri or UniFFI.
 
 Plugin runs execute inside the app process. If the app is force-quit, the next
 project open reconciles scans left in `Running` state. The behavior is shared by
-the Tauri and native macOS apps and is controlled by
-`OPENRISK_INTERRUPTED_SCAN_POLICY`:
+the Tauri and native macOS apps and is configured per project in
+**Settings → Advanced → Interrupted investigations**:
 
 - `fail` (default) — mark interrupted scans as `Failed`;
 - `draft` — restore them as drafts so the user can explicitly run them again;

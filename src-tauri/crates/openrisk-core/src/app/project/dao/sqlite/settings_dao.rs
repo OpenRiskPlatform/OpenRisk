@@ -5,6 +5,7 @@ use super::helpers::{
 };
 use crate::app::project::plugins::LocalPluginBundle;
 use crate::app::project::session::SqliteProjectPersistence;
+use crate::app::project::startup_recovery::InterruptedScanPolicy;
 use crate::app::project::types::*;
 use sqlx::SqliteConnection;
 
@@ -53,6 +54,7 @@ pub(super) async fn load_settings(
         r#"SELECT p.id as "id!", p.name as "name!", p.audit,
                   p.project_settings_id as "project_settings_id!",
                   ps.description, ps.locale, ps.theme, ps.advanced_mode as "advanced_mode!",
+                  ps.interrupted_scan_policy as "interrupted_scan_policy!",
                   ps.is_preview as "is_preview!"
            FROM Project p
            INNER JOIN ProjectSettings ps ON ps.id = p.project_settings_id
@@ -96,6 +98,11 @@ pub(super) async fn load_settings(
             locale: proj.locale.unwrap_or_else(|| "en-US".to_string()),
             theme: normalize_theme(proj.theme),
             advanced_mode: proj.advanced_mode != 0,
+            interrupted_scan_policy: InterruptedScanPolicy::from_config_value(
+                &proj.interrupted_scan_policy,
+            )
+            .as_config_value()
+            .to_string(),
             is_preview,
         },
         plugins,
@@ -107,6 +114,7 @@ pub(super) async fn update_project_settings(
     name: Option<String>,
     theme: Option<String>,
     advanced_mode: Option<bool>,
+    interrupted_scan_policy: Option<String>,
 ) -> Result<ProjectSettingsRecord, PersistenceError> {
     if matches!(&name, Some(n) if n.trim().is_empty()) {
         return Err(PersistenceError::Validation(
@@ -128,14 +136,16 @@ pub(super) async fn update_project_settings(
 
     let psid = project_settings_id(&mut *conn).await?;
 
-    let normalized = normalize_theme(theme);
-    sqlx::query!(
-        r#"UPDATE ProjectSettings SET theme = ?1 WHERE id = ?2"#,
-        normalized,
-        psid
-    )
-    .execute(&mut *conn)
-    .await?;
+    if let Some(theme) = theme {
+        let normalized = normalize_theme(Some(theme));
+        sqlx::query!(
+            r#"UPDATE ProjectSettings SET theme = ?1 WHERE id = ?2"#,
+            normalized,
+            psid
+        )
+        .execute(&mut *conn)
+        .await?;
+    }
 
     if let Some(am) = advanced_mode {
         let advanced_mode_i64 = am as i64;
@@ -148,9 +158,29 @@ pub(super) async fn update_project_settings(
         .await?;
     }
 
+    if let Some(policy) = interrupted_scan_policy {
+        let normalized_policy = InterruptedScanPolicy::try_from_config_value(&policy)
+            .ok_or_else(|| {
+                PersistenceError::Validation(format!(
+                    "Unknown interrupted scan policy '{}'. Expected fail, draft, or off.",
+                    policy
+                ))
+            })?
+            .as_config_value()
+            .to_string();
+        sqlx::query!(
+            r#"UPDATE ProjectSettings SET interrupted_scan_policy = ?1 WHERE id = ?2"#,
+            normalized_policy,
+            psid
+        )
+        .execute(&mut *conn)
+        .await?;
+    }
+
     let row = sqlx::query!(
         r#"SELECT id as "id!", description, locale, theme,
-                advanced_mode as "advanced_mode!"
+                advanced_mode as "advanced_mode!",
+                interrupted_scan_policy as "interrupted_scan_policy!"
             FROM ProjectSettings WHERE id = ?1"#,
         psid,
     )
@@ -163,6 +193,11 @@ pub(super) async fn update_project_settings(
         locale: row.locale.unwrap_or_else(|| "en-US".to_string()),
         theme: normalize_theme(row.theme),
         advanced_mode: row.advanced_mode != 0,
+        interrupted_scan_policy: InterruptedScanPolicy::from_config_value(
+            &row.interrupted_scan_policy,
+        )
+        .as_config_value()
+        .to_string(),
         is_preview: false,
     })
 }

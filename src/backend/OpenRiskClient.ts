@@ -22,6 +22,7 @@ export interface OpenRiskClient {
     name: string | null,
     theme: string | null,
     advancedMode: boolean | null,
+    interruptedScanPolicy: string | null,
   ): Promise<ProjectSettingsRecord>;
 
   setPluginSetting(

@@ -13,6 +13,7 @@ import {
 import { PluginSettingsForm } from "@/plugins/PluginSettingsForm";
 import { displayName } from "@/shared/humanizeIdentifier";
 import { GeneralSettingsPanel } from "./GeneralSettingsPanel";
+import { AdvancedSettingsPanel } from "./AdvancedSettingsPanel";
 import { PluginManagerPanel } from "./PluginManagerPanel";
 import { SecuritySettingsPanel } from "./SecuritySettingsPanel";
 import {
@@ -49,6 +50,12 @@ export function SettingsDialog({
   const content =
     activeCategory === "general" ? (
       <GeneralSettingsPanel
+        client={client}
+        settings={settings}
+        onSettingsReloaded={onSettingsReloaded}
+      />
+    ) : activeCategory === "advanced" ? (
+      <AdvancedSettingsPanel
         client={client}
         settings={settings}
         onSettingsReloaded={onSettingsReloaded}
@@ -100,6 +107,7 @@ export function SettingsDialog({
             activeCategory={activeCategory}
             plugins={settings.plugins}
             readOnly={settings.project.is_preview}
+            advancedMode={settings.projectSettings.advancedMode}
             onCategoryChange={setActiveCategory}
           />
           <div className="min-w-0 flex-1 overscroll-contain overflow-y-auto p-6 pr-12">

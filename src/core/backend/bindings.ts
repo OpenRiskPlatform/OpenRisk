@@ -30,7 +30,7 @@ export const commands = {
 	 *  Update the project-wide theme setting.
 	 *  #
 	 */
-	updateProjectSettings: (name: string | null, theme: string | null, advancedMode: boolean | null) => typedError<ProjectSettingsRecord, AppError>(__TAURI_INVOKE("update_project_settings", { name, theme, advancedMode })),
+	updateProjectSettings: (name: string | null, theme: string | null, advancedMode: boolean | null, interruptedScanPolicy: string | null) => typedError<ProjectSettingsRecord, AppError>(__TAURI_INVOKE("update_project_settings", { name, theme, advancedMode, interruptedScanPolicy })),
 	/**
 	 *  Set one plugin setting value within the active project.
 	 *  #
@@ -294,6 +294,7 @@ export type ProjectSettingsRecord = {
 	locale: string,
 	theme: string,
 	advancedMode: boolean,
+	interruptedScanPolicy: string,
 	isPreview: boolean,
 };
 

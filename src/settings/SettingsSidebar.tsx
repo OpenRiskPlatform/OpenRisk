@@ -1,10 +1,16 @@
-import { LockKeyhole, PackagePlus, Settings } from "lucide-react";
+import {
+  LockKeyhole,
+  PackagePlus,
+  Settings,
+  SlidersHorizontal,
+} from "lucide-react";
 import type { PluginRecord } from "@/core/backend/bindings";
 import { cn } from "@/lib/utils";
 import { displayName } from "@/shared/humanizeIdentifier";
 
 export type SettingsCategory =
   | "general"
+  | "advanced"
   | "plugins"
   | "security"
   | `plugin:${string}`;
@@ -13,11 +19,17 @@ interface SettingsSidebarProps {
   activeCategory: SettingsCategory;
   plugins: PluginRecord[];
   readOnly: boolean;
+  advancedMode: boolean;
   onCategoryChange: (category: SettingsCategory) => void;
 }
 
 const categories = [
   { id: "general" as const, label: "General", icon: Settings },
+  {
+    id: "advanced" as const,
+    label: "Advanced",
+    icon: SlidersHorizontal,
+  },
   { id: "plugins" as const, label: "Community plugins", icon: PackagePlus },
   { id: "security" as const, label: "Security", icon: LockKeyhole },
 ];
@@ -26,6 +38,7 @@ export function SettingsSidebar({
   activeCategory,
   plugins,
   readOnly,
+  advancedMode,
   onCategoryChange,
 }: SettingsSidebarProps) {
   const enabledPlugins = plugins.filter((plugin) => plugin.enabled);
@@ -37,7 +50,11 @@ export function SettingsSidebar({
       </p>
       <nav className="space-y-1">
         {categories
-          .filter((category) => !readOnly || category.id === "general")
+          .filter(
+            (category) =>
+              (!readOnly || category.id === "general") &&
+              (category.id !== "advanced" || advancedMode),
+          )
           .map((category) => {
             const Icon = category.icon;
             return (

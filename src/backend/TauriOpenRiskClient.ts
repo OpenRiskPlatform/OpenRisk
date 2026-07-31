@@ -12,8 +12,15 @@ export const tauriOpenRiskClient: OpenRiskClient = {
   },
 
   loadSettings: () => unwrap(commands.loadSettings()),
-  updateProjectSettings: (name, theme, advancedMode) =>
-    unwrap(commands.updateProjectSettings(name, theme, advancedMode)),
+  updateProjectSettings: (name, theme, advancedMode, interruptedScanPolicy) =>
+    unwrap(
+      commands.updateProjectSettings(
+        name,
+        theme,
+        advancedMode,
+        interruptedScanPolicy,
+      ),
+    ),
 
   setPluginSetting: (pluginId, settingName, value) =>
     unwrap(commands.setPluginSetting(pluginId, settingName, value)),

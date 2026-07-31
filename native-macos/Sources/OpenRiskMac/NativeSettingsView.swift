@@ -2,6 +2,7 @@ import SwiftUI
 
 enum NativeSettingsRoute: Hashable {
   case general
+  case advanced
   case plugins
   case security
   case plugin(String)
@@ -17,6 +18,10 @@ struct NativeSettingsView: View {
         Section("Settings") {
           Label("General", systemImage: "gearshape")
             .tag(NativeSettingsRoute.general)
+          if model.settingsSnapshot?.projectSettings.advancedMode == true {
+            Label("Advanced", systemImage: "slider.horizontal.3")
+              .tag(NativeSettingsRoute.advanced)
+          }
           Label("Community Plugins", systemImage: "shippingbox")
             .tag(NativeSettingsRoute.plugins)
           Label("Security", systemImage: "lock")
@@ -74,6 +79,9 @@ struct NativeSettingsView: View {
         .id(
           "general-\(settings.project.name)-\(settings.projectSettings.theme)-\(settings.projectSettings.advancedMode)"
         )
+    case .advanced:
+      NativeAdvancedSettingsView(model: model, settings: settings)
+        .id("advanced-\(settings.projectSettings.interruptedScanPolicy)")
     case .plugins:
       NativePluginManagerView(
         model: model,
@@ -165,6 +173,10 @@ private struct NativeGeneralSettingsView: View {
             }
           )
         )
+
+        Text("Shows technical result details and additional project settings.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
       }
 
       Section {

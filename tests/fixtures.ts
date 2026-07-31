@@ -73,6 +73,7 @@ export const projectSettings: ProjectSettingsPayload = {
     locale: "en",
     theme: "system",
     advancedMode: false,
+    interruptedScanPolicy: "fail",
     isPreview: false,
   },
   plugins: [demoPlugin],

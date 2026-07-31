@@ -718,15 +718,16 @@ pub(super) async fn begin_scan_run(
 ) -> Result<ScanRunContext, PersistenceError> {
     let mut guard = this.conn.lock().await;
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
-    let scan_preview = load_scan_preview_if_draft(&mut *conn, scan_id).await?;
+    let mut transaction = conn.begin().await?;
+    let scan_preview = load_scan_preview_if_draft(&mut transaction, scan_id).await?;
 
-    let psid = project_settings_id(&mut *conn).await?;
-    let project_id = project_id(&mut *conn).await?;
-    prepare_scan_for_run(&mut *conn, scan_id).await?;
+    let psid = project_settings_id(&mut transaction).await?;
+    let project_id = project_id(&mut transaction).await?;
+    prepare_scan_for_run(&mut transaction, scan_id).await?;
 
     let selected_revision_map =
-        persist_selected_plugins(&mut *conn, scan_id, &project_id, selected_plugins).await?;
-    persist_scan_inputs(&mut *conn, scan_id, inputs, &selected_revision_map).await?;
+        persist_selected_plugins(&mut transaction, scan_id, &project_id, selected_plugins).await?;
+    persist_scan_inputs(&mut transaction, scan_id, inputs, &selected_revision_map).await?;
 
     let mut plugins = Vec::new();
     for sel in selected_plugins {
@@ -740,8 +741,10 @@ pub(super) async fn begin_scan_run(
                 ))
             })?;
 
-        plugins.push(load_plugin_run_data(&mut *conn, &psid, sel, revision_id).await?);
+        plugins.push(load_plugin_run_data(&mut transaction, &psid, sel, revision_id).await?);
     }
+
+    transaction.commit().await?;
 
     Ok(ScanRunContext {
         scan_preview,
@@ -757,10 +760,12 @@ pub(super) async fn end_scan_run(
 ) -> Result<ScanSummaryRecord, PersistenceError> {
     let mut guard = this.conn.lock().await;
     let conn = guard.as_mut().ok_or_else(conn_unavailable)?;
+    let mut transaction = conn.begin().await?;
 
-    persist_scan_results(&mut *conn, scan_id, &results).await?;
-    complete_scan(&mut *conn, scan_id, preview.as_deref()).await?;
-    upsert_scan_metrics(&mut *conn, &results).await?;
+    persist_scan_results(&mut transaction, scan_id, &results).await?;
+    complete_scan(&mut transaction, scan_id, preview.as_deref()).await?;
+    upsert_scan_metrics(&mut transaction, &results).await?;
+    transaction.commit().await?;
 
     fetch_scan_summary_by_id(&mut *conn, scan_id).await
 }

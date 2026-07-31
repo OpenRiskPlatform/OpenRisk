@@ -8,9 +8,6 @@
 use super::types::PersistenceError;
 use sqlx::SqliteConnection;
 
-/// Environment variable used by both the Tauri and native app shells.
-pub const INTERRUPTED_SCAN_POLICY_ENV: &str = "OPENRISK_INTERRUPTED_SCAN_POLICY";
-
 /// What to do with persisted `Running` scans when a project is opened.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum InterruptedScanPolicy {
@@ -24,22 +21,27 @@ pub enum InterruptedScanPolicy {
 }
 
 impl InterruptedScanPolicy {
-    /// Resolve the process-wide policy. Unknown values intentionally fall back to [`Self::Fail`].
-    pub fn from_environment() -> Self {
-        std::env::var(INTERRUPTED_SCAN_POLICY_ENV)
-            .ok()
-            .as_deref()
-            .map(Self::from_config_value)
-            .unwrap_or_default()
+    /// Parse a persisted configuration value. Unknown values use the safe default.
+    pub fn from_config_value(value: &str) -> Self {
+        Self::try_from_config_value(value).unwrap_or_default()
     }
 
-    /// Parse a configuration value without reading process state.
-    pub fn from_config_value(value: &str) -> Self {
+    /// Parse a user-provided value without silently accepting a typo.
+    pub fn try_from_config_value(value: &str) -> Option<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
-            "off" | "disabled" | "ignore" => Self::Off,
-            "draft" | "restore-draft" | "resume" => Self::RestoreDraft,
-            "fail" | "failed" | "invalidate" => Self::Fail,
-            _ => Self::Fail,
+            "off" | "disabled" | "ignore" => Some(Self::Off),
+            "draft" | "restore-draft" | "resume" => Some(Self::RestoreDraft),
+            "fail" | "failed" | "invalidate" => Some(Self::Fail),
+            _ => None,
+        }
+    }
+
+    /// Stable value stored in project settings.
+    pub fn as_config_value(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Fail => "fail",
+            Self::RestoreDraft => "draft",
         }
     }
 }
@@ -111,6 +113,10 @@ mod tests {
         assert_eq!(
             InterruptedScanPolicy::from_config_value("unexpected"),
             InterruptedScanPolicy::Fail
+        );
+        assert_eq!(
+            InterruptedScanPolicy::try_from_config_value("unexpected"),
+            None
         );
     }
 

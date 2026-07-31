@@ -177,6 +177,7 @@ pub struct NativeProjectSettings {
     pub locale: String,
     pub theme: String,
     pub advanced_mode: bool,
+    pub interrupted_scan_policy: String,
     pub is_preview: bool,
 }
 
@@ -188,6 +189,7 @@ impl From<ProjectSettingsRecord> for NativeProjectSettings {
             locale: settings.locale,
             theme: settings.theme,
             advanced_mode: settings.advanced_mode,
+            interrupted_scan_policy: settings.interrupted_scan_policy,
             is_preview: settings.is_preview,
         }
     }

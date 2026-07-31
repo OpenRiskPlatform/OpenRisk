@@ -103,10 +103,11 @@ impl NativeOpenRiskClient {
         name: Option<String>,
         theme: Option<String>,
         advanced_mode: Option<bool>,
+        interrupted_scan_policy: Option<String>,
     ) -> Result<NativeProjectSettings, NativeOpenRiskError> {
         let project = self.open_project_handle().await?;
         project
-            .update_project_settings(name, theme, advanced_mode)
+            .update_project_settings(name, theme, advanced_mode, interrupted_scan_policy)
             .await
             .map(Into::into)
             .map_err(NativeOpenRiskError::operation)

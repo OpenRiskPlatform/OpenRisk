@@ -43,6 +43,7 @@ pub struct ProjectSettingsRecord {
     pub locale: String,
     pub theme: String,
     pub advanced_mode: bool,
+    pub interrupted_scan_policy: String,
     pub is_preview: bool,
 }
 

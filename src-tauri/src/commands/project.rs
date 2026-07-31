@@ -85,11 +85,12 @@ pub async fn update_project_settings(
     name: Option<String>,
     theme: Option<String>,
     advanced_mode: Option<bool>,
+    interrupted_scan_policy: Option<String>,
     state: tauri::State<'_, ProjectState>,
 ) -> Result<ProjectSettingsRecord, AppError> {
     let project = get_open_project(&state).await?;
     project
-        .update_project_settings(name, theme, advanced_mode)
+        .update_project_settings(name, theme, advanced_mode, interrupted_scan_policy)
         .await
         .map_err(AppError::from)
 }

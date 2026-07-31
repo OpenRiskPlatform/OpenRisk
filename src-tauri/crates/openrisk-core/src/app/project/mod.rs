@@ -20,5 +20,5 @@ mod types;
 
 pub use dao::ProjectPersistence;
 pub use session::SqliteProjectPersistence;
-pub use startup_recovery::{INTERRUPTED_SCAN_POLICY_ENV, InterruptedScanPolicy};
+pub use startup_recovery::InterruptedScanPolicy;
 pub use types::*;
