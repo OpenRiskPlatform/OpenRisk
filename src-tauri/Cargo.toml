@@ -59,7 +59,9 @@ default-run = "openrisk"
 
 [lib]
 name = "openrisk_tauri_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# The desktop binary links this adapter as a Rust library. Native-client FFI
+# artifacts are produced by the separate `openrisk-uniffi` crate.
+crate-type = ["rlib"]
 
 [[bin]]
 name = "openrisk"
