@@ -4,8 +4,7 @@
     "description": "Some description",
     "authors": [
         {
-            "name": "OpenRiskPlatform",
-            "email": "simemail@gmail.com"
+            "name": "OpenRiskPlatform"
         }
     ],
     "icon": "icon.png",

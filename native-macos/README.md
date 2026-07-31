@@ -39,6 +39,13 @@ Build it from the repository root:
 npm run native:macos
 ```
 
+Use the optimized, stripped build used by GitHub Actions for a distributable
+bundle:
+
+```bash
+npm run native:macos -- --release
+```
+
 The application bundle is generated inside the existing ignored Cargo target
 directory:
 

@@ -10,7 +10,7 @@ resolver = "3"
 
 [workspace.package]
 version = "0.1.0"
-authors = ["Tim 14", "Illia Chaban <ic-it@mail.com>"]
+authors = ["OpenRiskPlatform"]
 edition = "2024"
 rust-version = "1.94"
 
