@@ -15,8 +15,10 @@ mod plugins;
 mod security;
 pub mod service;
 pub(super) mod session;
+mod startup_recovery;
 mod types;
 
 pub use dao::ProjectPersistence;
 pub use session::SqliteProjectPersistence;
+pub use startup_recovery::{INTERRUPTED_SCAN_POLICY_ENV, InterruptedScanPolicy};
 pub use types::*;

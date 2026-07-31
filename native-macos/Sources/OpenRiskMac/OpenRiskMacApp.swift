@@ -17,6 +17,11 @@ struct OpenRiskMacApp: App {
         .windowStyle(.automatic)
         .commands {
             CommandGroup(replacing: .newItem) {
+                Button("New Project…") {
+                    model.chooseNewProject()
+                }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+
                 Button("New Investigation") {
                     model.createInvestigation()
                 }
@@ -27,6 +32,14 @@ struct OpenRiskMacApp: App {
                     model.chooseProject()
                 }
                 .keyboardShortcut("o")
+            }
+
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") {
+                    model.presentSettings()
+                }
+                .keyboardShortcut(",")
+                .disabled(model.project == nil)
             }
         }
     }

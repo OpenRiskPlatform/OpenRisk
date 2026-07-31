@@ -3,13 +3,12 @@ import { describe, expect, it } from "vitest";
 import { ScanStatusIndicator } from "@/investigations/ScanStatusIndicator";
 
 describe("ScanStatusIndicator", () => {
-  it("shows completed status without a success icon", () => {
+  it("hides completed status", () => {
     const { container } = render(
       <ScanStatusIndicator status="Completed" />,
     );
 
-    expect(screen.getByText("Completed")).toBeInTheDocument();
-    expect(container.querySelector("svg")).toBeNull();
+    expect(container).toBeEmptyDOMElement();
   });
 
   it("renders nothing for an icon-only completed status", () => {
@@ -27,5 +26,11 @@ describe("ScanStatusIndicator", () => {
 
     expect(screen.getByLabelText("Draft")).toBeInTheDocument();
     expect(container.querySelector("svg")).not.toBeNull();
+  });
+
+  it("shows failed when a completed scan contains failed results", () => {
+    render(<ScanStatusIndicator status="Completed" hasFailures />);
+
+    expect(screen.getByText("Failed")).toBeInTheDocument();
   });
 });

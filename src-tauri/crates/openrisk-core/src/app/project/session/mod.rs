@@ -18,6 +18,7 @@ use super::plugins::{LocalPluginBundle, sidecar_path};
 use super::security::{
     cache_key, clear_cached_key, escape_sql_literal, get_cached_key, lock_error,
 };
+use super::startup_recovery::{InterruptedScanPolicy, reconcile_interrupted_scans};
 use super::types::{PersistenceError, ProjectLockStatus, ProjectSummary};
 use sqlx::{Connection, SqliteConnection, sqlite::SqliteConnectOptions};
 use std::fs;
@@ -144,7 +145,20 @@ impl SqliteProjectPersistence {
     /// Runs pending migrations. Returns a lock error when the database is encrypted
     /// and no cached key is available.
     pub async fn open(project_path: &Path) -> Result<(ProjectSummary, Self), PersistenceError> {
-        Self::open_inner(project_path, None).await
+        Self::open_with_recovery_policy(project_path, InterruptedScanPolicy::from_environment())
+            .await
+    }
+
+    /// Open a project with an explicit interrupted-scan recovery policy.
+    ///
+    /// This is primarily useful for alternative app shells and tests. Production callers can
+    /// normally use [`Self::open`] and configure the policy through
+    /// [`super::startup_recovery::INTERRUPTED_SCAN_POLICY_ENV`].
+    pub async fn open_with_recovery_policy(
+        project_path: &Path,
+        recovery_policy: InterruptedScanPolicy,
+    ) -> Result<(ProjectSummary, Self), PersistenceError> {
+        Self::open_inner(project_path, None, recovery_policy).await
     }
 
     /// Open an existing encrypted project with an explicit password.
@@ -152,7 +166,21 @@ impl SqliteProjectPersistence {
         project_path: &Path,
         password: String,
     ) -> Result<(ProjectSummary, Self), PersistenceError> {
-        Self::open_inner(project_path, Some(password)).await
+        Self::open_with_password_and_recovery_policy(
+            project_path,
+            password,
+            InterruptedScanPolicy::from_environment(),
+        )
+        .await
+    }
+
+    /// Open an encrypted project with an explicit interrupted-scan recovery policy.
+    pub async fn open_with_password_and_recovery_policy(
+        project_path: &Path,
+        password: String,
+        recovery_policy: InterruptedScanPolicy,
+    ) -> Result<(ProjectSummary, Self), PersistenceError> {
+        Self::open_inner(project_path, Some(password), recovery_policy).await
     }
 
     /// Probe the lock status of a project file *without* opening it.
@@ -170,6 +198,7 @@ impl SqliteProjectPersistence {
     async fn open_inner(
         project_path: &Path,
         password: Option<String>,
+        recovery_policy: InterruptedScanPolicy,
     ) -> Result<(ProjectSummary, Self), PersistenceError> {
         let db_path = Self::existing_db_path(project_path)?;
 
@@ -213,6 +242,10 @@ impl SqliteProjectPersistence {
         )
         .fetch_one(&mut conn)
         .await?;
+
+        if project_row.is_preview == 0 {
+            reconcile_interrupted_scans(&mut conn, recovery_policy).await?;
+        }
 
         if let Some(pw) = &password {
             cache_key(&db_path, pw.clone());

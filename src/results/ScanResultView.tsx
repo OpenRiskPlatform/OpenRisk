@@ -261,21 +261,29 @@ export function ScanResultView({
   const activeEntrypointName =
     entrypointNameByKey[activeKey] ??
     humanizeIdentifier(activeEntrypointId);
+  const hasFailures = detail.results.some((result) => !result.output.ok);
   return (
     <div className="mx-auto w-full max-w-4xl">
       <header className="pb-7">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold">
-            {detail.preview?.trim() || `Investigation ${detail.id.slice(0, 8)}`}
-          </h1>
-          <ScanStatusIndicator status={detail.status} />
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="truncate text-2xl font-semibold">
+              {detail.preview?.trim() ||
+                `Investigation ${detail.id.slice(0, 8)}`}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {formatDate(detail.createdAt, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </p>
+          </div>
+          <ScanStatusIndicator
+            status={detail.status}
+            hasFailures={hasFailures}
+            className="shrink-0 pt-1"
+          />
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {formatDate(detail.createdAt, {
-            dateStyle: "medium",
-            timeStyle: "short",
-          })}
-        </p>
       </header>
 
       {visibleInputs.length > 0 ? (

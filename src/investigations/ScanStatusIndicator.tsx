@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 
 interface ScanStatusIndicatorProps {
   status: string;
+  hasFailures?: boolean;
   showLabel?: boolean;
   className?: string;
 }
@@ -32,21 +33,24 @@ const presentations = {
 
 export function ScanStatusIndicator({
   status,
+  hasFailures = false,
   showLabel = true,
   className,
 }: ScanStatusIndicatorProps) {
-  const presentation =
-    presentations[status as keyof typeof presentations] ??
-    presentations.Failed;
-  const Icon = presentation.icon;
+  const effectiveStatus = presentedScanStatus(status, hasFailures);
 
-  if (!Icon && !showLabel) {
+  if (!effectiveStatus) {
     return null;
   }
 
+  const presentation =
+    presentations[effectiveStatus as keyof typeof presentations] ??
+    presentations.Failed;
+  const Icon = presentation.icon;
+
   return (
     <span
-      aria-label={showLabel ? undefined : status}
+      aria-label={showLabel ? undefined : effectiveStatus}
       className={cn(
         "inline-flex items-center gap-1.5 text-sm",
         presentation.className,
@@ -56,10 +60,34 @@ export function ScanStatusIndicator({
       {Icon ? (
         <Icon
           aria-hidden="true"
-          className={cn("h-4 w-4", status === "Running" && "animate-spin")}
+          className={cn(
+            "h-4 w-4",
+            effectiveStatus === "Running" && "animate-spin",
+          )}
         />
       ) : null}
-      {showLabel ? status : null}
+      {showLabel ? effectiveStatus : null}
     </span>
   );
+}
+
+function presentedScanStatus(
+  status: string,
+  hasFailures: boolean,
+): keyof typeof presentations | null {
+  switch (status.toLowerCase()) {
+    case "running":
+      return "Running";
+    case "draft":
+      return "Draft";
+    case "failed":
+    case "error":
+      return "Failed";
+    case "completed":
+    case "complete":
+    case "success":
+      return hasFailures ? "Failed" : null;
+    default:
+      return "Failed";
+  }
 }

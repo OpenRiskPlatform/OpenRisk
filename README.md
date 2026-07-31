@@ -46,6 +46,21 @@ internal and does not control the packaged application version.
 Both React/Tauri and SwiftUI call the same `openrisk-core` use cases. Core must
 not depend on Tauri or UniFFI.
 
+### Interrupted scan recovery
+
+Plugin runs execute inside the app process. If the app is force-quit, the next
+project open reconciles scans left in `Running` state. The behavior is shared by
+the Tauri and native macOS apps and is controlled by
+`OPENRISK_INTERRUPTED_SCAN_POLICY`:
+
+- `fail` (default) — mark interrupted scans as `Failed`;
+- `draft` — restore them as drafts so the user can explicitly run them again;
+- `off` — disable startup reconciliation and leave them as `Running`.
+
+Automatic retry is intentionally not a startup policy: plugins can perform paid
+or externally visible operations, and a force-quit does not prove that those
+operations were never executed.
+
 ## Backend quality checks (Rust only)
 
 A backend-only CI workflow is defined in `.github/workflows/backend-rust-checks.yml` under workflow name `Backend` and runs as named jobs:
