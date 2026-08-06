@@ -70,6 +70,11 @@ pub trait ProjectPersistence: Send + Sync {
     async fn list_scans(&self) -> Result<Vec<ScanSummaryRecord>, PersistenceError>;
     /// Fetch full details of a single scan including all plugin results.
     async fn get_scan(&self, scan_id: &str) -> Result<ScanDetailRecord, PersistenceError>;
+    /// Build an immutable report snapshot using the exact plugin revisions used by the scan.
+    async fn get_scan_report_snapshot(
+        &self,
+        scan_id: &str,
+    ) -> Result<ScanReportSnapshot, PersistenceError>;
     /// Persist the current selection and inputs while the scan remains Draft.
     async fn update_scan_draft(
         &self,

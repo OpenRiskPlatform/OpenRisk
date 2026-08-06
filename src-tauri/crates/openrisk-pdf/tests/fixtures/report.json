@@ -1,0 +1,125 @@
+{
+  "report": {
+    "schemaVersion": "1",
+    "locale": "en-US",
+    "project": {
+      "id": "project-demo-2026",
+      "name": "Enhanced Due Diligence",
+      "description": "Independent background review prepared for internal compliance assessment.",
+      "audit": "EDD-2026-0042"
+    },
+    "scan": {
+      "id": "b0f42238-bd58-47ed-8891-0a24d05bd71a",
+      "title": "Иван Петров / Vendor screening",
+      "status": "Completed",
+      "createdAt": "2026-08-06T08:43:12Z"
+    },
+    "inputs": [
+      {
+        "pluginId": "adversea",
+        "pluginRevisionId": "revision-adversea-2.4.1",
+        "pluginName": "Adversea Intelligence",
+        "pluginVersion": "2.4.1",
+        "entrypointId": "pep-sanctions",
+        "entrypointName": "PEP and sanctions screening",
+        "fieldName": "fullName",
+        "fieldTitle": "Full legal name",
+        "value": "Иван Петров"
+      },
+      {
+        "pluginId": "adversea",
+        "pluginRevisionId": "revision-adversea-2.4.1",
+        "pluginName": "Adversea Intelligence",
+        "pluginVersion": "2.4.1",
+        "entrypointId": "pep-sanctions",
+        "entrypointName": "PEP and sanctions screening",
+        "fieldName": "country",
+        "fieldTitle": "Country",
+        "value": "slovakia"
+      }
+    ],
+    "executions": [
+      {
+        "pluginId": "adversea",
+        "pluginRevisionId": "revision-adversea-2.4.1",
+        "pluginName": "Adversea Intelligence",
+        "pluginVersion": "2.4.1",
+        "entrypointId": "pep-sanctions",
+        "entrypointName": "PEP and sanctions screening",
+        "ok": true,
+        "error": null,
+        "data": [
+          {
+            "$modelVersion": "0.0.3",
+            "$entity": "entity.person",
+            "$id": "adversea:person:74a8c9",
+            "$props": {
+              "name": [{"$type": "string", "value": "Иван Петров"}],
+              "aliases": [{"$type": "string", "value": "Ivan Petrov"}],
+              "birthDate": [{"$type": "date-partial-iso8601", "value": "1978"}],
+              "nationalities": [{"$type": "string", "value": "Slovakia"}],
+              "pepStatus": [{"$type": "boolean", "value": true}],
+              "sanctioned": [{"$type": "boolean", "value": false}],
+              "profileUrl": [{"$type": "url", "value": "https://example.org/records/person/74a8c9?source=openrisk&case=EDD-2026-0042"}]
+            },
+            "$extra": [
+              {"$type": "key-value", "value": {"key": "Match confidence", "value": "0.93"}},
+              {"$type": "key-value", "value": {"key": "Position", "value": "Former public official"}}
+            ],
+            "$sources": [
+              {"name": "Official register", "source": "https://example.org/official-register/74a8c9"},
+              {"name": "Screening dataset", "source": "https://example.org/datasets/screening"}
+            ]
+          }
+        ],
+        "rawDataJson": "[{\"$modelVersion\":\"0.0.3\",\"$entity\":\"entity.person\",\"$id\":\"adversea:person:74a8c9\"}]",
+        "formattedDataJson": "[\n  {\n    \"$modelVersion\": \"0.0.3\",\n    \"$entity\": \"entity.person\",\n    \"$id\": \"adversea:person:74a8c9\",\n    \"$props\": {\n      \"name\": [{\"$type\": \"string\", \"value\": \"Иван Петров\"}],\n      \"pepStatus\": [{\"$type\": \"boolean\", \"value\": true}],\n      \"sanctioned\": [{\"$type\": \"boolean\", \"value\": false}]\n    }\n  }\n]",
+        "parseError": null,
+        "logs": [
+          {"level": "log", "message": "Screening request completed"}
+        ]
+      },
+      {
+        "pluginId": "adversea",
+        "pluginRevisionId": "revision-adversea-2.4.1",
+        "pluginName": "Adversea Intelligence",
+        "pluginVersion": "2.4.1",
+        "entrypointId": "topic-report",
+        "entrypointName": "Adverse media topics",
+        "ok": true,
+        "error": null,
+        "data": [
+          {
+            "$modelVersion": "0.0.3",
+            "$entity": "entity.riskTopic",
+            "$id": "topic:fraud",
+            "$props": {
+              "topicId": [{"$type": "string", "value": "Fraud and financial misconduct"}],
+              "adverseActivityDetected": [{"$type": "boolean", "value": true}],
+              "summary": [{"$type": "string", "value": "Two potentially relevant mentions were identified. Manual source verification is required."}]
+            },
+            "$sources": [{"name": "Regional business journal", "source": "https://example.org/news/investigation-2024"}]
+          },
+          {
+            "$modelVersion": "0.0.3",
+            "$entity": "entity.riskTopic",
+            "$id": "topic:sanctions",
+            "$props": {
+              "topicId": [{"$type": "string", "value": "Sanctions evasion"}],
+              "adverseActivityDetected": [{"$type": "boolean", "value": false}],
+              "summary": [{"$type": "string", "value": "No relevant activity was identified in the available sources."}]
+            },
+            "$sources": []
+          }
+        ],
+        "rawDataJson": "[]",
+        "formattedDataJson": "[]",
+        "parseError": null,
+        "logs": []
+      }
+    ]
+  },
+  "profile": "advanced",
+  "generatedAt": "2026-08-06T09:10:00Z",
+  "snapshotSha256": "4591b1dc6b2ed7d5a181495737386d54cd23a05fbb8eeccf06f77378e020321c"
+}

@@ -80,6 +80,13 @@ export const commands = {
 	 */
 	getScan: (scanId: string) => typedError<ScanDetailRecord, AppError>(__TAURI_INVOKE("get_scan", { scanId })),
 	/**
+	 *  Render one completed investigation as an official, print-ready PDF report.
+	 * 
+	 *  The report is built from an immutable snapshot using the exact plugin revisions
+	 *  stored with the scan. Rendering and file I/O run off the async command thread.
+	 */
+	exportScanPdf: (scanId: string, destPath: string, profile: ReportProfile) => typedError<PdfExportReceipt, AppError>(__TAURI_INVOKE("export_scan_pdf", { scanId, destPath, profile })),
+	/**
 	 *  Persist the current form state while keeping the scan in Draft status.
 	 *  #
 	 */
@@ -154,6 +161,14 @@ export type LogEntry = {
 
 // Log severity level emitted by a plugin during execution.
 export type LogLevel = "log" | "warn" | "error";
+
+// Receipt returned after a PDF has been written successfully.
+export type PdfExportReceipt = {
+	destinationPath: string,
+	sha256: string,
+	byteLength: number,
+	pageCount: number,
+};
 
 // Author entry from a plugin manifest.
 export type PluginAuthor = {
@@ -329,6 +344,13 @@ export type RegistryPluginRecord = {
 	license?: string,
 	main?: string,
 };
+
+// Presentation profile for an exported investigation report.
+export type ReportProfile = 
+// Compact, readable presentation of the stored inputs and plugin results.
+"standard" | 
+// Readable presentation used in Advanced mode, still without runtime metadata or raw JSON.
+"advanced";
 
 // Full scan details: metadata, selected plugins, inputs, and all plugin results.
 export type ScanDetailRecord = {

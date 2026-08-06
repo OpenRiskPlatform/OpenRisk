@@ -181,6 +181,12 @@ export function createClient(
     createScan: vi.fn(async () => draftScan),
     listScans: vi.fn(async () => [completedScan]),
     getScan: vi.fn(async () => completedScanDetail),
+    exportScanPdf: vi.fn(async (_scanId, destPath) => ({
+      destinationPath: destPath,
+      sha256: "0".repeat(64),
+      byteLength: 1024,
+      pageCount: 3,
+    })),
     updateScanDraft: vi.fn(async () => draftScan),
     runScan: vi.fn(async () => completedScan),
     updateScanPreview: vi.fn(async () => completedScan),

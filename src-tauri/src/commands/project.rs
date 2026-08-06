@@ -2,9 +2,10 @@
 
 use crate::ProjectState;
 use openrisk_core::project::{
-    AppError, PluginEntrypointSelection, PluginRecord, PluginRegistryRecord, ProjectPersistence,
-    ProjectSettingsPayload, ProjectSettingsRecord, ProjectSummary, ScanDetailRecord,
-    ScanEntrypointInput, ScanSummaryRecord, SettingValue, SqliteProjectPersistence, service,
+    AppError, PdfExportReceipt, PluginEntrypointSelection, PluginRecord, PluginRegistryRecord,
+    ProjectPersistence, ProjectSettingsPayload, ProjectSettingsRecord, ProjectSummary,
+    ReportProfile, ScanDetailRecord, ScanEntrypointInput, ScanSummaryRecord, SettingValue,
+    SqliteProjectPersistence, service,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -220,6 +221,53 @@ pub async fn get_scan(
 ) -> Result<ScanDetailRecord, AppError> {
     let project = get_open_project(&state).await?;
     project.get_scan(&scan_id).await.map_err(AppError::from)
+}
+
+/// Render one completed investigation as an official, print-ready PDF report.
+///
+/// The report is built from an immutable snapshot using the exact plugin revisions
+/// stored with the scan. Rendering and file I/O run off the async command thread.
+#[tauri::command]
+#[specta::specta]
+pub async fn export_scan_pdf(
+    scan_id: String,
+    dest_path: String,
+    profile: ReportProfile,
+    state: tauri::State<'_, ProjectState>,
+) -> Result<PdfExportReceipt, AppError> {
+    let destination = PathBuf::from(dest_path.trim());
+    if destination.as_os_str().is_empty()
+        || destination
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_none_or(|extension| !extension.eq_ignore_ascii_case("pdf"))
+    {
+        return Err(AppError::Validation(
+            "PDF destination must end with .pdf".into(),
+        ));
+    }
+
+    let project = get_open_project(&state).await?;
+    let snapshot = project
+        .get_scan_report_snapshot(&scan_id)
+        .await
+        .map_err(AppError::from)?;
+    let destination_for_render = destination.clone();
+    let rendered = tauri::async_runtime::spawn_blocking(move || {
+        let rendered = openrisk_pdf::render_scan_report(&snapshot, profile)?;
+        openrisk_pdf::write_pdf_atomically(&destination_for_render, &rendered.bytes)?;
+        Ok::<_, openrisk_pdf::PdfRenderError>(rendered)
+    })
+    .await
+    .map_err(|error| AppError::Internal(format!("PDF renderer stopped: {error}")))?
+    .map_err(|error| AppError::Internal(error.to_string()))?;
+
+    Ok(PdfExportReceipt {
+        destination_path: destination.to_string_lossy().into_owned(),
+        sha256: rendered.sha256,
+        byte_length: rendered.bytes.len() as u64,
+        page_count: rendered.page_count,
+    })
 }
 
 /// Persist the current form state while keeping the scan in Draft status.

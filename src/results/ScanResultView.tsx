@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, FileJson } from "lucide-react";
+import { AlertTriangle, FileDown, FileJson } from "lucide-react";
 import type {
   LogEntry,
   ScanDetailRecord,
@@ -17,6 +17,7 @@ import {
   type PluginEntity,
 } from "./resultSchema";
 import { ScanStatusIndicator } from "@/investigations/ScanStatusIndicator";
+import { Button } from "@/components/ui/button";
 
 interface ScanResultViewProps {
   detail: ScanDetailRecord;
@@ -24,6 +25,8 @@ interface ScanResultViewProps {
   entrypointNameByKey: Record<string, string>;
   inputNameByKey: Record<string, string>;
   advancedMode: boolean;
+  exportingPdf?: boolean;
+  onExportPdf?: () => void;
 }
 
 interface ParsedResult {
@@ -203,6 +206,8 @@ export function ScanResultView({
   entrypointNameByKey,
   inputNameByKey,
   advancedMode,
+  exportingPdf = false,
+  onExportPdf,
 }: ScanResultViewProps) {
   const parsedResults = useMemo<ParsedResult[]>(
     () =>
@@ -278,11 +283,25 @@ export function ScanResultView({
               })}
             </p>
           </div>
-          <ScanStatusIndicator
-            status={detail.status}
-            hasFailures={hasFailures}
-            className="shrink-0 pt-1"
-          />
+          <div className="flex shrink-0 items-center gap-2">
+            {onExportPdf ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={exportingPdf}
+                onClick={onExportPdf}
+              >
+                <FileDown className="h-4 w-4" />
+                {exportingPdf ? "Exporting…" : "Export PDF"}
+              </Button>
+            ) : null}
+            <ScanStatusIndicator
+              status={detail.status}
+              hasFailures={hasFailures}
+              className="pt-1"
+            />
+          </div>
         </div>
       </header>
 

@@ -1,0 +1,20 @@
+[package]
+name = "openrisk-pdf"
+version.workspace = true
+description = "Deterministic PDF report renderer for OpenRisk"
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+hex.workspace = true
+openrisk-core = { path = "../openrisk-core" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tempfile = "3"
+thiserror.workspace = true
+time = { version = "0.3", features = ["formatting"] }
+typst = "=0.14.2"
+typst-as-lib = "=0.15.4"
+typst-pdf = "=0.14.2"

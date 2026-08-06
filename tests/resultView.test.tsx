@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ScanDetailRecord } from "@/core/backend/bindings";
 import { ScanResultView } from "@/results/ScanResultView";
 import { completedScanDetail } from "./fixtures";
@@ -24,6 +24,25 @@ function renderResult(detail: ScanDetailRecord, advancedMode: boolean) {
 }
 
 describe("ScanResultView presentation modes", () => {
+  it("offers PDF export for an eligible investigation", async () => {
+    const user = userEvent.setup();
+    const onExportPdf = vi.fn();
+
+    render(
+      <ScanResultView
+        detail={completedScanDetail}
+        pluginNameById={{ demo: "Demo Registry" }}
+        entrypointNameByKey={{ "demo::person-search": "Person search" }}
+        inputNameByKey={{ "demo::person-search::name": "Full name" }}
+        advancedMode={false}
+        onExportPdf={onExportPdf}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Export PDF" }));
+    expect(onExportPdf).toHaveBeenCalledOnce();
+  });
+
   it("deduplicates inputs and hides technical entity details in normal mode", () => {
     const detail: ScanDetailRecord = {
       ...completedScanDetail,

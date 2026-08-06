@@ -1,6 +1,7 @@
 //! SQLite implementation of the project DAO trait.
 
 mod helpers;
+mod report_dao;
 mod scans_dao;
 mod security_dao;
 mod settings_dao;
@@ -90,6 +91,12 @@ impl ProjectPersistence for SqliteProjectPersistence {
     }
     async fn get_scan(&self, scan_id: &str) -> Result<ScanDetailRecord, PersistenceError> {
         scans_dao::get_scan(self, scan_id).await
+    }
+    async fn get_scan_report_snapshot(
+        &self,
+        scan_id: &str,
+    ) -> Result<ScanReportSnapshot, PersistenceError> {
+        report_dao::get_scan_report_snapshot(self, scan_id).await
     }
     async fn update_scan_draft(
         &self,

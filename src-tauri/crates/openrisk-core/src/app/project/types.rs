@@ -370,6 +370,77 @@ pub struct ScanDetailRecord {
 }
 
 // ---------------------------------------------------------------------------
+// Report export types
+// ---------------------------------------------------------------------------
+
+/// Presentation profile for an exported investigation report.
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum ReportProfile {
+    /// Compact, readable presentation of the stored inputs and plugin results.
+    Standard,
+    /// Readable presentation used in Advanced mode, still without runtime metadata or raw JSON.
+    Advanced,
+}
+
+/// Immutable project metadata captured for a report export.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportProjectSnapshot {
+    pub name: String,
+    pub audit: Option<String>,
+}
+
+/// Immutable investigation metadata captured for a report export.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportScanSnapshot {
+    pub title: String,
+    pub status: String,
+    pub created_at: String,
+}
+
+/// One persisted input rendered in an investigation report.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportInputSnapshot {
+    pub field_name: String,
+    pub value: Value,
+}
+
+/// One persisted plugin execution rendered in an investigation report.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportExecutionSnapshot {
+    pub entrypoint_name: String,
+    pub ok: bool,
+    /// Parsed plugin output. Keys and values are preserved without runtime metadata.
+    pub data: Option<Value>,
+}
+
+/// Adapter-independent, immutable source document for a PDF renderer.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanReportSnapshot {
+    pub schema_version: String,
+    pub locale: String,
+    pub project: ReportProjectSnapshot,
+    pub scan: ReportScanSnapshot,
+    pub inputs: Vec<ReportInputSnapshot>,
+    pub executions: Vec<ReportExecutionSnapshot>,
+}
+
+/// Receipt returned after a PDF has been written successfully.
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PdfExportReceipt {
+    pub destination_path: String,
+    pub sha256: String,
+    pub byte_length: u64,
+    pub page_count: u32,
+}
+
+// ---------------------------------------------------------------------------
 // Internal types (not in the public API)
 // ---------------------------------------------------------------------------
 

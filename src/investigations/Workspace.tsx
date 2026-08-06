@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { save } from "@tauri-apps/plugin-dialog";
 import {
   LogOut,
   PanelLeftOpen,
@@ -74,6 +75,15 @@ function normalizedPreview(preview: string | null | undefined) {
   return preview?.trim() || "Untitled";
 }
 
+function pdfFileName(preview: string | null | undefined) {
+  const safe = normalizedPreview(preview)
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 100);
+  return `${safe || "investigation"}-report.pdf`;
+}
+
 export function Workspace({
   client,
   initialSettings,
@@ -87,6 +97,7 @@ export function Workspace({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(true);
   const [closing, setClosing] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const draftSession = useRef<DraftSession>({
     scanId: null,
     savedPreview: null,
@@ -490,6 +501,39 @@ export function Workspace({
     dispatch({ type: "settings-replaced", settings });
   };
 
+  const exportSelectedScanPdf = async () => {
+    const detail = state.detail;
+    if (
+      !detail ||
+      exportingPdf ||
+      !["Completed", "Failed"].includes(detail.status)
+    ) {
+      return;
+    }
+
+    const destination = await save({
+      title: "Export investigation report",
+      defaultPath: pdfFileName(detail.preview),
+      filters: [{ name: "PDF document", extensions: ["pdf"] }],
+    });
+    if (typeof destination !== "string") {
+      return;
+    }
+
+    setExportingPdf(true);
+    try {
+      await client.exportScanPdf(
+        detail.id,
+        destination,
+        state.settings.projectSettings.advancedMode ? "advanced" : "standard",
+      );
+    } catch (error) {
+      dispatch({ type: "operation-failed", error: errorMessage(error) });
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   const closeProject = async () => {
     if (
       closing ||
@@ -622,6 +666,12 @@ export function Workspace({
                 entrypointNameByKey={entrypointNameByKey}
                 inputNameByKey={inputNameByKey}
                 advancedMode={state.settings.projectSettings.advancedMode}
+                exportingPdf={exportingPdf}
+                onExportPdf={
+                  ["Completed", "Failed"].includes(state.detail.status)
+                    ? () => void exportSelectedScanPdf()
+                    : undefined
+                }
               />
             </div>
           ) : state.error ? (

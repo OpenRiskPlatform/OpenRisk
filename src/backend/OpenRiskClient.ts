@@ -1,4 +1,5 @@
 import type {
+  PdfExportReceipt,
   PluginEntrypointSelection,
   PluginRecord,
   PluginRegistryRecord,
@@ -6,6 +7,7 @@ import type {
   ProjectSettingsPayload,
   ProjectSettingsRecord,
   ProjectSummary,
+  ReportProfile,
   ScanDetailRecord,
   ScanEntrypointInput,
   ScanSummaryRecord,
@@ -40,6 +42,11 @@ export interface OpenRiskClient {
   createScan(preview: string | null): Promise<ScanSummaryRecord>;
   listScans(): Promise<ScanSummaryRecord[]>;
   getScan(scanId: string): Promise<ScanDetailRecord>;
+  exportScanPdf(
+    scanId: string,
+    destPath: string,
+    profile: ReportProfile,
+  ): Promise<PdfExportReceipt>;
   updateScanDraft(
     scanId: string,
     selectedPlugins: PluginEntrypointSelection[],
