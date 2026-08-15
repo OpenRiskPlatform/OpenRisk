@@ -1,7 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, FileDown, FileJson } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  FileDown,
+  FileJson,
+  ListChecks,
+} from "lucide-react";
 import type {
   LogEntry,
+  PdfExportSelection,
   ScanDetailRecord,
   ScanEntrypointInput,
   ScanPluginResultRecord,
@@ -18,6 +25,15 @@ import {
 } from "./resultSchema";
 import { ScanStatusIndicator } from "@/investigations/ScanStatusIndicator";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface ScanResultViewProps {
   detail: ScanDetailRecord;
@@ -26,12 +42,265 @@ interface ScanResultViewProps {
   inputNameByKey: Record<string, string>;
   advancedMode: boolean;
   exportingPdf?: boolean;
-  onExportPdf?: () => void;
+  onExportPdf?: (selection: PdfExportSelection | null) => void;
 }
 
 interface ParsedResult {
+  index: number;
   result: ScanPluginResultRecord;
   data: ParsedPluginData | null;
+}
+
+interface ExportResultOption {
+  index: number;
+  label: string;
+  description: string;
+}
+
+function PdfExportControl({
+  exporting,
+  hasSearchDetails,
+  resultOptions,
+  onExport,
+}: {
+  exporting: boolean;
+  hasSearchDetails: boolean;
+  resultOptions: ExportResultOption[];
+  onExport: (selection: PdfExportSelection | null) => void;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [selectiveOpen, setSelectiveOpen] = useState(false);
+  const [includeSearchDetails, setIncludeSearchDetails] = useState(true);
+  const [selectedResultIndices, setSelectedResultIndices] = useState<number[]>(
+    [],
+  );
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [menuOpen]);
+
+  const openSelectiveExport = () => {
+    setMenuOpen(false);
+    setIncludeSearchDetails(hasSearchDetails);
+    setSelectedResultIndices(resultOptions.map((option) => option.index));
+    setSelectiveOpen(true);
+  };
+
+  const allResultsSelected =
+    resultOptions.length > 0 &&
+    selectedResultIndices.length === resultOptions.length;
+  const selectedSectionCount =
+    selectedResultIndices.length + (includeSearchDetails ? 1 : 0);
+
+  const toggleResult = (index: number, selected: boolean) => {
+    setSelectedResultIndices((current) =>
+      selected
+        ? Array.from(new Set([...current, index])).sort((a, b) => a - b)
+        : current.filter((candidate) => candidate !== index),
+    );
+  };
+
+  return (
+    <>
+      <div ref={menuRef} className="relative flex">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="rounded-r-none"
+          disabled={exporting}
+          onClick={() => onExport(null)}
+        >
+          <FileDown className="h-4 w-4" />
+          {exporting ? "Exporting…" : "Export PDF"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="-ml-px rounded-l-none px-2"
+          aria-label="PDF export options"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          disabled={
+            exporting || (!hasSearchDetails && resultOptions.length === 0)
+          }
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          <ChevronDown className="h-4 w-4" />
+        </Button>
+
+        {menuOpen ? (
+          <div
+            role="menu"
+            className="absolute right-0 top-full z-40 mt-1 min-w-48 rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+              onClick={openSelectiveExport}
+            >
+              <ListChecks className="h-4 w-4" />
+              Selective export
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      <Dialog open={selectiveOpen} onOpenChange={setSelectiveOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Selective PDF export</DialogTitle>
+            <DialogDescription>
+              Choose which investigation sections to include. The report header
+              is always included.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[55vh] space-y-5 overflow-y-auto pr-1">
+            {hasSearchDetails ? (
+              <section>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Search details
+                </h3>
+                <label
+                  htmlFor="pdf-export-search-details"
+                  className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/40"
+                >
+                  <Checkbox
+                    id="pdf-export-search-details"
+                    className="mt-0.5"
+                    checked={includeSearchDetails}
+                    onCheckedChange={(checked) =>
+                      setIncludeSearchDetails(checked === true)
+                    }
+                  />
+                  <span>
+                    <span className="block text-sm font-medium">
+                      Search details
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      Values used to run this investigation.
+                    </span>
+                  </span>
+                </label>
+              </section>
+            ) : null}
+
+            <section>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Results
+                </h3>
+                {resultOptions.length > 0 ? (
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-muted-foreground hover:text-foreground"
+                    onClick={() =>
+                      setSelectedResultIndices(
+                        allResultsSelected
+                          ? []
+                          : resultOptions.map((option) => option.index),
+                      )
+                    }
+                  >
+                    {allResultsSelected ? "Clear all" : "Select all"}
+                  </button>
+                ) : null}
+              </div>
+
+              {resultOptions.length > 0 ? (
+                <div className="space-y-2">
+                  {resultOptions.map((option) => {
+                    const checkboxId = `pdf-export-result-${option.index}`;
+                    return (
+                      <label
+                        key={option.index}
+                        htmlFor={checkboxId}
+                        className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/40"
+                      >
+                        <Checkbox
+                          id={checkboxId}
+                          className="mt-0.5"
+                          checked={selectedResultIndices.includes(option.index)}
+                          onCheckedChange={(checked) =>
+                            toggleResult(option.index, checked === true)
+                          }
+                        />
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium">
+                            {option.label}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {option.description}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                  No results are available for export.
+                </p>
+              )}
+            </section>
+          </div>
+
+          <DialogFooter className="items-center sm:justify-between">
+            <span className="text-xs text-muted-foreground">
+              {selectedSectionCount} selected
+            </span>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSelectiveOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={exporting || selectedSectionCount === 0}
+                onClick={() => {
+                  setSelectiveOpen(false);
+                  onExport({
+                    includeSearchDetails,
+                    resultIndices: selectedResultIndices,
+                  });
+                }}
+              >
+                <FileDown className="h-4 w-4" />
+                Export selected
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
 function Logs({ logs }: { logs: LogEntry[] }) {
@@ -211,7 +480,8 @@ export function ScanResultView({
 }: ScanResultViewProps) {
   const parsedResults = useMemo<ParsedResult[]>(
     () =>
-      detail.results.map((result) => ({
+      detail.results.map((result, index) => ({
+        index,
         result,
         data:
           result.output.ok && result.output.dataJson
@@ -219,6 +489,32 @@ export function ScanResultView({
             : null,
       })),
     [detail.results],
+  );
+  const exportResultOptions = useMemo<ExportResultOption[]>(
+    () =>
+      parsedResults.map((item) => {
+        const key = resultKey(
+          item.result.pluginId,
+          item.result.entrypointId,
+        );
+        const entrypointName =
+          entrypointNameByKey[key] ??
+          humanizeIdentifier(item.result.entrypointId);
+        const pluginName =
+          pluginNameById[item.result.pluginId] ??
+          humanizeIdentifier(item.result.pluginId);
+        const itemCount = resultItemCount([item]);
+        const resultDescription = !item.result.output.ok
+          ? "Failed execution"
+          : `${itemCount} ${itemCount === 1 ? "item" : "items"}`;
+
+        return {
+          index: item.index,
+          label: `Result ${item.index + 1}: ${entrypointName}`,
+          description: `${pluginName} / ${resultDescription}`,
+        };
+      }),
+    [entrypointNameByKey, parsedResults, pluginNameById],
   );
   const groupKeys = useMemo(
     () =>
@@ -285,16 +581,12 @@ export function ScanResultView({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {onExportPdf ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={exportingPdf}
-                onClick={onExportPdf}
-              >
-                <FileDown className="h-4 w-4" />
-                {exportingPdf ? "Exporting…" : "Export PDF"}
-              </Button>
+              <PdfExportControl
+                exporting={exportingPdf}
+                hasSearchDetails={detail.inputs.length > 0}
+                resultOptions={exportResultOptions}
+                onExport={onExportPdf}
+              />
             ) : null}
             <ScanStatusIndicator
               status={detail.status}

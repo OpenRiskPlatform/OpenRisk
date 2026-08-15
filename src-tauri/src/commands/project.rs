@@ -2,11 +2,12 @@
 
 use crate::ProjectState;
 use openrisk_core::project::{
-    AppError, PdfExportReceipt, PluginEntrypointSelection, PluginRecord, PluginRegistryRecord,
-    ProjectPersistence, ProjectSettingsPayload, ProjectSettingsRecord, ProjectSummary,
-    ReportProfile, ScanDetailRecord, ScanEntrypointInput, ScanSummaryRecord, SettingValue,
-    SqliteProjectPersistence, service,
+    AppError, PdfExportReceipt, PdfExportSelection, PluginEntrypointSelection, PluginRecord,
+    PluginRegistryRecord, ProjectPersistence, ProjectSettingsPayload, ProjectSettingsRecord,
+    ProjectSummary, ReportProfile, ScanDetailRecord, ScanEntrypointInput, ScanSummaryRecord,
+    SettingValue, SqliteProjectPersistence, service,
 };
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -233,6 +234,7 @@ pub async fn export_scan_pdf(
     scan_id: String,
     dest_path: String,
     profile: ReportProfile,
+    selection: Option<PdfExportSelection>,
     state: tauri::State<'_, ProjectState>,
 ) -> Result<PdfExportReceipt, AppError> {
     let destination = PathBuf::from(dest_path.trim());
@@ -248,10 +250,43 @@ pub async fn export_scan_pdf(
     }
 
     let project = get_open_project(&state).await?;
-    let snapshot = project
+    let mut snapshot = project
         .get_scan_report_snapshot(&scan_id)
         .await
         .map_err(AppError::from)?;
+    if let Some(selection) = selection {
+        if !selection.include_search_details && selection.result_indices.is_empty() {
+            return Err(AppError::Validation(
+                "Select search details or at least one result to export".into(),
+            ));
+        }
+
+        let selected_indices: HashSet<usize> = selection
+            .result_indices
+            .into_iter()
+            .map(|index| index as usize)
+            .collect();
+        if let Some(index) = selected_indices
+            .iter()
+            .find(|index| **index >= snapshot.executions.len())
+        {
+            return Err(AppError::Validation(format!(
+                "Selected result index {index} does not exist"
+            )));
+        }
+
+        snapshot.include_search_details = selection.include_search_details;
+        snapshot.include_results = !selected_indices.is_empty();
+        if !selection.include_search_details {
+            snapshot.inputs.clear();
+        }
+        snapshot.executions = snapshot
+            .executions
+            .into_iter()
+            .enumerate()
+            .filter_map(|(index, execution)| selected_indices.contains(&index).then_some(execution))
+            .collect();
+    }
     let destination_for_render = destination.clone();
     let rendered = tauri::async_runtime::spawn_blocking(move || {
         let rendered = openrisk_pdf::render_scan_report(&snapshot, profile)?;

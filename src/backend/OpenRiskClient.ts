@@ -1,5 +1,6 @@
 import type {
   PdfExportReceipt,
+  PdfExportSelection,
   PluginEntrypointSelection,
   PluginRecord,
   PluginRegistryRecord,
@@ -46,6 +47,7 @@ export interface OpenRiskClient {
     scanId: string,
     destPath: string,
     profile: ReportProfile,
+    selection: PdfExportSelection | null,
   ): Promise<PdfExportReceipt>;
   updateScanDraft(
     scanId: string,

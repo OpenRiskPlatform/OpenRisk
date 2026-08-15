@@ -17,6 +17,7 @@ import { errorMessage } from "@/backend/errors";
 import type {
   PluginEntrypointSelection,
   PluginRecord,
+  PdfExportSelection,
   ProjectSettingsPayload,
   ScanDetailRecord,
   ScanEntrypointInput,
@@ -501,7 +502,9 @@ export function Workspace({
     dispatch({ type: "settings-replaced", settings });
   };
 
-  const exportSelectedScanPdf = async () => {
+  const exportSelectedScanPdf = async (
+    selection: PdfExportSelection | null = null,
+  ) => {
     const detail = state.detail;
     if (
       !detail ||
@@ -526,6 +529,7 @@ export function Workspace({
         detail.id,
         destination,
         state.settings.projectSettings.advancedMode ? "advanced" : "standard",
+        selection,
       );
     } catch (error) {
       dispatch({ type: "operation-failed", error: errorMessage(error) });
@@ -669,7 +673,7 @@ export function Workspace({
                 exportingPdf={exportingPdf}
                 onExportPdf={
                   ["Completed", "Failed"].includes(state.detail.status)
-                    ? () => void exportSelectedScanPdf()
+                    ? (selection) => void exportSelectedScanPdf(selection)
                     : undefined
                 }
               />

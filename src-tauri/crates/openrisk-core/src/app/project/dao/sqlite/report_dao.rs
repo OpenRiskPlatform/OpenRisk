@@ -92,6 +92,8 @@ pub(super) async fn get_scan_report_snapshot(
             status: head.scan_status,
             created_at: head.scan_created_at,
         },
+        include_search_details: true,
+        include_results: true,
         inputs,
         executions,
     })

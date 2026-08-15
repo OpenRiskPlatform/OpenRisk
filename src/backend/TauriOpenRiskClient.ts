@@ -39,8 +39,8 @@ export const tauriOpenRiskClient: OpenRiskClient = {
   createScan: (preview) => unwrap(commands.createScan(preview)),
   listScans: () => unwrap(commands.listScans()),
   getScan: (scanId) => unwrap(commands.getScan(scanId)),
-  exportScanPdf: (scanId, destPath, profile) =>
-    unwrap(commands.exportScanPdf(scanId, destPath, profile)),
+  exportScanPdf: (scanId, destPath, profile, selection) =>
+    unwrap(commands.exportScanPdf(scanId, destPath, profile, selection)),
   updateScanDraft: (scanId, selectedPlugins, inputs) =>
     unwrap(commands.updateScanDraft(scanId, selectedPlugins, inputs)),
   runScan: (scanId, selectedPlugins, inputs) =>

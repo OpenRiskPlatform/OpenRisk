@@ -352,26 +352,31 @@
   key-value-row("Reference", report.project.audit)
 }
 
-#section("1", "Input")
-#if report.inputs.len() == 0 {
-  [No input data.]
-} else {
-  let seen = ()
-  for input in report.inputs {
-    let signature = input.fieldName + repr(input.value)
-    if signature not in seen {
-      seen.push(signature)
-      key-value-row(input.fieldName, value-view(input.value))
+#if report.includeSearchDetails {
+  section("1", "Input")
+  if report.inputs.len() == 0 {
+    [No input data.]
+  } else {
+    let seen = ()
+    for input in report.inputs {
+      let signature = input.fieldName + repr(input.value)
+      if signature not in seen {
+        seen.push(signature)
+        key-value-row(input.fieldName, value-view(input.value))
+      }
     }
   }
 }
 
-#section("2", "Results")
-#if report.executions.len() == 0 {
-  [No result data.]
-} else {
-  for (index, execution) in report.executions.enumerate() {
-    subsection("2." + str(index + 1), execution.entrypointName)
-    execution-output(execution)
+#if report.includeResults {
+  section(if report.includeSearchDetails { "2" } else { "1" }, "Results")
+  if report.executions.len() == 0 {
+    [No result data.]
+  } else {
+    for (index, execution) in report.executions.enumerate() {
+      let section-number = if report.includeSearchDetails { "2." } else { "1." }
+      subsection(section-number + str(index + 1), execution.entrypointName)
+      execution-output(execution)
+    }
   }
 }

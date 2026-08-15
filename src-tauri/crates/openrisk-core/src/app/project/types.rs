@@ -383,6 +383,15 @@ pub enum ReportProfile {
     Advanced,
 }
 
+/// User-selected report sections for a selective PDF export.
+#[derive(Debug, Clone, Deserialize, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PdfExportSelection {
+    pub include_search_details: bool,
+    /// Zero-based indices into the scan's persisted result list.
+    pub result_indices: Vec<u32>,
+}
+
 /// Immutable project metadata captured for a report export.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -426,8 +435,16 @@ pub struct ScanReportSnapshot {
     pub locale: String,
     pub project: ReportProjectSnapshot,
     pub scan: ReportScanSnapshot,
+    #[serde(default = "report_section_enabled")]
+    pub include_search_details: bool,
+    #[serde(default = "report_section_enabled")]
+    pub include_results: bool,
     pub inputs: Vec<ReportInputSnapshot>,
     pub executions: Vec<ReportExecutionSnapshot>,
+}
+
+fn report_section_enabled() -> bool {
+    true
 }
 
 /// Receipt returned after a PDF has been written successfully.

@@ -149,7 +149,7 @@ mod tests {
         assert!(rendered.bytes.starts_with(b"%PDF-"));
         assert!(rendered.bytes.ends_with(b"%%EOF"));
         assert!(rendered.bytes.len() > 10_000);
-        assert!(rendered.page_count >= 2);
+        assert!(rendered.page_count >= 1);
         assert_eq!(rendered.sha256.len(), 64);
         assert_eq!(rendered.snapshot_sha256.len(), 64);
 

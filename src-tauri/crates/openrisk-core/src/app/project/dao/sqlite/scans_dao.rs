@@ -630,10 +630,12 @@ pub(super) async fn get_scan(
     }
 
     let result_rows = sqlx::query!(
-        r#"SELECT id as "id!", plugin_id as "plugin_id!",
-                  plugin_revision_id, entrypoint_id as "entrypoint_id!",
-                  ok as "ok!", error, data_json
-           FROM ScanPluginResult WHERE scan_id = ?1"#,
+        r#"SELECT spr.id as "id!", spr.plugin_id as "plugin_id!",
+                  spr.plugin_revision_id, spr.entrypoint_id as "entrypoint_id!",
+                  spr.ok as "ok!", spr.error, spr.data_json
+           FROM ScanPluginResult spr
+           WHERE spr.scan_id = ?1
+           ORDER BY spr.rowid"#,
         scan_id,
     )
     .fetch_all(&mut *conn)

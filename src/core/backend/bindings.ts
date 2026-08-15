@@ -85,7 +85,11 @@ export const commands = {
 	 *  The report is built from an immutable snapshot using the exact plugin revisions
 	 *  stored with the scan. Rendering and file I/O run off the async command thread.
 	 */
-	exportScanPdf: (scanId: string, destPath: string, profile: ReportProfile) => typedError<PdfExportReceipt, AppError>(__TAURI_INVOKE("export_scan_pdf", { scanId, destPath, profile })),
+	exportScanPdf: (scanId: string, destPath: string, profile: ReportProfile, selection: {
+	includeSearchDetails: boolean,
+	// Zero-based indices into the scan's persisted result list.
+	resultIndices: number[],
+} | null) => typedError<PdfExportReceipt, AppError>(__TAURI_INVOKE("export_scan_pdf", { scanId, destPath, profile, selection })),
 	/**
 	 *  Persist the current form state while keeping the scan in Draft status.
 	 *  #
@@ -168,6 +172,13 @@ export type PdfExportReceipt = {
 	sha256: string,
 	byteLength: number,
 	pageCount: number,
+};
+
+// User-selected report sections for a selective PDF export.
+export type PdfExportSelection = {
+	includeSearchDetails: boolean,
+	// Zero-based indices into the scan's persisted result list.
+	resultIndices: number[],
 };
 
 // Author entry from a plugin manifest.
