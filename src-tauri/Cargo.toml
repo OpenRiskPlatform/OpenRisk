@@ -3,8 +3,6 @@ members = [
   ".",
   "crates/openrisk-core",
   "crates/openrisk-pdf",
-  "crates/openrisk-uniffi",
-  "tools/uniffi-bindgen",
 ]
 default-members = ["."]
 resolver = "3"
@@ -47,7 +45,6 @@ sqlx = { version = "0.8.6", default-features = false, features = [
 ] }
 thiserror = "2.0"
 tokio = { version = "1", features = ["rt", "sync"] }
-uniffi = { version = "0.32.0", default-features = false }
 uuid = { version = "1", features = ["v4"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
@@ -62,8 +59,7 @@ default-run = "openrisk"
 
 [lib]
 name = "openrisk_tauri_lib"
-# The desktop binary links this adapter as a Rust library. Native-client FFI
-# artifacts are produced by the separate `openrisk-uniffi` crate.
+# The desktop binary links the Tauri adapter as a Rust library.
 crate-type = ["rlib"]
 
 [[bin]]

@@ -2,7 +2,7 @@
 //!
 //! This crate owns project persistence, scan orchestration, plugin execution,
 //! manifest validation, and the domain records returned by those use cases.
-//! It deliberately has no dependency on Tauri or UniFFI.
+//! It deliberately has no dependency on Tauri or another UI adapter.
 
 mod app;
 mod plugin_manifest;

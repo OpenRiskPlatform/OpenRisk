@@ -15,7 +15,6 @@
     "test:watch": "vitest",
     "preview": "vite preview",
     "tauri": "tauri",
-    "native:macos": "bash scripts/build-native-macos.sh",
     "version:app": "npm version --no-git-tag-version",
     "precommit:backend": "node scripts/precommit-backend.mjs",
     "udeps:backend": "node scripts/udeps-backend.mjs",

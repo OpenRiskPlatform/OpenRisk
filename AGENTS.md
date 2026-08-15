@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This is OpenRisk project repository. Its Rust workspace lives in src-tauri/, with shared backend logic in src-tauri/crates/openrisk-core, a thin Tauri adapter in src-tauri/src, a UniFFI adapter in src-tauri/crates/openrisk-uniffi, and the React frontend in src/.
+This is OpenRisk project repository. Its Rust workspace lives in src-tauri/, with shared backend logic in src-tauri/crates/openrisk-core, a thin Tauri adapter in src-tauri/src, and the React frontend in src/.
 OpenRisk helps users investigate different entities for personal or legal reasons, more detailed motivation can be found in ./docs/OpenRisk.archimate file which is Archi syntax, you may use archi-mcp to connect to it.
 OpenRisk consist of backend application in Rust, frontend in React, plugins written in Typescript/Javascript.
 
@@ -98,8 +98,8 @@ index.js/ts file is js code that is executed in deno runtime via rustyscript. In
 ## Backend Stack (Current)
 
 - Cargo workspace rooted at src-tauri/.
-- Shared backend: openrisk-core (no Tauri or UniFFI dependency).
-- UI adapters: openrisk-tauri and openrisk-uniffi.
+- Shared backend: openrisk-core (no Tauri or UI dependency).
+- UI adapter: openrisk-tauri.
 - Database: SQLite via sqlx.
 - Encryption: SQLCipher (bundled via libsqlite3-sys features).
 - Plugin runtime: rustyscript (isolated JS/TS execution).

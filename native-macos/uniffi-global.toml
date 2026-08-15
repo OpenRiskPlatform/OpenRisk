@@ -1,2 +1,0 @@
-[crate-roots]
-openrisk_uniffi = "../src-tauri/crates/openrisk-uniffi"

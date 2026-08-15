@@ -36,21 +36,29 @@ The command updates both `package.json` and `package-lock.json` without creating
 a Git commit or tag. The workspace crate version in `src-tauri/Cargo.toml` is
 internal and does not control the packaged application version.
 
+### Manual releases
+
+Releases are started only from **Actions → Manual release → Run workflow** on
+the `main` branch. The optional `version` input accepts an exact stable SemVer
+such as `2.1.0`. When it is empty, the workflow bumps the current minor version.
+
+The workflow runs `npm run version:app`, commits the updated `package.json` and
+`package-lock.json` to `main`, builds the Tauri bundles, and publishes the
+`openrisk-v<version>` GitHub release. No release branch is used.
+
 ## Rust workspace
 
 - `src-tauri/crates/openrisk-core` — shared business logic, persistence, and plugin runtime.
 - `src-tauri/src` — thin Tauri commands and desktop bootstrap.
-- `src-tauri/crates/openrisk-uniffi` — native Swift/UniFFI boundary.
-- `src-tauri/tools/uniffi-bindgen` — pinned binding generator tool.
 
-Both React/Tauri and SwiftUI call the same `openrisk-core` use cases. Core must
-not depend on Tauri or UniFFI.
+The React/Tauri application calls the shared `openrisk-core` use cases. Core
+must not depend on Tauri or another UI adapter.
 
 ### Interrupted scan recovery
 
 Plugin runs execute inside the app process. If the app is force-quit, the next
-project open reconciles scans left in `Running` state. The behavior is shared by
-the Tauri and native macOS apps and is configured per project in
+project open reconciles scans left in `Running` state. The behavior is
+configured per project in
 **Settings → Advanced → Interrupted investigations**:
 
 - `fail` (default) — mark interrupted scans as `Failed`;
