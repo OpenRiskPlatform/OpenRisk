@@ -422,6 +422,12 @@ pub struct ReportScanSnapshot {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReportInputSnapshot {
+    /// Plugin that owns this input. Empty when reading legacy snapshots.
+    #[serde(default)]
+    pub plugin_id: String,
+    /// Entrypoint that owns this input. Empty when reading legacy snapshots.
+    #[serde(default)]
+    pub entrypoint_id: String,
     pub field_name: String,
     pub value: Value,
 }
@@ -430,6 +436,12 @@ pub struct ReportInputSnapshot {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReportExecutionSnapshot {
+    /// Plugin that produced this execution. Empty when reading legacy snapshots.
+    #[serde(default)]
+    pub plugin_id: String,
+    /// Entrypoint that produced this execution. Empty when reading legacy snapshots.
+    #[serde(default)]
+    pub entrypoint_id: String,
     pub entrypoint_name: String,
     pub ok: bool,
     /// Parsed plugin output. Keys and values are preserved without runtime metadata.

@@ -20,13 +20,29 @@
   fallback: false,
 )
 #set par(leading: 0.58em, justify: false)
-#show heading.where(level: 3): it => block(
-  breakable: false,
-  above: 8pt,
-  below: 0pt,
-)[
-  #text(size: 10pt, weight: 650)[#it.body]
-]
+#show heading.where(level: 1): it => {
+  block(
+    breakable: false,
+    above: 0pt,
+    below: 10pt,
+  )[
+    #text(size: 14pt, weight: 650)[#it.body]
+    #v(4pt)
+    #line(length: 100%, stroke: 0.8pt + ink)
+  ]
+}
+
+#show heading.where(level: 2): it => {
+  block(
+    breakable: false,
+    above: 0pt,
+    below: 8pt,
+  )[
+    #text(size: 11pt, weight: 650)[#it.body]
+    #v(3pt)
+    #line(length: 100%, stroke: 0.45pt + rule)
+  ]
+}
 
 #set page(
   paper: "a4",
@@ -78,26 +94,6 @@
     str(value)
   }
 }
-
-#let section(number, title) = block(
-  breakable: false,
-  above: 15pt,
-  below: 7pt,
-)[
-  #text(size: 11.5pt, weight: 650)[#number. #upper(title)]
-  #v(3pt)
-  #line(length: 100%, stroke: 0.8pt + ink)
-]
-
-#let subsection(number, title) = block(
-  breakable: false,
-  above: 13pt,
-  below: 6pt,
-)[
-  #text(size: 10.5pt, weight: 650)[#number #title]
-  #v(2pt)
-  #line(length: 100%, stroke: 0.45pt + rule)
-]
 
 #let key-value-table(rows, compact: false) = {
   let cells = ()
@@ -288,17 +284,10 @@
 
   block(
     breakable: not keep-together,
-    above: 2pt,
-    below: 5pt,
+    above: 0pt,
+    below: 8pt,
   )[
-    #if index > 0 {
-      v(8pt)
-      line(length: 80%, stroke: 0.65pt + rule)
-      v(6pt)
-    }
-    #heading(level: 3)[Result #(index + 1)]
-    #v(9pt)
-
+    #heading(level: 2)[Result #(index + 1)]
     #if rows.len() > 0 {
       key-value-table(rows)
     }
@@ -311,18 +300,27 @@
   ]
 }
 
+#let result-block(title, body) = block(
+  breakable: false,
+  above: 0pt,
+  below: 8pt,
+)[
+  #heading(level: 2)[#title]
+  #body
+]
+
 #let execution-output(execution) = {
   if not execution.ok {
-    key-value-row("Status", [Failed])
+    result-block("Result 1", key-value-row("Status", [Failed]))
   } else {
     let data = execution.at("data", default: none)
     if data == none {
-      [No result data.]
+      result-block("Result 1", [No result data.])
     } else if type(data) == array and data.all(item =>
       type(item) == dictionary and "$entity" in item and "$id" in item
     ) {
       if data.len() == 0 {
-        [[]]
+        result-block("Result 1", [No result data.])
       } else {
         for (index, entity) in data.enumerate() {
           entity-view(entity, index)
@@ -331,9 +329,34 @@
     } else if type(data) == dictionary and "$entity" in data and "$id" in data {
       entity-view(data, 0)
     } else {
-      value-view(data)
+      result-block("Result 1", value-view(data))
     }
   }
+}
+
+#let execution-inputs(execution) = {
+  report.inputs.filter(input => {
+    if execution.entrypointId != "" and input.entrypointId != "" {
+      input.entrypointId == execution.entrypointId and (
+        execution.pluginId == "" or input.pluginId == execution.pluginId
+      )
+    } else {
+      true
+    }
+  })
+}
+
+#let input-data(execution) = {
+  let rows = ()
+  let seen = ()
+  for input in execution-inputs(execution) {
+    let signature = input.fieldName + repr(input.value)
+    if signature not in seen {
+      seen.push(signature)
+      rows.push((key: input.fieldName, value: value-view(input.value)))
+    }
+  }
+  rows
 }
 
 // Plain institutional masthead.
@@ -352,30 +375,46 @@
   key-value-row("Reference", report.project.audit)
 }
 
-#if report.includeSearchDetails {
-  section("1", "Input")
+#if report.includeSearchDetails and not report.includeResults {
+  text(size: 8.5pt, weight: 650)[INPUT DATA]
+  v(3pt)
   if report.inputs.len() == 0 {
     [No input data.]
   } else {
+    let rows = ()
     let seen = ()
     for input in report.inputs {
       let signature = input.fieldName + repr(input.value)
       if signature not in seen {
         seen.push(signature)
-        key-value-row(input.fieldName, value-view(input.value))
+        rows.push((key: input.fieldName, value: value-view(input.value)))
       }
     }
+    key-value-table(rows)
   }
 }
 
 #if report.includeResults {
-  section(if report.includeSearchDetails { "2" } else { "1" }, "Results")
+  v(18pt)
   if report.executions.len() == 0 {
     [No result data.]
   } else {
     for (index, execution) in report.executions.enumerate() {
-      let section-number = if report.includeSearchDetails { "2." } else { "1." }
-      subsection(section-number + str(index + 1), execution.entrypointName)
+      if index > 0 {
+        pagebreak()
+      }
+      heading(level: 1)[#execution.entrypointName]
+      if report.includeSearchDetails {
+        let rows = input-data(execution)
+        text(size: 8.5pt, weight: 650)[INPUT DATA]
+        v(3pt)
+        if rows.len() == 0 {
+          [No input data.]
+        } else {
+          key-value-table(rows)
+        }
+        v(8pt)
+      }
       execution-output(execution)
     }
   }

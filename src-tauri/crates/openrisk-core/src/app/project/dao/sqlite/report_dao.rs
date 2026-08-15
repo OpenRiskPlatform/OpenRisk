@@ -37,7 +37,8 @@ pub(super) async fn get_scan_report_snapshot(
     }
 
     let input_rows = sqlx::query!(
-        r#"SELECT sei.field_name as "field_name!", sei.value_json as "value_json!"
+        r#"SELECT sei.plugin_id as "plugin_id!", sei.entrypoint_id as "entrypoint_id!",
+                  sei.field_name as "field_name!", sei.value_json as "value_json!"
            FROM ScanEntrypointInput sei
            WHERE sei.scan_id = ?1
            ORDER BY sei.rowid"#,
@@ -49,13 +50,16 @@ pub(super) async fn get_scan_report_snapshot(
     let inputs = input_rows
         .into_iter()
         .map(|row| ReportInputSnapshot {
+            plugin_id: row.plugin_id,
+            entrypoint_id: row.entrypoint_id,
             field_name: row.field_name,
             value: serde_json::from_str(&row.value_json).unwrap_or(serde_json::Value::Null),
         })
         .collect();
 
     let result_rows = sqlx::query!(
-        r#"SELECT spr.ok as "ok!", spr.data_json,
+        r#"SELECT spr.plugin_id as "plugin_id!", spr.entrypoint_id as "entrypoint_id!",
+                  spr.ok as "ok!", spr.data_json,
                   COALESCE(pre.name, spr.entrypoint_id) as "entrypoint_name!: String"
            FROM ScanPluginResult spr
            LEFT JOIN PluginRevisionEntrypoint pre
@@ -71,6 +75,8 @@ pub(super) async fn get_scan_report_snapshot(
     let executions = result_rows
         .into_iter()
         .map(|row| ReportExecutionSnapshot {
+            plugin_id: row.plugin_id,
+            entrypoint_id: row.entrypoint_id,
             entrypoint_name: row.entrypoint_name,
             ok: row.ok != 0,
             data: row
