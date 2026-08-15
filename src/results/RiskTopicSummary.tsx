@@ -9,6 +9,8 @@ import {
 import { EntityCard, extraRows } from "./EntityCard";
 import { propertyMetadata } from "./dataModel";
 import { ValueView } from "./ValueView";
+import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 
 function safeWebUrl(value: string): string | null {
   try {
@@ -24,19 +26,49 @@ function safeWebUrl(value: string): string | null {
 export function RiskTopicSummary({
   topics,
   advancedMode,
+  exportSelectionMode = false,
+  isTopicSelected,
+  onTopicSelectionChange,
 }: {
   topics: PluginEntity[];
   advancedMode: boolean;
+  exportSelectionMode?: boolean;
+  isTopicSelected?: (index: number) => boolean;
+  onTopicSelectionChange?: (index: number, selected: boolean) => void;
 }) {
   if (advancedMode) {
     return (
       <div className="space-y-4">
         {topics.map((topic, index) => (
-          <EntityCard
+          <div
             key={`${topic.$entity}:${topic.$id}:${index}`}
-            entity={topic}
-            advancedMode
-          />
+            className={cn(
+              exportSelectionMode && "rounded-md border px-3 py-2",
+              exportSelectionMode &&
+                isTopicSelected?.(index) &&
+                "border-primary/40 bg-muted/20",
+            )}
+          >
+            {exportSelectionMode ? (
+              <div className="mb-2 flex items-center gap-2">
+                <Checkbox
+                  id={`pdf-export-risk-topic-${index}`}
+                  aria-label={`Include risk topic ${index + 1}`}
+                  checked={isTopicSelected?.(index) ?? false}
+                  onCheckedChange={(checked) =>
+                    onTopicSelectionChange?.(index, checked === true)
+                  }
+                />
+                <label
+                  htmlFor={`pdf-export-risk-topic-${index}`}
+                  className="cursor-pointer text-xs font-medium"
+                >
+                  Include this item
+                </label>
+              </div>
+            ) : null}
+            <EntityCard entity={topic} advancedMode />
+          </div>
         ))}
       </div>
     );
@@ -74,8 +106,31 @@ export function RiskTopicSummary({
         return (
           <article
             key={`${topic.$id}:${index}`}
-            className="border-b border-border py-4 first:pt-0 last:border-b-0 last:pb-0"
+            className={cn(
+              "border-b border-border py-4 first:pt-0 last:border-b-0 last:pb-0",
+              exportSelectionMode &&
+                isTopicSelected?.(index) &&
+                "bg-muted/20",
+            )}
           >
+            {exportSelectionMode ? (
+              <div className="mb-2 flex items-center gap-2">
+                <Checkbox
+                  id={`pdf-export-risk-topic-${index}`}
+                  aria-label={`Include risk topic ${index + 1}`}
+                  checked={isTopicSelected?.(index) ?? false}
+                  onCheckedChange={(checked) =>
+                    onTopicSelectionChange?.(index, checked === true)
+                  }
+                />
+                <label
+                  htmlFor={`pdf-export-risk-topic-${index}`}
+                  className="cursor-pointer text-xs font-medium"
+                >
+                  Include this item
+                </label>
+              </div>
+            ) : null}
             <header className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-sm font-semibold">

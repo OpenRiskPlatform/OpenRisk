@@ -43,6 +43,83 @@ describe("ScanResultView presentation modes", () => {
     expect(onExportPdf).toHaveBeenCalledOnce();
   });
 
+  it("selects PDF content directly from the rendered results", async () => {
+    const user = userEvent.setup();
+    const onExportPdf = vi.fn();
+    const detail: ScanDetailRecord = {
+      ...completedScanDetail,
+      selectedPlugins: [
+        ...completedScanDetail.selectedPlugins,
+        { pluginId: "demo", entrypointId: "second-check" },
+      ],
+      results: [
+        ...completedScanDetail.results,
+        {
+          ...completedScanDetail.results[0],
+          entrypointId: "second-check",
+          output: {
+            ...completedScanDetail.results[0].output,
+            dataJson: JSON.stringify([
+              {
+                $entity: "entity.person",
+                $id: "demo:discarded",
+                $props: {
+                  name: [{ $type: "string", value: "Discarded result" }],
+                },
+              },
+              {
+                $entity: "entity.person",
+                $id: "demo:selected",
+                $props: {
+                  name: [{ $type: "string", value: "Selected result" }],
+                },
+              },
+            ]),
+          },
+        },
+      ],
+    };
+
+    render(
+      <ScanResultView
+        detail={detail}
+        pluginNameById={{ demo: "Demo Registry" }}
+        entrypointNameByKey={{
+          "demo::person-search": "Person search",
+          "demo::second-check": "Second check",
+        }}
+        inputNameByKey={{ "demo::person-search::name": "Full name" }}
+        advancedMode={false}
+        onExportPdf={onExportPdf}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "PDF export options" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Choose content" }));
+
+    expect(
+      screen.getByRole("region", { name: "PDF content selection" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Include search details" }))
+      .not.toBeChecked();
+
+    await user.click(screen.getByRole("tab", { name: "Second check" }));
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: "Include Second check item 2",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Export selected" }));
+
+    expect(onExportPdf).toHaveBeenCalledWith({
+      includeSearchDetails: false,
+      results: [{ resultIndex: 1, itemIndices: [1] }],
+    });
+  });
+
   it("deduplicates inputs and hides technical entity details in normal mode", () => {
     const detail: ScanDetailRecord = {
       ...completedScanDetail,

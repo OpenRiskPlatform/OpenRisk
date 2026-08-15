@@ -87,8 +87,7 @@ export const commands = {
 	 */
 	exportScanPdf: (scanId: string, destPath: string, profile: ReportProfile, selection: {
 	includeSearchDetails: boolean,
-	// Zero-based indices into the scan's persisted result list.
-	resultIndices: number[],
+	results: PdfExportResultSelection[],
 } | null) => typedError<PdfExportReceipt, AppError>(__TAURI_INVOKE("export_scan_pdf", { scanId, destPath, profile, selection })),
 	/**
 	 *  Persist the current form state while keeping the scan in Draft status.
@@ -174,11 +173,18 @@ export type PdfExportReceipt = {
 	pageCount: number,
 };
 
-// User-selected report sections for a selective PDF export.
+// One selected plugin result, optionally narrowed to items in its top-level array.
+export type PdfExportResultSelection = {
+	// Zero-based index into the scan's persisted result list.
+	resultIndex: number,
+	// Zero-based top-level array item indices. `None` / `null` includes the whole result.
+	itemIndices: number[] | null,
+};
+
+// User-selected report content for a selective PDF export.
 export type PdfExportSelection = {
 	includeSearchDetails: boolean,
-	// Zero-based indices into the scan's persisted result list.
-	resultIndices: number[],
+	results: PdfExportResultSelection[],
 };
 
 // Author entry from a plugin manifest.

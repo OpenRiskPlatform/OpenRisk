@@ -1,0 +1,55 @@
+name: Frontend
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig*.json"
+      - "vite.config.*"
+      - "vitest.config.*"
+      - "tailwind.config.*"
+      - "postcss.config.*"
+      - ".github/workflows/frontend-checks.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig*.json"
+      - "vite.config.*"
+      - "vitest.config.*"
+      - "tailwind.config.*"
+      - "postcss.config.*"
+      - ".github/workflows/frontend-checks.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    name: test-and-build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.2
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build

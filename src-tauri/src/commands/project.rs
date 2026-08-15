@@ -7,7 +7,7 @@ use openrisk_core::project::{
     ProjectSummary, ReportProfile, ScanDetailRecord, ScanEntrypointInput, ScanSummaryRecord,
     SettingValue, SqliteProjectPersistence, service,
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -255,28 +255,54 @@ pub async fn export_scan_pdf(
         .await
         .map_err(AppError::from)?;
     if let Some(selection) = selection {
-        if !selection.include_search_details && selection.result_indices.is_empty() {
+        if !selection.include_search_details && selection.results.is_empty() {
             return Err(AppError::Validation(
                 "Select search details or at least one result to export".into(),
             ));
         }
 
-        let selected_indices: HashSet<usize> = selection
-            .result_indices
-            .into_iter()
-            .map(|index| index as usize)
-            .collect();
-        if let Some(index) = selected_indices
-            .iter()
-            .find(|index| **index >= snapshot.executions.len())
-        {
-            return Err(AppError::Validation(format!(
-                "Selected result index {index} does not exist"
-            )));
+        let mut selected_results = HashMap::new();
+        for result in selection.results {
+            let result_index = result.result_index as usize;
+            if result_index >= snapshot.executions.len() {
+                return Err(AppError::Validation(format!(
+                    "Selected result index {result_index} does not exist"
+                )));
+            }
+            if let Some(item_indices) = &result.item_indices {
+                if item_indices.is_empty() {
+                    return Err(AppError::Validation(format!(
+                        "Selected result index {result_index} has no selected items"
+                    )));
+                }
+                let Some(serde_json::Value::Array(items)) =
+                    snapshot.executions[result_index].data.as_ref()
+                else {
+                    return Err(AppError::Validation(format!(
+                        "Selected result index {result_index} does not contain selectable items"
+                    )));
+                };
+                if let Some(item_index) = item_indices
+                    .iter()
+                    .find(|item_index| **item_index as usize >= items.len())
+                {
+                    return Err(AppError::Validation(format!(
+                        "Selected item index {item_index} does not exist in result {result_index}"
+                    )));
+                }
+            }
+            if selected_results
+                .insert(result_index, result.item_indices)
+                .is_some()
+            {
+                return Err(AppError::Validation(format!(
+                    "Selected result index {result_index} is duplicated"
+                )));
+            }
         }
 
         snapshot.include_search_details = selection.include_search_details;
-        snapshot.include_results = !selected_indices.is_empty();
+        snapshot.include_results = !selected_results.is_empty();
         if !selection.include_search_details {
             snapshot.inputs.clear();
         }
@@ -284,7 +310,29 @@ pub async fn export_scan_pdf(
             .executions
             .into_iter()
             .enumerate()
-            .filter_map(|(index, execution)| selected_indices.contains(&index).then_some(execution))
+            .filter_map(|(result_index, mut execution)| {
+                let item_indices = selected_results.remove(&result_index)?;
+                if let Some(item_indices) = item_indices {
+                    let data = execution.data.take()?;
+                    let serde_json::Value::Array(items) = data else {
+                        return None;
+                    };
+                    let selected_item_indices: HashSet<usize> = item_indices
+                        .into_iter()
+                        .map(|index| index as usize)
+                        .collect();
+                    execution.data = Some(serde_json::Value::Array(
+                        items
+                            .into_iter()
+                            .enumerate()
+                            .filter_map(|(index, item)| {
+                                selected_item_indices.contains(&index).then_some(item)
+                            })
+                            .collect(),
+                    ));
+                }
+                Some(execution)
+            })
             .collect();
     }
     let destination_for_render = destination.clone();

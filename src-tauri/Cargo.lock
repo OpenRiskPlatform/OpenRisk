@@ -5661,6 +5661,7 @@ version = "0.1.0"
 dependencies = [
  "openrisk-core",
  "openrisk-pdf",
+ "serde_json",
  "specta",
  "specta-typescript",
  "tauri",

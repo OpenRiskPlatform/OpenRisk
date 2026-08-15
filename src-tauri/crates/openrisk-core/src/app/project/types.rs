@@ -383,13 +383,22 @@ pub enum ReportProfile {
     Advanced,
 }
 
-/// User-selected report sections for a selective PDF export.
+/// One selected plugin result, optionally narrowed to items in its top-level array.
+#[derive(Debug, Clone, Deserialize, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PdfExportResultSelection {
+    /// Zero-based index into the scan's persisted result list.
+    pub result_index: u32,
+    /// Zero-based top-level array item indices. `None` / `null` includes the whole result.
+    pub item_indices: Option<Vec<u32>>,
+}
+
+/// User-selected report content for a selective PDF export.
 #[derive(Debug, Clone, Deserialize, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PdfExportSelection {
     pub include_search_details: bool,
-    /// Zero-based indices into the scan's persisted result list.
-    pub result_indices: Vec<u32>,
+    pub results: Vec<PdfExportResultSelection>,
 }
 
 /// Immutable project metadata captured for a report export.

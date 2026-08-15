@@ -69,7 +69,7 @@ Automatic retry is intentionally not a startup policy: plugins can perform paid
 or externally visible operations, and a force-quit does not prove that those
 operations were never executed.
 
-## Backend quality checks (Rust only)
+## Continuous integration
 
 A backend-only CI workflow is defined in `.github/workflows/backend-rust-checks.yml` under workflow name `Backend` and runs as named jobs:
 
@@ -81,15 +81,8 @@ A backend-only CI workflow is defined in `.github/workflows/backend-rust-checks.
 
 Checks run only when relevant backend files change. Compile-heavy checks are staged with `needs` and use a shared Rust cache key.
 
-Local pre-commit hook is managed by Husky (`.husky/pre-commit`) and runs the same backend checks via:
-
-```bash
-npm run precommit:backend
-```
-
-Husky is installed automatically on `npm install` through the `prepare` script.
-The hook is scope-aware and runs checks only when relevant staged backend files changed.
-All hook/CI steps are check-only and do not auto-fix tracked files.
+Frontend tests and the production build run in `.github/workflows/frontend-checks.yml`.
+The repository does not install Git hooks or run checks during local commits.
 
 ### Optional: unused dependency scan
 

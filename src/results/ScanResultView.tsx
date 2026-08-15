@@ -26,14 +26,7 @@ import {
 import { ScanStatusIndicator } from "@/investigations/ScanStatusIndicator";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 interface ScanResultViewProps {
   detail: ScanDetailRecord;
@@ -51,30 +44,38 @@ interface ParsedResult {
   data: ParsedPluginData | null;
 }
 
-interface ExportResultOption {
-  index: number;
-  label: string;
-  description: string;
+interface ExportItem {
+  resultIndex: number;
+  itemIndex: number | null;
+}
+
+function exportItemKey({ resultIndex, itemIndex }: ExportItem): string {
+  return `${resultIndex}:${itemIndex === null ? "all" : itemIndex}`;
+}
+
+function resultExportItems(result: ParsedResult): ExportItem[] {
+  if (result.data?.kind === "entities" && result.data.entities.length > 0) {
+    return result.data.entities.map((_, itemIndex) => ({
+      resultIndex: result.index,
+      itemIndex,
+    }));
+  }
+  return [{ resultIndex: result.index, itemIndex: null }];
 }
 
 function PdfExportControl({
   exporting,
-  hasSearchDetails,
-  resultOptions,
-  onExport,
+  canChooseContent,
+  onExportAll,
+  onChooseContent,
 }: {
   exporting: boolean;
-  hasSearchDetails: boolean;
-  resultOptions: ExportResultOption[];
-  onExport: (selection: PdfExportSelection | null) => void;
+  canChooseContent: boolean;
+  onExportAll: () => void;
+  onChooseContent: () => void;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [selectiveOpen, setSelectiveOpen] = useState(false);
-  const [includeSearchDetails, setIncludeSearchDetails] = useState(true);
-  const [selectedResultIndices, setSelectedResultIndices] = useState<number[]>(
-    [],
-  );
 
   useEffect(() => {
     if (!menuOpen) {
@@ -100,206 +101,53 @@ function PdfExportControl({
     };
   }, [menuOpen]);
 
-  const openSelectiveExport = () => {
-    setMenuOpen(false);
-    setIncludeSearchDetails(hasSearchDetails);
-    setSelectedResultIndices(resultOptions.map((option) => option.index));
-    setSelectiveOpen(true);
-  };
-
-  const allResultsSelected =
-    resultOptions.length > 0 &&
-    selectedResultIndices.length === resultOptions.length;
-  const selectedSectionCount =
-    selectedResultIndices.length + (includeSearchDetails ? 1 : 0);
-
-  const toggleResult = (index: number, selected: boolean) => {
-    setSelectedResultIndices((current) =>
-      selected
-        ? Array.from(new Set([...current, index])).sort((a, b) => a - b)
-        : current.filter((candidate) => candidate !== index),
-    );
-  };
-
   return (
-    <>
-      <div ref={menuRef} className="relative flex">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="rounded-r-none"
-          disabled={exporting}
-          onClick={() => onExport(null)}
-        >
-          <FileDown className="h-4 w-4" />
-          {exporting ? "Exporting…" : "Export PDF"}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="-ml-px rounded-l-none px-2"
-          aria-label="PDF export options"
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          disabled={
-            exporting || (!hasSearchDetails && resultOptions.length === 0)
-          }
-          onClick={() => setMenuOpen((open) => !open)}
-        >
-          <ChevronDown className="h-4 w-4" />
-        </Button>
+    <div ref={menuRef} className="relative flex">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="rounded-r-none"
+        disabled={exporting}
+        onClick={onExportAll}
+      >
+        <FileDown className="h-4 w-4" />
+        {exporting ? "Exporting…" : "Export PDF"}
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="-ml-px rounded-l-none px-2"
+        aria-label="PDF export options"
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        disabled={exporting || !canChooseContent}
+        onClick={() => setMenuOpen((open) => !open)}
+      >
+        <ChevronDown className="h-4 w-4" />
+      </Button>
 
-        {menuOpen ? (
-          <div
-            role="menu"
-            className="absolute right-0 top-full z-40 mt-1 min-w-48 rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+      {menuOpen ? (
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-40 mt-1 min-w-48 rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+            onClick={() => {
+              setMenuOpen(false);
+              onChooseContent();
+            }}
           >
-            <button
-              type="button"
-              role="menuitem"
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
-              onClick={openSelectiveExport}
-            >
-              <ListChecks className="h-4 w-4" />
-              Selective export
-            </button>
-          </div>
-        ) : null}
-      </div>
-
-      <Dialog open={selectiveOpen} onOpenChange={setSelectiveOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Selective PDF export</DialogTitle>
-            <DialogDescription>
-              Choose which investigation sections to include. The report header
-              is always included.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="max-h-[55vh] space-y-5 overflow-y-auto pr-1">
-            {hasSearchDetails ? (
-              <section>
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Search details
-                </h3>
-                <label
-                  htmlFor="pdf-export-search-details"
-                  className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/40"
-                >
-                  <Checkbox
-                    id="pdf-export-search-details"
-                    className="mt-0.5"
-                    checked={includeSearchDetails}
-                    onCheckedChange={(checked) =>
-                      setIncludeSearchDetails(checked === true)
-                    }
-                  />
-                  <span>
-                    <span className="block text-sm font-medium">
-                      Search details
-                    </span>
-                    <span className="block text-xs text-muted-foreground">
-                      Values used to run this investigation.
-                    </span>
-                  </span>
-                </label>
-              </section>
-            ) : null}
-
-            <section>
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Results
-                </h3>
-                {resultOptions.length > 0 ? (
-                  <button
-                    type="button"
-                    className="text-xs font-medium text-muted-foreground hover:text-foreground"
-                    onClick={() =>
-                      setSelectedResultIndices(
-                        allResultsSelected
-                          ? []
-                          : resultOptions.map((option) => option.index),
-                      )
-                    }
-                  >
-                    {allResultsSelected ? "Clear all" : "Select all"}
-                  </button>
-                ) : null}
-              </div>
-
-              {resultOptions.length > 0 ? (
-                <div className="space-y-2">
-                  {resultOptions.map((option) => {
-                    const checkboxId = `pdf-export-result-${option.index}`;
-                    return (
-                      <label
-                        key={option.index}
-                        htmlFor={checkboxId}
-                        className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/40"
-                      >
-                        <Checkbox
-                          id={checkboxId}
-                          className="mt-0.5"
-                          checked={selectedResultIndices.includes(option.index)}
-                          onCheckedChange={(checked) =>
-                            toggleResult(option.index, checked === true)
-                          }
-                        />
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-medium">
-                            {option.label}
-                          </span>
-                          <span className="block truncate text-xs text-muted-foreground">
-                            {option.description}
-                          </span>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                  No results are available for export.
-                </p>
-              )}
-            </section>
-          </div>
-
-          <DialogFooter className="items-center sm:justify-between">
-            <span className="text-xs text-muted-foreground">
-              {selectedSectionCount} selected
-            </span>
-            <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setSelectiveOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                disabled={exporting || selectedSectionCount === 0}
-                onClick={() => {
-                  setSelectiveOpen(false);
-                  onExport({
-                    includeSearchDetails,
-                    resultIndices: selectedResultIndices,
-                  });
-                }}
-              >
-                <FileDown className="h-4 w-4" />
-                Export selected
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+            <ListChecks className="h-4 w-4" />
+            Choose content
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -369,10 +217,20 @@ function ResultData({
   data,
   hiddenRiskTopics,
   advancedMode,
+  resultIndex,
+  exportLabel,
+  exportSelectionMode,
+  selectedExportItemKeys,
+  onExportItemChange,
 }: {
   data: ParsedPluginData | null;
   hiddenRiskTopics: boolean;
   advancedMode: boolean;
+  resultIndex: number;
+  exportLabel: string;
+  exportSelectionMode: boolean;
+  selectedExportItemKeys: ReadonlySet<string>;
+  onExportItemChange: (item: ExportItem, selected: boolean) => void;
 }) {
   if (!data) {
     return <p className="text-sm text-muted-foreground">No output data.</p>;
@@ -392,9 +250,12 @@ function ResultData({
     return <RawOutput raw={data.raw} advancedMode={advancedMode} />;
   }
 
-  const entities = hiddenRiskTopics
-    ? data.entities.filter((entity) => entity.$entity !== "entity.riskTopic")
-    : data.entities;
+  const entities = data.entities
+    .map((entity, itemIndex) => ({ entity, itemIndex }))
+    .filter(
+      ({ entity }) =>
+        !hiddenRiskTopics || entity.$entity !== "entity.riskTopic",
+    );
 
   if (entities.length === 0) {
     return (
@@ -408,26 +269,60 @@ function ResultData({
 
   return (
     <div className={advancedMode ? "space-y-4" : ""}>
-      {entities.map((entity, index) => (
-        <EntityCard
-          key={`${entity.$entity}:${entity.$id}:${index}`}
-          entity={entity}
-          advancedMode={advancedMode}
-        />
-      ))}
+      {entities.map(({ entity, itemIndex }) => {
+        const exportItem = { resultIndex, itemIndex };
+        const key = exportItemKey(exportItem);
+        return (
+          <div
+            key={`${entity.$entity}:${entity.$id}:${itemIndex}`}
+            className={cn(
+              exportSelectionMode && "rounded-md border px-3 py-2",
+              exportSelectionMode &&
+                selectedExportItemKeys.has(key) &&
+                "border-primary/40 bg-muted/20",
+            )}
+          >
+            {exportSelectionMode ? (
+              <div className="mb-2 flex items-center gap-2">
+                <Checkbox
+                  id={`pdf-export-item-${resultIndex}-${itemIndex}`}
+                  aria-label={`Include ${exportLabel} item ${itemIndex + 1}`}
+                  checked={selectedExportItemKeys.has(key)}
+                  onCheckedChange={(checked) =>
+                    onExportItemChange(exportItem, checked === true)
+                  }
+                />
+                <label
+                  htmlFor={`pdf-export-item-${resultIndex}-${itemIndex}`}
+                  className="cursor-pointer text-xs font-medium"
+                >
+                  Include this item
+                </label>
+              </div>
+            ) : null}
+            <EntityCard entity={entity} advancedMode={advancedMode} />
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-function riskTopics(results: ParsedResult[]): PluginEntity[] {
-  const topics: PluginEntity[] = [];
+interface RiskTopicItem extends ExportItem {
+  entity: PluginEntity;
+}
+
+function riskTopics(results: ParsedResult[]): RiskTopicItem[] {
+  const topics: RiskTopicItem[] = [];
   for (const item of results) {
     if (item.data?.kind !== "entities") {
       continue;
     }
     topics.push(
-      ...item.data.entities.filter(
-        (entity) => entity.$entity === "entity.riskTopic",
+      ...item.data.entities.flatMap((entity, itemIndex) =>
+        entity.$entity === "entity.riskTopic"
+          ? [{ entity, resultIndex: item.index, itemIndex }]
+          : [],
       ),
     );
   }
@@ -490,32 +385,99 @@ export function ScanResultView({
       })),
     [detail.results],
   );
-  const exportResultOptions = useMemo<ExportResultOption[]>(
-    () =>
-      parsedResults.map((item) => {
-        const key = resultKey(
-          item.result.pluginId,
-          item.result.entrypointId,
-        );
-        const entrypointName =
-          entrypointNameByKey[key] ??
-          humanizeIdentifier(item.result.entrypointId);
-        const pluginName =
-          pluginNameById[item.result.pluginId] ??
-          humanizeIdentifier(item.result.pluginId);
-        const itemCount = resultItemCount([item]);
-        const resultDescription = !item.result.output.ok
-          ? "Failed execution"
-          : `${itemCount} ${itemCount === 1 ? "item" : "items"}`;
-
-        return {
-          index: item.index,
-          label: `Result ${item.index + 1}: ${entrypointName}`,
-          description: `${pluginName} / ${resultDescription}`,
-        };
-      }),
-    [entrypointNameByKey, parsedResults, pluginNameById],
+  const [exportSelectionMode, setExportSelectionMode] = useState(false);
+  const [includeSearchDetails, setIncludeSearchDetails] = useState(false);
+  const [selectedExportItemKeys, setSelectedExportItemKeys] = useState<
+    string[]
+  >([]);
+  const selectedExportItemKeySet = useMemo(
+    () => new Set(selectedExportItemKeys),
+    [selectedExportItemKeys],
   );
+  const selectableExportItems = useMemo(
+    () => parsedResults.flatMap(resultExportItems),
+    [parsedResults],
+  );
+  const hasSearchDetails = detail.inputs.length > 0;
+  const selectedSectionCount =
+    selectedExportItemKeys.length + (includeSearchDetails ? 1 : 0);
+  const totalSectionCount =
+    selectableExportItems.length + (hasSearchDetails ? 1 : 0);
+  const allSectionsSelected =
+    totalSectionCount > 0 && selectedSectionCount === totalSectionCount;
+  const selectedResults = useMemo<PdfExportSelection["results"]>(
+    () =>
+      parsedResults.flatMap((result) => {
+        const selectedItems = resultExportItems(result).filter((item) =>
+          selectedExportItemKeySet.has(exportItemKey(item)),
+        );
+        if (selectedItems.length === 0) {
+          return [];
+        }
+        return [
+          {
+            resultIndex: result.index,
+            itemIndices:
+              result.data?.kind === "entities" &&
+              result.data.entities.length > 0
+                ? selectedItems.flatMap(({ itemIndex }) =>
+                    itemIndex === null ? [] : [itemIndex],
+                  )
+                : null,
+          },
+        ];
+      }),
+    [parsedResults, selectedExportItemKeySet],
+  );
+
+  useEffect(() => {
+    setExportSelectionMode(false);
+    setIncludeSearchDetails(false);
+    setSelectedExportItemKeys([]);
+  }, [detail.id]);
+
+  useEffect(() => {
+    if (exportSelectionMode && exportingPdf) {
+      setExportSelectionMode(false);
+    }
+  }, [exportSelectionMode, exportingPdf]);
+
+  const toggleExportItems = (items: ExportItem[], selected: boolean) => {
+    setSelectedExportItemKeys((current) => {
+      const next = new Set(current);
+      for (const item of items) {
+        const key = exportItemKey(item);
+        if (selected) {
+          next.add(key);
+        } else {
+          next.delete(key);
+        }
+      }
+      return Array.from(next).sort();
+    });
+  };
+
+  const startContentSelection = () => {
+    setIncludeSearchDetails(false);
+    setSelectedExportItemKeys([]);
+    setExportSelectionMode(true);
+  };
+
+  const cancelContentSelection = () => {
+    setExportSelectionMode(false);
+    setIncludeSearchDetails(false);
+    setSelectedExportItemKeys([]);
+  };
+
+  const toggleAllSections = () => {
+    if (allSectionsSelected) {
+      setIncludeSearchDetails(false);
+      setSelectedExportItemKeys([]);
+      return;
+    }
+    setIncludeSearchDetails(hasSearchDetails);
+    setSelectedExportItemKeys(selectableExportItems.map(exportItemKey));
+  };
   const groupKeys = useMemo(
     () =>
       Array.from(
@@ -580,12 +542,12 @@ export function ScanResultView({
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {onExportPdf ? (
+            {onExportPdf && !exportSelectionMode ? (
               <PdfExportControl
                 exporting={exportingPdf}
-                hasSearchDetails={detail.inputs.length > 0}
-                resultOptions={exportResultOptions}
-                onExport={onExportPdf}
+                canChooseContent={totalSectionCount > 0}
+                onExportAll={() => onExportPdf(null)}
+                onChooseContent={startContentSelection}
               />
             ) : null}
             <ScanStatusIndicator
@@ -597,9 +559,91 @@ export function ScanResultView({
         </div>
       </header>
 
+      {onExportPdf && exportSelectionMode ? (
+        <div
+          role="region"
+          aria-label="PDF content selection"
+          className="sticky top-3 z-30 mb-6 flex flex-wrap items-center justify-between gap-3 rounded-md border bg-background/95 px-4 py-3 shadow-sm backdrop-blur"
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <ListChecks className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Choose PDF content</p>
+              <p className="text-xs text-muted-foreground">
+                {selectedSectionCount === 0
+                  ? "Select the exact items you want below."
+                  : `${selectedSectionCount} of ${totalSectionCount} items selected.`}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={toggleAllSections}
+            >
+              {allSectionsSelected ? "Clear all" : "Select all"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={cancelContentSelection}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={exportingPdf || selectedSectionCount === 0}
+              onClick={() =>
+                onExportPdf({
+                  includeSearchDetails,
+                  results: selectedResults,
+                })
+              }
+            >
+              <FileDown className="h-4 w-4" />
+              Export selected
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {visibleInputs.length > 0 ? (
-        <section className="border-t py-6">
-          <h2 className="mb-3 text-sm font-semibold">Search details</h2>
+        <section
+          className={cn(
+            "border-t py-6",
+            exportSelectionMode &&
+              includeSearchDetails &&
+              "bg-muted/20",
+          )}
+        >
+          <div className="mb-3 flex items-center gap-2">
+            {exportSelectionMode ? (
+              <Checkbox
+                id="pdf-export-search-details"
+                aria-label="Include search details"
+                checked={includeSearchDetails}
+                onCheckedChange={(checked) =>
+                  setIncludeSearchDetails(checked === true)
+                }
+              />
+            ) : null}
+            <h2 className="text-sm font-semibold">
+              {exportSelectionMode ? (
+                <label
+                  htmlFor="pdf-export-search-details"
+                  className="cursor-pointer"
+                >
+                  Search details
+                </label>
+              ) : (
+                "Search details"
+              )}
+            </h2>
+          </div>
           <dl>
             {visibleInputs.map((input, index) => (
               <div
@@ -670,6 +714,10 @@ export function ScanResultView({
                 pluginNameById[pluginId] ?? humanizeIdentifier(pluginId);
               const count = resultItemCount(results);
               const failed = results.some(({ result }) => !result.output.ok);
+              const groupExportItems = results.flatMap(resultExportItems);
+              const selectedInGroup = groupExportItems.filter((item) =>
+                selectedExportItemKeySet.has(exportItemKey(item)),
+              ).length;
 
               return (
                 <button
@@ -687,7 +735,11 @@ export function ScanResultView({
                   onClick={() => setActiveKey(key)}
                 >
                   <span>{label}</span>
-                  {failed ? (
+                  {exportSelectionMode && groupExportItems.length > 0 ? (
+                    <span className="ml-1.5 text-xs text-muted-foreground">
+                      {selectedInGroup}/{groupExportItems.length}
+                    </span>
+                  ) : failed ? (
                     <AlertTriangle className="ml-1.5 inline h-3.5 w-3.5 text-destructive" />
                   ) : count > 0 ? (
                     <span className="ml-1.5 text-xs text-muted-foreground">
@@ -706,8 +758,17 @@ export function ScanResultView({
                   Risk topics ({topics.length})
                 </h3>
                 <RiskTopicSummary
-                  topics={topics}
+                  topics={topics.map(({ entity }) => entity)}
                   advancedMode={advancedMode}
+                  exportSelectionMode={exportSelectionMode}
+                  isTopicSelected={(topicIndex) =>
+                    selectedExportItemKeySet.has(
+                      exportItemKey(topics[topicIndex]),
+                    )
+                  }
+                  onTopicSelectionChange={(topicIndex, selected) =>
+                    toggleExportItems([topics[topicIndex]], selected)
+                  }
                 />
               </div>
             ) : null}
@@ -717,30 +778,79 @@ export function ScanResultView({
                 This check returned no results.
               </p>
             ) : (
-              visibleResults.map(({ result, data }, resultIndex) => (
-                <div
-                  key={`${activeKey}:${resultIndex}`}
-                  className="border-b py-6 first:pt-0 last:border-b-0 last:pb-0"
-                >
-                  <ResultBoundary rawOutput={result.output.dataJson}>
-                    {result.output.ok ? (
-                      <ResultData
-                        data={data}
-                        hiddenRiskTopics={topics.length > 0}
-                        advancedMode={advancedMode}
-                      />
-                    ) : (
-                      <div
-                        role="alert"
-                        className="border-y border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"
-                      >
-                        {result.output.error ?? "Plugin execution failed."}
-                      </div>
+              visibleResults.map(({ index, result, data }) => {
+                const resultItems = resultExportItems({
+                  index,
+                  result,
+                  data,
+                });
+                const wholeResultItem = resultItems.find(
+                  ({ itemIndex }) => itemIndex === null,
+                );
+                const resultSelected = resultItems.some((item) =>
+                  selectedExportItemKeySet.has(exportItemKey(item)),
+                );
+                return (
+                  <div
+                    key={`${activeKey}:${index}`}
+                    className={cn(
+                      "border-b py-6 first:pt-0 last:border-b-0 last:pb-0",
+                      exportSelectionMode && resultSelected && "bg-muted/20",
                     )}
-                  </ResultBoundary>
-                  {advancedMode ? <Logs logs={result.output.logs} /> : null}
-                </div>
-              ))
+                  >
+                    {exportSelectionMode && wholeResultItem ? (
+                      <div className="mb-4 flex items-center gap-2 rounded-md border bg-background px-3 py-2">
+                        <Checkbox
+                          id={`pdf-export-result-${index}`}
+                          aria-label={`Include ${activeEntrypointName} result ${index + 1}`}
+                          checked={selectedExportItemKeySet.has(
+                            exportItemKey(wholeResultItem),
+                          )}
+                          onCheckedChange={(checked) =>
+                            toggleExportItems(
+                              [wholeResultItem],
+                              checked === true,
+                            )
+                          }
+                        />
+                        <label
+                          htmlFor={`pdf-export-result-${index}`}
+                          className="cursor-pointer text-sm font-medium"
+                        >
+                          Include this result
+                        </label>
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          Result {index + 1}
+                        </span>
+                      </div>
+                    ) : null}
+                    <ResultBoundary rawOutput={result.output.dataJson}>
+                      {result.output.ok ? (
+                        <ResultData
+                          data={data}
+                          hiddenRiskTopics={topics.length > 0}
+                          advancedMode={advancedMode}
+                          resultIndex={index}
+                          exportLabel={activeEntrypointName}
+                          exportSelectionMode={exportSelectionMode}
+                          selectedExportItemKeys={selectedExportItemKeySet}
+                          onExportItemChange={(item, selected) =>
+                            toggleExportItems([item], selected)
+                          }
+                        />
+                      ) : (
+                        <div
+                          role="alert"
+                          className="border-y border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"
+                        >
+                          {result.output.error ?? "Plugin execution failed."}
+                        </div>
+                      )}
+                    </ResultBoundary>
+                    {advancedMode ? <Logs logs={result.output.logs} /> : null}
+                  </div>
+                );
+              })
             )}
           </div>
         </section>
