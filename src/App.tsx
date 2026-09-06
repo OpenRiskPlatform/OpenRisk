@@ -22,13 +22,20 @@ export default function App({ client = tauriOpenRiskClient }: AppProps) {
 
   const loadWorkspace = async (project: ProjectSummary) => {
     try {
-      const [settings, scans] = await Promise.all([
+      const [settings, scans, pluginInstallationEnabled] = await Promise.all([
         client.loadSettings(),
         client.listScans(),
+        client.pluginInstallationEnabled(),
       ]);
       applyTheme(settings.projectSettings.theme);
       addRecentProject(project.directory);
-      dispatch({ type: "workspace-loaded", project, settings, scans });
+      dispatch({
+        type: "workspace-loaded",
+        project,
+        settings,
+        scans,
+        pluginInstallationEnabled,
+      });
     } catch (error) {
       // Opening is a two-phase operation. Do not leave the backend holding a
       // project when loading the initial workspace data fails.
@@ -92,6 +99,7 @@ export default function App({ client = tauriOpenRiskClient }: AppProps) {
         client={client}
         initialSettings={state.settings}
         initialScans={state.scans}
+        pluginInstallationEnabled={state.pluginInstallationEnabled}
         onCloseProject={async () => {
           await client.closeProject();
           dispatch({ type: "project-closed" });

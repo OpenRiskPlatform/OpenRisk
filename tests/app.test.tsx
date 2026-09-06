@@ -5,6 +5,12 @@ import App from "@/App";
 import { createClient } from "./fixtures";
 
 describe("App project lifecycle", () => {
+  it("uses OpenRisk branding by default", () => {
+    render(<App client={createClient()} />);
+
+    expect(screen.getByRole("img", { name: "OpenRisk" })).toBeVisible();
+  });
+
   it("closes a project when initial workspace loading fails", async () => {
     const user = userEvent.setup();
     const client = createClient({

@@ -16,6 +16,12 @@ use typst_pdf::{PdfOptions, PdfStandard, PdfStandards, Timestamp};
 
 const TEMPLATE: &str = include_str!("../templates/investigation.typ");
 const NOTO_SANS: &[u8] = include_bytes!("../assets/fonts/NotoSans.ttf");
+#[cfg(feature = "custom-branding")]
+const CUSTOM_LOGO: &[u8] = include_bytes!(env!("OPENRISK_BRAND_LOGO_EMBED_PATH"));
+#[cfg(feature = "custom-branding")]
+const CUSTOM_LOGO_FILENAME: &str = env!("OPENRISK_BRAND_LOGO_FILENAME");
+#[cfg(feature = "custom-branding")]
+const CUSTOM_BRAND_NAME: &str = env!("OPENRISK_BRAND_NAME");
 
 #[derive(Debug, Error)]
 pub enum PdfRenderError {
@@ -44,6 +50,8 @@ struct RenderPayload<'a> {
     profile: &'static str,
     generated_at: String,
     snapshot_sha256: &'a str,
+    brand_logo_path: Option<&'static str>,
+    brand_name: &'static str,
 }
 
 fn digest(bytes: &[u8]) -> String {
@@ -69,12 +77,28 @@ pub fn render_scan_report(
         },
         generated_at,
         snapshot_sha256: &snapshot_sha256,
+        #[cfg(feature = "custom-branding")]
+        brand_logo_path: Some(CUSTOM_LOGO_FILENAME),
+        #[cfg(not(feature = "custom-branding"))]
+        brand_logo_path: None,
+        #[cfg(feature = "custom-branding")]
+        brand_name: CUSTOM_BRAND_NAME,
+        #[cfg(not(feature = "custom-branding"))]
+        brand_name: "OpenRisk",
     })?;
+
+    #[cfg(feature = "custom-branding")]
+    let static_files = [
+        ("report.json", payload.as_slice()),
+        (CUSTOM_LOGO_FILENAME, CUSTOM_LOGO),
+    ];
+    #[cfg(not(feature = "custom-branding"))]
+    let static_files = [("report.json", payload.as_slice())];
 
     let engine = TypstEngine::builder()
         .main_file(TEMPLATE)
         .fonts([NOTO_SANS])
-        .with_static_file_resolver([("report.json", payload.as_slice())])
+        .with_static_file_resolver(static_files)
         .build();
 
     let compiled = engine.compile::<PagedDocument>();

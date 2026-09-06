@@ -21,6 +21,18 @@ async fn get_open_project(
     })
 }
 
+#[cfg(feature = "disable-plugin-installation")]
+fn plugin_installation_disabled() -> AppError {
+    AppError::Validation("Plugin installation is disabled in this build".into())
+}
+
+/// Report whether this build permits installing additional plugins.
+#[tauri::command]
+#[specta::specta]
+pub fn plugin_installation_enabled() -> bool {
+    !cfg!(feature = "disable-plugin-installation")
+}
+
 /// Create a new project database at `project_path` and open it as the active project.
 /// #
 #[tauri::command]
@@ -122,10 +134,18 @@ pub async fn upsert_project_plugin_from_dir(
     plugin_dir: String,
     state: tauri::State<'_, ProjectState>,
 ) -> Result<PluginRecord, AppError> {
-    let project = get_open_project(&state).await?;
-    service::upsert_plugin_from_dir(project.as_ref(), &PathBuf::from(plugin_dir))
-        .await
-        .map_err(AppError::from)
+    #[cfg(feature = "disable-plugin-installation")]
+    {
+        let _ = (plugin_dir, state);
+        Err(plugin_installation_disabled())
+    }
+    #[cfg(not(feature = "disable-plugin-installation"))]
+    {
+        let project = get_open_project(&state).await?;
+        service::upsert_plugin_from_dir(project.as_ref(), &PathBuf::from(plugin_dir))
+            .await
+            .map_err(AppError::from)
+    }
 }
 
 /// Register or refresh a plugin from a `.zip` archive into the active project.
@@ -136,10 +156,18 @@ pub async fn upsert_project_plugin_from_zip(
     zip_path: String,
     state: tauri::State<'_, ProjectState>,
 ) -> Result<PluginRecord, AppError> {
-    let project = get_open_project(&state).await?;
-    service::upsert_plugin_from_zip(project.as_ref(), &PathBuf::from(zip_path))
-        .await
-        .map_err(AppError::from)
+    #[cfg(feature = "disable-plugin-installation")]
+    {
+        let _ = (zip_path, state);
+        Err(plugin_installation_disabled())
+    }
+    #[cfg(not(feature = "disable-plugin-installation"))]
+    {
+        let project = get_open_project(&state).await?;
+        service::upsert_plugin_from_zip(project.as_ref(), &PathBuf::from(zip_path))
+            .await
+            .map_err(AppError::from)
+    }
 }
 
 /// Install a plugin from a remote `plugin.json` URL.
@@ -153,10 +181,18 @@ pub async fn install_plugin_from_url(
     manifest_url: String,
     state: tauri::State<'_, ProjectState>,
 ) -> Result<PluginRecord, AppError> {
-    let project = get_open_project(&state).await?;
-    service::upsert_plugin_from_url(project.as_ref(), &manifest_url)
-        .await
-        .map_err(AppError::from)
+    #[cfg(feature = "disable-plugin-installation")]
+    {
+        let _ = (manifest_url, state);
+        Err(plugin_installation_disabled())
+    }
+    #[cfg(not(feature = "disable-plugin-installation"))]
+    {
+        let project = get_open_project(&state).await?;
+        service::upsert_plugin_from_url(project.as_ref(), &manifest_url)
+            .await
+            .map_err(AppError::from)
+    }
 }
 
 /// Enable or disable a plugin within the active project.
@@ -440,7 +476,14 @@ pub async fn reorder_scans(
 #[tauri::command]
 #[specta::specta]
 pub async fn get_plugin_registry() -> Result<PluginRegistryRecord, AppError> {
-    service::get_plugin_registry().await.map_err(AppError::from)
+    #[cfg(feature = "disable-plugin-installation")]
+    {
+        Err(plugin_installation_disabled())
+    }
+    #[cfg(not(feature = "disable-plugin-installation"))]
+    {
+        service::get_plugin_registry().await.map_err(AppError::from)
+    }
 }
 
 /// Export the currently open project as a read-only preview copy at `dest_path`.

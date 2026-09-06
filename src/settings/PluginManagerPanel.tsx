@@ -34,6 +34,7 @@ type PluginView = "installed" | "registry" | "manual";
 interface PluginManagerPanelProps {
   client: OpenRiskClient;
   settings: ProjectSettingsPayload;
+  installationEnabled: boolean;
   onPluginUpdated: (plugin: PluginRecord) => void;
   onConfigurePlugin?: (pluginId: string) => void;
 }
@@ -41,6 +42,7 @@ interface PluginManagerPanelProps {
 export function PluginManagerPanel({
   client,
   settings,
+  installationEnabled,
   onPluginUpdated,
   onConfigurePlugin,
 }: PluginManagerPanelProps) {
@@ -151,7 +153,7 @@ export function PluginManagerPanel({
           {description}
         </p>
       </div>
-      {view === "installed" && !readOnly ? (
+      {view === "installed" && !readOnly && installationEnabled ? (
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setView("registry")}>
             Browse plugins

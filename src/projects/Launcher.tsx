@@ -2,7 +2,7 @@ import { useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { FolderOpen, FolderPlus, ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { OpenRiskLogo } from "@/components/ui/OpenRiskLogo";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 import {
   addRecentProject,
   readRecentProjects,
@@ -71,10 +71,11 @@ export function Launcher({
     <main className="flex min-h-screen items-center justify-center bg-muted/30 px-6 py-12">
       <section className="w-full max-w-2xl rounded-3xl border bg-background p-8 shadow-sm">
         <div className="mb-10 flex justify-center">
-          <OpenRiskLogo
+          <BrandLogo
             size={72}
             textSizeClassName="text-4xl"
-            className="text-foreground"
+            customWidth={320}
+            className="max-w-full text-foreground"
           />
         </div>
 

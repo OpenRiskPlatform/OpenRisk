@@ -16,6 +16,7 @@ import type {
 } from "@/core/backend/bindings";
 
 export interface OpenRiskClient {
+  pluginInstallationEnabled(): Promise<boolean>;
   createProject(name: string, projectPath: string): Promise<ProjectSummary>;
   openProject(projectPath: string, password: string | null): Promise<ProjectSummary>;
   closeProject(): Promise<void>;

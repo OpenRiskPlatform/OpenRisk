@@ -23,6 +23,7 @@ export type AppState =
       project: ProjectSummary;
       settings: ProjectSettingsPayload;
       scans: ScanSummaryRecord[];
+      pluginInstallationEnabled: boolean;
     };
 
 export type AppAction =
@@ -37,6 +38,7 @@ export type AppAction =
       project: ProjectSummary;
       settings: ProjectSettingsPayload;
       scans: ScanSummaryRecord[];
+      pluginInstallationEnabled: boolean;
     }
   | { type: "project-closed" };
 
@@ -83,6 +85,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         project: action.project,
         settings: action.settings,
         scans: action.scans,
+        pluginInstallationEnabled: action.pluginInstallationEnabled,
       };
     case "project-closed":
       return initialAppState;

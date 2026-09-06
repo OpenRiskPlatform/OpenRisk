@@ -25,6 +25,7 @@ interface SettingsDialogProps {
   open: boolean;
   client: OpenRiskClient;
   settings: ProjectSettingsPayload;
+  pluginInstallationEnabled: boolean;
   onOpenChange: (open: boolean) => void;
   onPluginUpdated: (plugin: PluginRecord) => void;
   onSettingsReloaded: (settings: ProjectSettingsPayload) => void;
@@ -34,6 +35,7 @@ export function SettingsDialog({
   open,
   client,
   settings,
+  pluginInstallationEnabled,
   onOpenChange,
   onPluginUpdated,
   onSettingsReloaded,
@@ -64,6 +66,7 @@ export function SettingsDialog({
       <PluginManagerPanel
         client={client}
         settings={settings}
+        installationEnabled={pluginInstallationEnabled}
         onPluginUpdated={onPluginUpdated}
         onConfigurePlugin={(id) => setActiveCategory(`plugin:${id}`)}
       />

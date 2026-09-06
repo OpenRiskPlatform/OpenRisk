@@ -57,6 +57,11 @@ edition.workspace = true
 rust-version.workspace = true
 default-run = "openrisk"
 
+[features]
+default = []
+disable-plugin-installation = []
+custom-branding = ["openrisk-pdf/custom-branding"]
+
 [lib]
 name = "openrisk_tauri_lib"
 # The desktop binary links the Tauri adapter as a Rust library.

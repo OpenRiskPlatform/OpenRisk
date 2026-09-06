@@ -26,6 +26,7 @@ describe("plugin actions", () => {
       <PluginManagerPanel
         client={client}
         settings={projectSettings}
+        installationEnabled
         onPluginUpdated={() => undefined}
       />,
     );
@@ -37,6 +38,27 @@ describe("plugin actions", () => {
     await waitFor(() =>
       expect(client.getPluginRegistry).toHaveBeenCalledTimes(1),
     );
+  });
+
+  it("removes plugin installation actions when the build disables them", () => {
+    const client = createClient();
+
+    render(
+      <PluginManagerPanel
+        client={client}
+        settings={projectSettings}
+        installationEnabled={false}
+        onPluginUpdated={() => undefined}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Browse plugins" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Install from file" }),
+    ).toBeNull();
+    expect(screen.getByText("Demo Registry")).toBeVisible();
   });
 
   it("writes plugin settings only after Save settings", async () => {
