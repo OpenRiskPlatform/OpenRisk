@@ -1,0 +1,6 @@
+{
+  "$schema": "./build-config.schema.json",
+  "configVersion": 1,
+  "features": [],
+  "branding": null
+}

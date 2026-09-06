@@ -6,6 +6,10 @@ authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 
+[features]
+default = []
+custom-branding = []
+
 [dependencies]
 hex.workspace = true
 openrisk-core = { path = "../openrisk-core" }

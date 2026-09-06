@@ -54,6 +54,74 @@ The workflow runs `npm run version:app`, commits the updated `package.json` and
 The React/Tauri application calls the shared `openrisk-core` use cases. Core
 must not depend on Tauri or another UI adapter.
 
+## Configurable builds
+
+Use the cross-platform build wrapper on Windows, macOS, or Linux. The standard
+build permits installing plugins and uses the checked-in OpenRisk logo in the
+app, exported PDF reports, and OS packages:
+
+```bash
+npm run build:app
+```
+
+Plugin installation can be removed independently:
+
+```bash
+npm run build:app -- --disable-plugin-installation
+```
+
+Build behavior is read from the committed `build-config.json`. The default
+configuration is:
+
+```json
+{
+  "$schema": "./build-config.schema.json",
+  "configVersion": 1,
+  "features": [],
+  "branding": null
+}
+```
+
+The manual release workflow calls the same build wrapper, so every release uses
+the feature and branding values committed with its release commit.
+
+For a white-label build, set `branding` to a brand name, one PNG/SVG wordmark
+shared by the app and PDF template, and a square PNG/SVG source for packaged
+Windows, macOS, and Linux icons. Paths are resolved relative to the config file:
+
+```json
+{
+  "$schema": "./build-config.schema.json",
+  "configVersion": 1,
+  "features": ["disable-plugin-installation"],
+  "branding": {
+    "name": "Example Brand",
+    "logo": "assets/branding/example-logo.svg",
+    "appIcon": "assets/branding/example-icon.svg"
+  }
+}
+```
+
+The script generates platform icons in a temporary directory; it does not
+replace the checked-in OpenRisk icons. Custom branding enables the internal
+`custom-branding` Cargo feature and embeds the selected wordmark into the PDF
+binary at compile time.
+
+Command-line values can augment or replace the committed configuration for a
+local build:
+
+```bash
+npm run build:app -- --brand-name "Example Brand" --brand-logo path/to/logo.svg --app-icon path/to/icon.svg
+npm run build:app -- --features feature-a,feature-b
+npm run build:app -- --build-config path/to/another-build-config.json
+```
+
+Put raw Tauri build arguments after a second `--`, for example:
+
+```bash
+npm run build:app -- --disable-plugin-installation -- --target aarch64-apple-darwin
+```
+
 ### Interrupted scan recovery
 
 Plugin runs execute inside the app process. If the app is force-quit, the next
