@@ -3,6 +3,7 @@ import { unwrap } from "@/lib/utils";
 import type { OpenRiskClient } from "./OpenRiskClient";
 
 export const tauriOpenRiskClient: OpenRiskClient = {
+  pluginInstallationEnabled: () => commands.pluginInstallationEnabled(),
   createProject: (name, projectPath) =>
     unwrap(commands.createProject(name, projectPath)),
   openProject: (projectPath, password) =>

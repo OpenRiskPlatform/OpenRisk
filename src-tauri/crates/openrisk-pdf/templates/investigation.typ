@@ -7,8 +7,8 @@
 #let light-rule = rgb("#DDDDDD")
 
 #set document(
-  title: "OpenRisk Investigation Report - " + report.scan.title,
-  author: "OpenRisk",
+  title: payload.brandName + " Investigation Report - " + report.scan.title,
+  author: payload.brandName,
   description: "Investigation results for " + report.project.name,
   date: auto,
 )
@@ -52,7 +52,11 @@
       grid(
         columns: (1fr, auto),
         align: (left, right),
-        text(size: 7.5pt, weight: 600)[OPENRISK],
+        if payload.brandLogoPath != none {
+          image(payload.brandLogoPath, width: 28mm, alt: payload.brandName)
+        } else {
+          text(size: 7.5pt, weight: 600)[OPENRISK]
+        },
         text(size: 7.5pt, fill: muted)[Investigation Report],
       )
       v(4pt)
@@ -64,7 +68,11 @@
     v(4pt)
     grid(
       columns: (1fr, auto),
-      text(size: 7pt, fill: muted)[OpenRisk],
+      if payload.brandLogoPath != none {
+        image(payload.brandLogoPath, width: 22mm, alt: payload.brandName)
+      } else {
+        text(size: 7pt, fill: muted)[OpenRisk]
+      },
       text(size: 7pt, fill: muted)[Page #counter(page).display("1 / 1", both: true)],
     )
   },
@@ -359,8 +367,12 @@
   rows
 }
 
-// Plain institutional masthead.
-#text(size: 9pt, weight: 650, tracking: 0.08em)[OPENRISK]
+// Plain institutional masthead, optionally replaced for a white-label build.
+#if payload.brandLogoPath != none {
+  image(payload.brandLogoPath, width: 42mm, alt: payload.brandName)
+} else {
+  text(size: 9pt, weight: 650, tracking: 0.08em)[OPENRISK]
+}
 #v(4pt)
 #line(length: 100%, stroke: 1pt + ink)
 #v(18pt)

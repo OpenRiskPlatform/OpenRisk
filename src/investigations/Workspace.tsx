@@ -24,7 +24,7 @@ import type {
   ScanSummaryRecord,
 } from "@/core/backend/bindings";
 import { Button } from "@/components/ui/button";
-import { OpenRiskLogo } from "@/components/ui/OpenRiskLogo";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 import { ScanResultView } from "@/results/ScanResultView";
 import { applyTheme } from "@/app/theme";
 import { SettingsDialog } from "@/settings/SettingsDialog";
@@ -40,6 +40,7 @@ interface WorkspaceProps {
   client: OpenRiskClient;
   initialSettings: ProjectSettingsPayload;
   initialScans: ScanSummaryRecord[];
+  pluginInstallationEnabled?: boolean;
   onCloseProject: () => Promise<void>;
 }
 
@@ -89,6 +90,7 @@ export function Workspace({
   client,
   initialSettings,
   initialScans,
+  pluginInstallationEnabled = true,
   onCloseProject,
 }: WorkspaceProps) {
   const [state, dispatch] = useReducer(
@@ -579,9 +581,10 @@ export function Workspace({
             <PanelLeftOpen className="h-4 w-4" />
           </Button>
         ) : null}
-        <OpenRiskLogo
+        <BrandLogo
           size={30}
           textSizeClassName="text-lg"
+          customWidth={160}
           className="text-foreground"
         />
         <div className="h-6 w-px bg-border" />
@@ -690,6 +693,7 @@ export function Workspace({
         open={settingsOpen}
         client={client}
         settings={state.settings}
+        pluginInstallationEnabled={pluginInstallationEnabled}
         onOpenChange={setSettingsOpen}
         onPluginUpdated={replacePlugin}
         onSettingsReloaded={replaceSettings}

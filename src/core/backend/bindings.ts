@@ -4,6 +4,8 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 
 /** Commands */
 export const commands = {
+	// Report whether this build permits installing additional plugins.
+	pluginInstallationEnabled: () => __TAURI_INVOKE<boolean>("plugin_installation_enabled"),
 	/**
 	 *  Create a new project database at `project_path` and open it as the active project.
 	 *  #

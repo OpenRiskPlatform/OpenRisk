@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openrisk.eu/schemas/build-config.schema.json",
+  "title": "OpenRisk build configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["configVersion", "features", "branding"],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "configVersion": {
+      "const": 1
+    },
+    "features": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[A-Za-z0-9_-]+$"
+      }
+    },
+    "branding": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "logo", "appIcon"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "logo": {
+              "type": "string",
+              "minLength": 1
+            },
+            "appIcon": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    }
+  }
+}
