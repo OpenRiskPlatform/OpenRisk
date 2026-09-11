@@ -13,8 +13,38 @@ function requiredEnvironmentValue(name: string): string {
   return value;
 }
 
+function availablePluginIds(): string[] {
+  const configured = process.env.OPENRISK_AVAILABLE_PLUGINS?.trim();
+  if (!configured) {
+    return [];
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(configured);
+  } catch (error) {
+    throw new Error(
+      `OPENRISK_AVAILABLE_PLUGINS must be a JSON array: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (
+    !Array.isArray(parsed) ||
+    parsed.some(
+      (pluginId) =>
+        typeof pluginId !== "string" ||
+        !/^[A-Za-z0-9._-]+$/.test(pluginId),
+    )
+  ) {
+    throw new Error(
+      "OPENRISK_AVAILABLE_PLUGINS must contain only valid plugin IDs.",
+    );
+  }
+  return parsed;
+}
+
 export function brandingPlugin(): Plugin {
   const customBranding = process.env.OPENRISK_CUSTOM_BRANDING === "1";
+  const configuredAvailablePluginIds = availablePluginIds();
 
   return {
     name: "openrisk-branding",
@@ -31,6 +61,7 @@ export function brandingPlugin(): Plugin {
           "export const customBranding = false;",
           'export const brandName = "OpenRisk";',
           "export const logoUrl = null;",
+          `export const availablePluginIds = ${JSON.stringify(configuredAvailablePluginIds)};`,
         ].join("\n");
       }
 
@@ -45,6 +76,7 @@ export function brandingPlugin(): Plugin {
         `import logoUrl from ${JSON.stringify(logoPath)};`,
         "export const customBranding = true;",
         `export const brandName = ${JSON.stringify(brandName)};`,
+        `export const availablePluginIds = ${JSON.stringify(configuredAvailablePluginIds)};`,
         "export { logoUrl };",
       ].join("\n");
     },

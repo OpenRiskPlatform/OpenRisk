@@ -41,6 +41,8 @@ interface WorkspaceProps {
   initialSettings: ProjectSettingsPayload;
   initialScans: ScanSummaryRecord[];
   pluginInstallationEnabled?: boolean;
+  pluginMarketplaceEnabled?: boolean;
+  availablePluginIds?: readonly string[];
   onCloseProject: () => Promise<void>;
 }
 
@@ -91,6 +93,8 @@ export function Workspace({
   initialSettings,
   initialScans,
   pluginInstallationEnabled = true,
+  pluginMarketplaceEnabled = true,
+  availablePluginIds = [],
   onCloseProject,
 }: WorkspaceProps) {
   const [state, dispatch] = useReducer(
@@ -694,6 +698,8 @@ export function Workspace({
         client={client}
         settings={state.settings}
         pluginInstallationEnabled={pluginInstallationEnabled}
+        pluginMarketplaceEnabled={pluginMarketplaceEnabled}
+        availablePluginIds={availablePluginIds}
         onOpenChange={setSettingsOpen}
         onPluginUpdated={replacePlugin}
         onSettingsReloaded={replaceSettings}

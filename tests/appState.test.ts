@@ -25,6 +25,7 @@ describe("appReducer", () => {
       settings: projectSettings,
       scans: [],
       pluginInstallationEnabled: true,
+      pluginMarketplaceEnabled: true,
     });
 
     expect(workspace.status).toBe("workspace");

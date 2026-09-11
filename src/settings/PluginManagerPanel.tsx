@@ -15,19 +15,10 @@ import type {
   RegistryPluginRecord,
 } from "@/core/backend/bindings";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { displayName } from "@/shared/humanizeIdentifier";
-import { pluginVersionAction } from "./pluginVersions";
-
-const REGISTRY_BASE =
-  "https://raw.githubusercontent.com/OpenRiskPlatform/plugins/main";
+import { PluginInstallControls } from "./PluginInstallControls";
+import { pluginManifestUrl } from "./pluginVersions";
 
 type PluginView = "installed" | "registry" | "manual";
 
@@ -48,9 +39,6 @@ export function PluginManagerPanel({
 }: PluginManagerPanelProps) {
   const [view, setView] = useState<PluginView>("installed");
   const [registry, setRegistry] = useState<RegistryPluginRecord[] | null>(null);
-  const [selectedVersions, setSelectedVersions] = useState<
-    Record<string, string>
-  >({});
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const readOnly = settings.project.is_preview;
@@ -118,11 +106,12 @@ export function PluginManagerPanel({
     await runAction("zip", () => client.upsertProjectPluginFromZip(zipPath));
   };
 
-  const installRegistryPlugin = async (plugin: RegistryPluginRecord) => {
-    const version = selectedVersions[plugin.id] ?? plugin.version;
-    const manifestUrl = `${REGISTRY_BASE}/${plugin.id}/${version}/plugin.json`;
+  const installRegistryPlugin = async (
+    plugin: RegistryPluginRecord,
+    version: string,
+  ) => {
     await runAction(`registry:${plugin.id}`, () =>
-      client.installPluginFromUrl(manifestUrl),
+      client.installPluginFromUrl(pluginManifestUrl(plugin.id, version)),
     );
   };
 
@@ -170,7 +159,7 @@ export function PluginManagerPanel({
     <div className="mx-auto w-full max-w-2xl space-y-7">
       {view === "installed"
         ? header(
-            "Plugins",
+            "Plugin Marketplace",
             "Choose which integrations are available in this project.",
           )
         : view === "registry"
@@ -274,25 +263,10 @@ export function PluginManagerPanel({
               const installed = settings.plugins.find(
                 (item) => item.id === plugin.id,
               );
-              const versions = Array.from(
-                new Set([
-                  plugin.version,
-                  ...(plugin.versions ?? []),
-                  ...(installed ? [installed.version] : []),
-                ]),
-              );
-              const selectedVersion =
-                selectedVersions[plugin.id] ?? plugin.version;
-              const actionLabel = pluginVersionAction(
-                installed?.version ?? null,
-                plugin.version,
-                selectedVersion,
-              );
-
               return (
                 <li
                   key={plugin.id}
-                  className="grid gap-3 border-b py-4 sm:grid-cols-[minmax(0,1fr)_10.5rem_auto] sm:items-center"
+                  className="grid gap-3 border-b py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium">{pluginName}</p>
@@ -321,38 +295,15 @@ export function PluginManagerPanel({
                       </p>
                     )}
                   </div>
-                  <Select
-                    value={selectedVersion}
+                  <PluginInstallControls
+                    plugin={plugin}
+                    installedVersion={installed?.version}
                     disabled={pendingAction !== null}
-                    onValueChange={(version) =>
-                      setSelectedVersions((current) => ({
-                        ...current,
-                        [plugin.id]: version,
-                      }))
+                    installing={pendingAction === `registry:${plugin.id}`}
+                    onInstall={(version) =>
+                      void installRegistryPlugin(plugin, version)
                     }
-                  >
-                    <SelectTrigger aria-label={`${pluginName} version`}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {versions.map((version) => (
-                        <SelectItem key={version} value={version}>
-                          v{version}
-                          {version === plugin.version ? " · Latest" : ""}
-                          {version === installed?.version ? " · Installed" : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    size="sm"
-                    disabled={pendingAction !== null}
-                    onClick={() => void installRegistryPlugin(plugin)}
-                  >
-                    {pendingAction === `registry:${plugin.id}`
-                      ? "Installing…"
-                      : actionLabel}
-                  </Button>
+                  />
                 </li>
               );
             })}

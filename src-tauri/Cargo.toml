@@ -60,6 +60,7 @@ default-run = "openrisk"
 [features]
 default = []
 disable-plugin-installation = []
+disable-plugin-marketplace = []
 custom-branding = ["openrisk-pdf/custom-branding"]
 
 [lib]

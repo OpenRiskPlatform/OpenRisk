@@ -12,6 +12,7 @@ import { Launcher } from "@/projects/Launcher";
 import { addRecentProject } from "@/projects/recentProjects";
 import { UnlockProjectDialog } from "@/projects/UnlockProjectDialog";
 import type { ProjectSummary } from "@/core/backend/bindings";
+import { availablePluginIds } from "virtual:openrisk-branding";
 
 interface AppProps {
   client?: OpenRiskClient;
@@ -22,10 +23,16 @@ export default function App({ client = tauriOpenRiskClient }: AppProps) {
 
   const loadWorkspace = async (project: ProjectSummary) => {
     try {
-      const [settings, scans, pluginInstallationEnabled] = await Promise.all([
+      const [
+        settings,
+        scans,
+        pluginInstallationEnabled,
+        pluginMarketplaceEnabled,
+      ] = await Promise.all([
         client.loadSettings(),
         client.listScans(),
         client.pluginInstallationEnabled(),
+        client.pluginMarketplaceEnabled(),
       ]);
       applyTheme(settings.projectSettings.theme);
       addRecentProject(project.directory);
@@ -35,6 +42,7 @@ export default function App({ client = tauriOpenRiskClient }: AppProps) {
         settings,
         scans,
         pluginInstallationEnabled,
+        pluginMarketplaceEnabled,
       });
     } catch (error) {
       // Opening is a two-phase operation. Do not leave the backend holding a
@@ -100,6 +108,8 @@ export default function App({ client = tauriOpenRiskClient }: AppProps) {
         initialSettings={state.settings}
         initialScans={state.scans}
         pluginInstallationEnabled={state.pluginInstallationEnabled}
+        pluginMarketplaceEnabled={state.pluginMarketplaceEnabled}
+        availablePluginIds={availablePluginIds}
         onCloseProject={async () => {
           await client.closeProject();
           dispatch({ type: "project-closed" });

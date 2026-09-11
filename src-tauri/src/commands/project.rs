@@ -33,6 +33,13 @@ pub fn plugin_installation_enabled() -> bool {
     !cfg!(feature = "disable-plugin-installation")
 }
 
+/// Report whether this build exposes the general plugin marketplace.
+#[tauri::command]
+#[specta::specta]
+pub fn plugin_marketplace_enabled() -> bool {
+    !cfg!(feature = "disable-plugin-marketplace")
+}
+
 /// Create a new project database at `project_path` and open it as the active project.
 /// #
 #[tauri::command]

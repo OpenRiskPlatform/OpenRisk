@@ -14,6 +14,7 @@ import { PluginSettingsForm } from "@/plugins/PluginSettingsForm";
 import { displayName } from "@/shared/humanizeIdentifier";
 import { GeneralSettingsPanel } from "./GeneralSettingsPanel";
 import { AdvancedSettingsPanel } from "./AdvancedSettingsPanel";
+import { AvailablePluginPanel } from "./AvailablePluginPanel";
 import { PluginManagerPanel } from "./PluginManagerPanel";
 import { SecuritySettingsPanel } from "./SecuritySettingsPanel";
 import {
@@ -26,6 +27,8 @@ interface SettingsDialogProps {
   client: OpenRiskClient;
   settings: ProjectSettingsPayload;
   pluginInstallationEnabled: boolean;
+  pluginMarketplaceEnabled: boolean;
+  availablePluginIds: readonly string[];
   onOpenChange: (open: boolean) => void;
   onPluginUpdated: (plugin: PluginRecord) => void;
   onSettingsReloaded: (settings: ProjectSettingsPayload) => void;
@@ -36,6 +39,8 @@ export function SettingsDialog({
   client,
   settings,
   pluginInstallationEnabled,
+  pluginMarketplaceEnabled,
+  availablePluginIds,
   onOpenChange,
   onPluginUpdated,
   onSettingsReloaded,
@@ -48,6 +53,8 @@ export function SettingsDialog({
   const plugin = pluginId
     ? settings.plugins.find((item) => item.id === pluginId) ?? null
     : null;
+  const availablePluginId =
+    pluginId && availablePluginIds.includes(pluginId) ? pluginId : null;
 
   const content =
     activeCategory === "general" ? (
@@ -92,6 +99,13 @@ export function SettingsDialog({
           onPluginUpdated={onPluginUpdated}
         />
       </div>
+    ) : availablePluginId ? (
+      <AvailablePluginPanel
+        client={client}
+        pluginId={availablePluginId}
+        installationEnabled={pluginInstallationEnabled}
+        onPluginUpdated={onPluginUpdated}
+      />
     ) : (
       <p className="text-sm text-muted-foreground">
         This plugin is disabled or no longer installed.
@@ -109,6 +123,8 @@ export function SettingsDialog({
           <SettingsSidebar
             activeCategory={activeCategory}
             plugins={settings.plugins}
+            availablePluginIds={availablePluginIds}
+            marketplaceEnabled={pluginMarketplaceEnabled}
             readOnly={settings.project.is_preview}
             advancedMode={settings.projectSettings.advancedMode}
             onCategoryChange={setActiveCategory}
