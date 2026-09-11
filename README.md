@@ -78,9 +78,18 @@ configuration is:
   "$schema": "./build-config.schema.json",
   "configVersion": 1,
   "features": [],
+  "availablePlugins": [],
   "branding": null
 }
 ```
+
+`availablePlugins` lists registry plugin IDs that are shown under **Plugin
+Options** without being installed automatically. Each listed plugin gets the
+same version selector and install action used by the marketplace. Add
+`disable-plugin-marketplace` to `features` to hide the general marketplace
+while retaining these explicitly available plugins. The stronger
+`disable-plugin-installation` feature still removes every install action and
+blocks installation in the backend.
 
 The manual release workflow calls the same build wrapper, so every release uses
 the feature and branding values committed with its release commit.
@@ -93,7 +102,8 @@ Windows, macOS, and Linux icons. Paths are resolved relative to the config file:
 {
   "$schema": "./build-config.schema.json",
   "configVersion": 1,
-  "features": ["disable-plugin-installation"],
+  "features": ["disable-plugin-marketplace"],
+  "availablePlugins": ["example-plugin"],
   "branding": {
     "name": "Example Brand",
     "logo": "assets/branding/example-logo.svg",
@@ -112,6 +122,7 @@ local build:
 
 ```bash
 npm run build:app -- --brand-name "Example Brand" --brand-logo path/to/logo.svg --app-icon path/to/icon.svg
+npm run build:app -- --disable-plugin-marketplace --available-plugins example-plugin
 npm run build:app -- --features feature-a,feature-b
 npm run build:app -- --build-config path/to/another-build-config.json
 ```

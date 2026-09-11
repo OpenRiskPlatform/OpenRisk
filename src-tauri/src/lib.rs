@@ -16,6 +16,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new().commands(collect_commands![
         // Project & scan commands
         commands::project::plugin_installation_enabled,
+        commands::project::plugin_marketplace_enabled,
         commands::project::create_project,
         commands::project::open_project,
         commands::project::close_project,

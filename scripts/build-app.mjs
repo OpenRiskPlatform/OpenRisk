@@ -26,12 +26,15 @@ const usage = `Build OpenRisk with optional, independent feature flags.
 Usage:
   npm run build:app
   npm run build:app -- --disable-plugin-installation
+  npm run build:app -- --disable-plugin-marketplace --available-plugins adversea
   npm run build:app -- --brand-name <name> --brand-logo <png-or-svg> --app-icon <square-png-or-svg>
   npm run build:app -- --build-config <path>
   npm run build:app -- [options] -- [extra tauri build arguments]
 
 Options:
   --disable-plugin-installation  Remove plugin installation from UI and backend.
+  --disable-plugin-marketplace   Remove the general plugin marketplace.
+  --available-plugins <a,b>      Show listed registry plugins in Plugin Options.
   --brand-name <name>            Accessible/PDF name for a custom brand.
   --brand-logo <path>            Wordmark used by both the app UI and PDFs.
   --app-icon <path>              Square source used to generate packaged OS icons.
@@ -102,7 +105,13 @@ function loadBuildConfig(configuredPath) {
   const config = expectObject(parsed, "Build config");
   assertKnownKeys(
     config,
-    new Set(["$schema", "configVersion", "features", "branding"]),
+    new Set([
+      "$schema",
+      "configVersion",
+      "features",
+      "availablePlugins",
+      "branding",
+    ]),
     "Build config",
   );
   if (config.configVersion !== 1) {
@@ -119,8 +128,26 @@ function loadBuildConfig(configuredPath) {
     return feature;
   });
 
+  if (!Array.isArray(config.availablePlugins)) {
+    throw new Error("Build config availablePlugins must be an array.");
+  }
+  const availablePlugins = config.availablePlugins.map((pluginId) => {
+    if (
+      typeof pluginId !== "string" ||
+      !/^[A-Za-z0-9._-]+$/.test(pluginId)
+    ) {
+      throw new Error(
+        `Invalid plugin ID in build config availablePlugins: ${String(pluginId)}`,
+      );
+    }
+    return pluginId;
+  });
+  if (new Set(availablePlugins).size !== availablePlugins.length) {
+    throw new Error("Build config availablePlugins must not contain duplicates.");
+  }
+
   if (config.branding === null) {
-    return { features, branding: null };
+    return { features, availablePlugins, branding: null };
   }
 
   const branding = expectObject(config.branding, "Build config branding");
@@ -138,6 +165,7 @@ function loadBuildConfig(configuredPath) {
   const configDirectory = path.dirname(configPath);
   return {
     features,
+    availablePlugins,
     branding: {
       name: branding.name,
       logo: path.resolve(configDirectory, branding.logo),
@@ -153,6 +181,7 @@ function parseArguments(args) {
     appIcon: undefined,
     buildConfig: process.env.OPENRISK_BUILD_CONFIG || "build-config.json",
     features: new Set(),
+    availablePlugins: undefined,
     tauriArgs: [],
   };
 
@@ -173,6 +202,27 @@ function parseArguments(args) {
     }
     if (argument === "--disable-plugin-installation") {
       options.features.add("disable-plugin-installation");
+      continue;
+    }
+    if (argument === "--disable-plugin-marketplace") {
+      options.features.add("disable-plugin-marketplace");
+      continue;
+    }
+    if (argument === "--available-plugins") {
+      const value = takeValue(args, index, argument);
+      options.availablePlugins = value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      for (const pluginId of options.availablePlugins) {
+        if (!/^[A-Za-z0-9._-]+$/.test(pluginId)) {
+          throw new Error(`Invalid plugin ID: ${pluginId}`);
+        }
+      }
+      if (new Set(options.availablePlugins).size !== options.availablePlugins.length) {
+        throw new Error("--available-plugins must not contain duplicates.");
+      }
+      index += 1;
       continue;
     }
     if (argument === "--brand-name") {
@@ -242,6 +292,12 @@ async function main() {
   for (const feature of buildConfig.features) {
     options.features.add(feature);
   }
+  const availablePlugins =
+    options.availablePlugins ?? buildConfig.availablePlugins;
+  const baseEnvironment = {
+    ...process.env,
+    OPENRISK_AVAILABLE_PLUGINS: JSON.stringify(availablePlugins),
+  };
 
   const commandLineBranding = [
     options.brandName,
@@ -277,7 +333,7 @@ async function main() {
       buildArgs.push("--features", [...options.features].sort().join(","));
     }
     buildArgs.push(...options.tauriArgs);
-    await runTauri(buildArgs);
+    await runTauri(buildArgs, baseEnvironment);
     return;
   }
 
@@ -324,7 +380,7 @@ async function main() {
     );
 
     const environment = {
-      ...process.env,
+      ...baseEnvironment,
       OPENRISK_CUSTOM_BRANDING: "1",
       OPENRISK_BRAND_NAME: brandName,
       OPENRISK_BRAND_LOGO: brandLogo,

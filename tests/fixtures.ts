@@ -164,6 +164,7 @@ export function createClient(
 ): OpenRiskClient {
   const client: OpenRiskClient = {
     pluginInstallationEnabled: vi.fn(async () => true),
+    pluginMarketplaceEnabled: vi.fn(async () => true),
     createProject: vi.fn(async () => projectSettings.project),
     openProject: vi.fn(async () => projectSettings.project),
     closeProject: vi.fn(async () => undefined),

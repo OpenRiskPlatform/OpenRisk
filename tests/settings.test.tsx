@@ -38,6 +38,8 @@ describe("advanced settings navigation", () => {
       <SettingsSidebar
         activeCategory="general"
         plugins={[demoPlugin]}
+        availablePluginIds={[]}
+        marketplaceEnabled
         readOnly={false}
         advancedMode={false}
         onCategoryChange={() => undefined}
@@ -50,6 +52,8 @@ describe("advanced settings navigation", () => {
       <SettingsSidebar
         activeCategory="general"
         plugins={[demoPlugin]}
+        availablePluginIds={[]}
+        marketplaceEnabled
         readOnly={false}
         advancedMode
         onCategoryChange={() => undefined}
@@ -57,5 +61,45 @@ describe("advanced settings navigation", () => {
     );
 
     expect(screen.getByRole("button", { name: "Advanced" })).toBeVisible();
+  });
+
+  it("shows available plugins independently from the marketplace", () => {
+    render(
+      <SettingsSidebar
+        activeCategory="general"
+        plugins={[]}
+        availablePluginIds={["adversea"]}
+        marketplaceEnabled={false}
+        readOnly={false}
+        advancedMode={false}
+        onCategoryChange={() => undefined}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Plugin Marketplace" }),
+    ).toBeNull();
+    expect(screen.getByRole("button", { name: "Adversea" })).toBeVisible();
+  });
+
+  it("renames Community plugins to Plugin Marketplace", () => {
+    render(
+      <SettingsSidebar
+        activeCategory="general"
+        plugins={[]}
+        availablePluginIds={[]}
+        marketplaceEnabled
+        readOnly={false}
+        advancedMode={false}
+        onCategoryChange={() => undefined}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Plugin Marketplace" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Community plugins" }),
+    ).toBeNull();
   });
 });

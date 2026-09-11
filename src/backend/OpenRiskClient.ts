@@ -17,6 +17,7 @@ import type {
 
 export interface OpenRiskClient {
   pluginInstallationEnabled(): Promise<boolean>;
+  pluginMarketplaceEnabled(): Promise<boolean>;
   createProject(name: string, projectPath: string): Promise<ProjectSummary>;
   openProject(projectPath: string, password: string | null): Promise<ProjectSummary>;
   closeProject(): Promise<void>;
