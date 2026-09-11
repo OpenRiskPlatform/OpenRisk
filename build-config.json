@@ -1,0 +1,7 @@
+{
+  "$schema": "./build-config.schema.json",
+  "configVersion": 1,
+  "features": [],
+  "availablePlugins": [],
+  "branding": null
+}
