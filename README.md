@@ -91,8 +91,12 @@ while retaining these explicitly available plugins. The stronger
 `disable-plugin-installation` feature still removes every install action and
 blocks installation in the backend.
 
-The manual release workflow calls the same build wrapper, so every release uses
-the feature and branding values committed with its release commit.
+The manual release workflow always builds the default OpenRisk configuration
+and every directory under `custom-releases/`, each as a separate GitHub release
+for the same version. Each directory owns its build config, logos, and icons.
+See [custom release setup](custom-releases/README.md) for adding variants,
+package identities, and release behavior. Keep the root config at the defaults
+above; put customer-specific settings in their variant directory.
 
 For a white-label build, set `branding` to a brand name, one PNG/SVG wordmark
 shared by the app and PDF template, and a square PNG/SVG source for packaged
@@ -125,6 +129,7 @@ npm run build:app -- --brand-name "Example Brand" --brand-logo path/to/logo.svg 
 npm run build:app -- --disable-plugin-marketplace --available-plugins example-plugin
 npm run build:app -- --features feature-a,feature-b
 npm run build:app -- --build-config path/to/another-build-config.json
+npm run build:app -- --build-config custom-releases/cybertrust/build-config.json
 ```
 
 Put raw Tauri build arguments after a second `--`, for example:

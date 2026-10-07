@@ -30,6 +30,22 @@
         "pattern": "^[A-Za-z0-9._-]+$"
       }
     },
+    "application": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["productName", "identifier", "binaryName"],
+      "properties": {
+        "productName": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9 ._-]*[A-Za-z0-9._-])?$"
+        },
+        "identifier": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9-]*(\\.[A-Za-z][A-Za-z0-9-]*)+$"
+        },
+        "binaryName": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+      }
+    },
     "branding": {
       "oneOf": [
         {

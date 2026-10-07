@@ -11,8 +11,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { applicationTauriConfig } from "./release-config.mjs";
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const rootDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
 const tauriCli = path.join(
   rootDir,
   "node_modules",
@@ -87,8 +91,8 @@ function assertKnownKeys(value, allowedKeys, label) {
   }
 }
 
-function loadBuildConfig(configuredPath) {
-  const configPath = path.resolve(rootDir, configuredPath);
+export function loadBuildConfig(configuredPath, repositoryRoot = rootDir) {
+  const configPath = path.resolve(repositoryRoot, configuredPath);
   if (!existsSync(configPath)) {
     throw new Error(`Build config does not exist: ${configPath}`);
   }
@@ -111,6 +115,7 @@ function loadBuildConfig(configuredPath) {
       "features",
       "availablePlugins",
       "branding",
+      "application",
     ]),
     "Build config",
   );
@@ -123,7 +128,9 @@ function loadBuildConfig(configuredPath) {
 
   const features = config.features.map((feature) => {
     if (typeof feature !== "string" || !/^[A-Za-z0-9_-]+$/.test(feature)) {
-      throw new Error(`Invalid Cargo feature in build config: ${String(feature)}`);
+      throw new Error(
+        `Invalid Cargo feature in build config: ${String(feature)}`,
+      );
     }
     return feature;
   });
@@ -132,10 +139,7 @@ function loadBuildConfig(configuredPath) {
     throw new Error("Build config availablePlugins must be an array.");
   }
   const availablePlugins = config.availablePlugins.map((pluginId) => {
-    if (
-      typeof pluginId !== "string" ||
-      !/^[A-Za-z0-9._-]+$/.test(pluginId)
-    ) {
+    if (typeof pluginId !== "string" || !/^[A-Za-z0-9._-]+$/.test(pluginId)) {
       throw new Error(
         `Invalid plugin ID in build config availablePlugins: ${String(pluginId)}`,
       );
@@ -143,11 +147,16 @@ function loadBuildConfig(configuredPath) {
     return pluginId;
   });
   if (new Set(availablePlugins).size !== availablePlugins.length) {
-    throw new Error("Build config availablePlugins must not contain duplicates.");
+    throw new Error(
+      "Build config availablePlugins must not contain duplicates.",
+    );
   }
 
+  // Validate optional package identity even when no custom logo is supplied.
+  applicationTauriConfig(config);
+  const application = config.application;
   if (config.branding === null) {
-    return { features, availablePlugins, branding: null };
+    return { features, availablePlugins, branding: null, application };
   }
 
   const branding = expectObject(config.branding, "Build config branding");
@@ -158,7 +167,9 @@ function loadBuildConfig(configuredPath) {
   );
   for (const key of ["name", "logo", "appIcon"]) {
     if (typeof branding[key] !== "string" || !branding[key].trim()) {
-      throw new Error(`Build config branding.${key} must be a non-empty string.`);
+      throw new Error(
+        `Build config branding.${key} must be a non-empty string.`,
+      );
     }
   }
 
@@ -166,6 +177,7 @@ function loadBuildConfig(configuredPath) {
   return {
     features,
     availablePlugins,
+    application,
     branding: {
       name: branding.name,
       logo: path.resolve(configDirectory, branding.logo),
@@ -219,7 +231,10 @@ function parseArguments(args) {
           throw new Error(`Invalid plugin ID: ${pluginId}`);
         }
       }
-      if (new Set(options.availablePlugins).size !== options.availablePlugins.length) {
+      if (
+        new Set(options.availablePlugins).size !==
+        options.availablePlugins.length
+      ) {
         throw new Error("--available-plugins must not contain duplicates.");
       }
       index += 1;
@@ -253,7 +268,9 @@ function parseArguments(args) {
       index += 1;
       continue;
     }
-    throw new Error(`Unknown option: ${argument}. Put Tauri arguments after --.`);
+    throw new Error(
+      `Unknown option: ${argument}. Put Tauri arguments after --.`,
+    );
   }
 
   return options;
@@ -281,8 +298,8 @@ function runTauri(args, environment = process.env) {
   });
 }
 
-async function main() {
-  const options = parseArguments(process.argv.slice(2));
+export async function main(args = process.argv.slice(2), tauri = runTauri) {
+  const options = parseArguments(args);
   if (options.help) {
     console.log(usage);
     return;
@@ -318,7 +335,11 @@ async function main() {
     options.appIcon = buildConfig.branding.appIcon;
   }
 
-  const brandingValues = [options.brandName, options.brandLogo, options.appIcon];
+  const brandingValues = [
+    options.brandName,
+    options.brandLogo,
+    options.appIcon,
+  ];
   const customBranding =
     brandingValues.some(Boolean) || options.features.has("custom-branding");
   if (customBranding && brandingValues.some((value) => !value)) {
@@ -327,51 +348,58 @@ async function main() {
     );
   }
 
-  if (!customBranding) {
+  if (!customBranding && !buildConfig.application) {
     const buildArgs = ["build"];
     if (options.features.size > 0) {
       buildArgs.push("--features", [...options.features].sort().join(","));
     }
     buildArgs.push(...options.tauriArgs);
-    await runTauri(buildArgs, baseEnvironment);
+    await tauri(buildArgs, baseEnvironment);
     return;
   }
 
-  const brandName = options.brandName.trim();
-  if (!brandName) {
+  const brandName = options.brandName?.trim();
+  if (customBranding && !brandName) {
     throw new Error("--brand-name cannot be empty.");
   }
-  if (/\r|\n/.test(brandName)) {
+  if (brandName && /\r|\n/.test(brandName)) {
     throw new Error("--brand-name cannot contain line breaks.");
   }
-  const brandLogo = resolveAsset(options.brandLogo, "Brand logo");
-  const appIcon = resolveAsset(options.appIcon, "App icon");
-  options.features.add("custom-branding");
+  const brandLogo = customBranding
+    ? resolveAsset(options.brandLogo, "Brand logo")
+    : undefined;
+  const appIcon = customBranding
+    ? resolveAsset(options.appIcon, "App icon")
+    : undefined;
+  if (customBranding) options.features.add("custom-branding");
 
-  const temporaryDirectory = mkdtempSync(path.join(tmpdir(), "openrisk-build-"));
+  const temporaryDirectory = mkdtempSync(
+    path.join(tmpdir(), "openrisk-build-"),
+  );
   try {
     const iconsDirectory = path.join(temporaryDirectory, "icons");
-    await runTauri([
-      "icon",
-      appIcon,
-      "--output",
-      iconsDirectory,
-    ]);
+    if (customBranding)
+      await tauri(["icon", appIcon, "--output", iconsDirectory]);
 
     const temporaryConfig = path.join(temporaryDirectory, "branding.conf.json");
     writeFileSync(
       temporaryConfig,
       `${JSON.stringify(
         {
-          bundle: {
-            icon: [
-              path.join(iconsDirectory, "32x32.png"),
-              path.join(iconsDirectory, "128x128.png"),
-              path.join(iconsDirectory, "128x128@2x.png"),
-              path.join(iconsDirectory, "icon.icns"),
-              path.join(iconsDirectory, "icon.ico"),
-            ],
-          },
+          ...applicationTauriConfig(buildConfig),
+          ...(customBranding
+            ? {
+                bundle: {
+                  icon: [
+                    path.join(iconsDirectory, "32x32.png"),
+                    path.join(iconsDirectory, "128x128.png"),
+                    path.join(iconsDirectory, "128x128@2x.png"),
+                    path.join(iconsDirectory, "icon.icns"),
+                    path.join(iconsDirectory, "icon.ico"),
+                  ],
+                },
+              }
+            : {}),
         },
         null,
         2,
@@ -381,24 +409,34 @@ async function main() {
 
     const environment = {
       ...baseEnvironment,
-      OPENRISK_CUSTOM_BRANDING: "1",
-      OPENRISK_BRAND_NAME: brandName,
-      OPENRISK_BRAND_LOGO: brandLogo,
+      ...(customBranding
+        ? {
+            OPENRISK_CUSTOM_BRANDING: "1",
+            OPENRISK_BRAND_NAME: brandName,
+            OPENRISK_BRAND_LOGO: brandLogo,
+          }
+        : {}),
     };
     const buildArgs = [
       "build",
-      "--features",
-      [...options.features].sort().join(","),
+      ...(options.features.size
+        ? ["--features", [...options.features].sort().join(",")]
+        : []),
       "--config",
       temporaryConfig,
       ...options.tauriArgs,
     ];
-    await runTauri(buildArgs, environment);
+    await tauri(buildArgs, environment);
   } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });
   }
 }
 
-main().catch((error) => {
-  fail(error instanceof Error ? error.message : String(error));
-});
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  main().catch((error) => {
+    fail(error instanceof Error ? error.message : String(error));
+  });
+}

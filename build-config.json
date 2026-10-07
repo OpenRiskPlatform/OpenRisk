@@ -1,11 +1,7 @@
 {
   "$schema": "./build-config.schema.json",
   "configVersion": 1,
-  "features": ["disable-plugin-marketplace"],
-  "availablePlugins": ["adversea"],
-  "branding": {
-    "name": "Cyber Trust",
-    "logo": "assets/branding/cybertrust-logo.png",
-    "appIcon": "assets/branding/cybertrust-icon.svg"
-  }
+  "features": [],
+  "availablePlugins": [],
+  "branding": null
 }
