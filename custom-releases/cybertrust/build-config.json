@@ -1,0 +1,16 @@
+{
+  "$schema": "../../build-config.schema.json",
+  "configVersion": 1,
+  "features": ["disable-plugin-marketplace"],
+  "availablePlugins": ["adversea"],
+  "application": {
+    "productName": "CyberTrust",
+    "identifier": "edu.openrisk.cybertrust",
+    "binaryName": "cybertrust"
+  },
+  "branding": {
+    "name": "Cyber Trust",
+    "logo": "cybertrust-logo.png",
+    "appIcon": "cybertrust-icon.svg"
+  }
+}

@@ -23,8 +23,9 @@ jobs:
       contents: write
     outputs:
       commit: ${{ steps.release.outputs.commit }}
-      tag: ${{ steps.release.outputs.tag }}
       version: ${{ steps.release.outputs.version }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      releases: ${{ steps.plan.outputs.releases }}
 
     steps:
       - name: Require main branch
@@ -47,11 +48,16 @@ jobs:
           node-version: 22.22.2
           cache: npm
 
+      - name: Validate and discover all release variants
+        id: plan
+        run: node scripts/release-plan.mjs --github-output
+
       - name: Bump and commit application version
         id: release
         shell: bash
         env:
           REQUESTED_VERSION: ${{ inputs.version }}
+          RELEASES: ${{ steps.plan.outputs.releases }}
         run: |
           current_version="$(node -p "require('./package.json').version")"
           requested_version="$(echo "$REQUESTED_VERSION" | xargs)"
@@ -78,11 +84,13 @@ jobs:
           npm run version:app -- "$version_argument"
 
           version="$(node -p "require('./package.json').version")"
-          tag="openrisk-v${version}"
-          if git show-ref --verify --quiet "refs/tags/${tag}"; then
-            echo "::error title=Release already exists::Tag ${tag} already exists."
-            exit 1
-          fi
+          while IFS= read -r release_id; do
+            tag="${release_id}-v${version}"
+            if git show-ref --verify --quiet "refs/tags/${tag}"; then
+              echo "::error title=Release already exists::Tag ${tag} already exists."
+              exit 1
+            fi
+          done < <(node -e 'for (const release of JSON.parse(process.env.RELEASES)) console.log(release.id)')
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -91,26 +99,20 @@ jobs:
           git push origin HEAD:main
 
           echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
   build-release:
-    name: Tauri (${{ matrix.platform }})
+    name: ${{ matrix.name }} (${{ matrix.platform }})
     needs: prepare-release
     permissions:
       contents: write
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: macos-latest
-            args: --target aarch64-apple-darwin
-          - platform: ubuntu-22.04
-            args: ""
-          - platform: windows-2022
-            args: ""
+      matrix: ${{ fromJSON(needs.prepare-release.outputs.matrix) }}
 
     runs-on: ${{ matrix.platform }}
+    env:
+      OPENRISK_BUILD_CONFIG: ${{ matrix.config }}
     steps:
       - name: Checkout release commit
         uses: actions/checkout@v4
@@ -134,7 +136,7 @@ jobs:
         with:
           workspaces: |
             src-tauri -> target
-          shared-key: release-${{ matrix.platform }}
+          shared-key: release-${{ matrix.id }}-${{ matrix.platform }}
 
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
@@ -145,23 +147,33 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      # tauri-action must see the same package identity as the build wrapper
+      # so it locates the correctly named installers after the build.
+      - name: Prepare Tauri package identity
+        id: tauri-config
+        run: node scripts/release-plan.mjs --tauri-config
+
       - name: Build and upload release bundle
         uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tauriScript: npm run build:app --
-          tagName: ${{ needs.prepare-release.outputs.tag }}
-          releaseName: OpenRisk v${{ needs.prepare-release.outputs.version }}
+          tagName: ${{ matrix.id }}-v${{ needs.prepare-release.outputs.version }}
+          releaseName: ${{ matrix.name }} v${{ needs.prepare-release.outputs.version }}
+          releaseCommitish: ${{ needs.prepare-release.outputs.commit }}
           releaseBody: See the assets to download this version and install.
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
+          args: --config "${{ steps.tauri-config.outputs.path }}" ${{ matrix.args }}
 
   publish-release:
-    name: Publish GitHub release
+    name: Publish ${{ matrix.release.name }}
     needs: [prepare-release, build-release]
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        release: ${{ fromJSON(needs.prepare-release.outputs.releases) }}
     permissions:
       contents: write
     steps:
@@ -169,5 +181,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ needs.prepare-release.outputs.tag }}
-        run: gh release edit "$RELEASE_TAG" --draft=false
+          RELEASE_TAG: ${{ matrix.release.id }}-v${{ needs.prepare-release.outputs.version }}
+          IS_DEFAULT: ${{ matrix.release.id == 'openrisk' }}
+        run: gh release edit "$RELEASE_TAG" --draft=false --latest="$IS_DEFAULT"

@@ -1,0 +1,38 @@
+name: Release configuration
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build-app.mjs"
+      - "scripts/release-*.mjs"
+      - "build-config*.json"
+      - "custom-releases/**"
+      - "src-tauri/tauri.conf.json"
+      - ".github/workflows/manual-release.yml"
+      - ".github/workflows/release-config-checks.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "scripts/build-app.mjs"
+      - "scripts/release-*.mjs"
+      - "build-config*.json"
+      - "custom-releases/**"
+      - "src-tauri/tauri.conf.json"
+      - ".github/workflows/manual-release.yml"
+      - ".github/workflows/release-config-checks.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.2
+      - name: Test release discovery and build integration
+        run: node --test scripts/release-plan.test.mjs
+      - name: Validate committed variants
+        run: node scripts/release-plan.mjs
