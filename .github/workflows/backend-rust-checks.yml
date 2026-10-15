@@ -6,6 +6,7 @@ on:
       - "src-tauri/**"
       - "src/core/backend/bindings.ts"
       - "rust-toolchain.toml"
+      - ".github/fixtures/branding/**"
       - ".github/workflows/backend-rust-checks.yml"
   push:
     branches: ["main"]
@@ -13,6 +14,7 @@ on:
       - "src-tauri/**"
       - "src/core/backend/bindings.ts"
       - "rust-toolchain.toml"
+      - ".github/fixtures/branding/**"
       - ".github/workflows/backend-rust-checks.yml"
 
 permissions:
@@ -46,6 +48,8 @@ jobs:
               - 'src-tauri/**/Cargo.toml'
               - 'src-tauri/Cargo.lock'
               - 'rust-toolchain.toml'
+              - '.github/fixtures/branding/**'
+              - '.github/workflows/backend-rust-checks.yml'
             manifest_sync:
               - 'src-tauri/crates/openrisk-core/schemas/plugin-manifest.schema.json'
               - 'src-tauri/crates/openrisk-core/schemas/plugin-manifest.schema.rs'
@@ -114,10 +118,24 @@ jobs:
             src-tauri -> target
           shared-key: ${{ format('backend-rust-{0}-{1}', runner.os, hashFiles('src-tauri/Cargo.lock')) }}
 
-      - name: cargo check
+      - name: cargo check (default features)
+        run: cargo check --workspace --all-targets
+
+      - name: cargo clippy (default features, -D warnings)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # Custom branding requires compile-time inputs. Keep this fixture
+      # independent of customer release configs and scope it to these steps.
+      - name: cargo check (all features)
+        env:
+          OPENRISK_BRAND_LOGO: ${{ github.workspace }}/.github/fixtures/branding/ci-logo.svg
+          OPENRISK_BRAND_NAME: OpenRisk CI
         run: cargo check --workspace --all-targets --all-features
 
-      - name: cargo clippy (-D warnings)
+      - name: cargo clippy (all features, -D warnings)
+        env:
+          OPENRISK_BRAND_LOGO: ${{ github.workspace }}/.github/fixtures/branding/ci-logo.svg
+          OPENRISK_BRAND_NAME: OpenRisk CI
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
       - name: Verify checks are non-mutating (clean git tree)
@@ -322,7 +340,8 @@ jobs:
 
       - name: cargo udeps (nightly)
         run: |
-          export RUSTC="$(rustup which --toolchain nightly rustc)"
+          RUSTC="$(rustup which --toolchain nightly rustc)"
+          export RUSTC
           rustup run nightly cargo udeps --workspace --all-targets
 
       - name: Verify checks are non-mutating (clean git tree)
