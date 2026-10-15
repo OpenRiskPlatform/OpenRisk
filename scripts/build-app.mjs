@@ -3,15 +3,15 @@ import { spawn } from "node:child_process";
 import {
   existsSync,
   mkdtempSync,
+  mkdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { applicationTauriConfig } from "./release-config.mjs";
+import { applicationTauriConfig, bundleIconPaths } from "./release-config.mjs";
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -373,9 +373,11 @@ export async function main(args = process.argv.slice(2), tauri = runTauri) {
     : undefined;
   if (customBranding) options.features.add("custom-branding");
 
-  const temporaryDirectory = mkdtempSync(
-    path.join(tmpdir(), "openrisk-build-"),
-  );
+  // Tauri's resource iterator drops Windows drive prefixes. Keep generated
+  // icons on the checkout's drive and refer to them relative to src-tauri.
+  const scratchDirectory = path.join(rootDir, ".release");
+  mkdirSync(scratchDirectory, { recursive: true });
+  const temporaryDirectory = mkdtempSync(path.join(scratchDirectory, "build-"));
   try {
     const iconsDirectory = path.join(temporaryDirectory, "icons");
     if (customBranding)
@@ -390,13 +392,10 @@ export async function main(args = process.argv.slice(2), tauri = runTauri) {
           ...(customBranding
             ? {
                 bundle: {
-                  icon: [
-                    path.join(iconsDirectory, "32x32.png"),
-                    path.join(iconsDirectory, "128x128.png"),
-                    path.join(iconsDirectory, "128x128@2x.png"),
-                    path.join(iconsDirectory, "icon.icns"),
-                    path.join(iconsDirectory, "icon.ico"),
-                  ],
+                  icon: bundleIconPaths(
+                    iconsDirectory,
+                    path.join(rootDir, "src-tauri"),
+                  ),
                 },
               }
             : {}),

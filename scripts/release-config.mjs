@@ -1,5 +1,27 @@
 // Shared by the build wrapper and release discovery so package names agree
 // with the configuration seen by tauri-action during artifact discovery.
+import path from "node:path";
+
+export function bundleIconPaths(iconsDirectory, tauriDirectory, paths = path) {
+  return [
+    "32x32.png",
+    "128x128.png",
+    "128x128@2x.png",
+    "icon.icns",
+    "icon.ico",
+  ].map((name) => {
+    const relative = paths.relative(
+      tauriDirectory,
+      paths.join(iconsDirectory, name),
+    );
+    if (paths.isAbsolute(relative))
+      throw new Error(
+        "Generated bundle icons must be on the same drive as src-tauri.",
+      );
+    return relative.replaceAll("\\", "/");
+  });
+}
+
 export function applicationTauriConfig(config) {
   if (config.application === undefined) return {};
   const app = config.application;

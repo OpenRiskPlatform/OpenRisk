@@ -15,6 +15,7 @@ import {
   writeTauriReleaseConfig,
 } from "./release-plan.mjs";
 import { main } from "./build-app.mjs";
+import { bundleIconPaths } from "./release-config.mjs";
 
 const defaultConfig = {
   configVersion: 1,
@@ -22,6 +23,28 @@ const defaultConfig = {
   availablePlugins: [],
   branding: null,
 };
+
+test("Windows bundle icons remain relative even when TEMP uses another drive", () => {
+  const icons = bundleIconPaths(
+    "D:\\a\\OpenRisk\\OpenRisk\\.release\\build-test\\icons",
+    "D:\\a\\OpenRisk\\OpenRisk\\src-tauri",
+    path.win32,
+  );
+  assert.equal(icons.at(-1), "../.release/build-test/icons/icon.ico");
+  for (const icon of icons) {
+    assert.equal(path.win32.isAbsolute(icon), false);
+    assert.equal(icon.includes("\\"), false);
+  }
+  assert.throws(
+    () =>
+      bundleIconPaths(
+        "C:\\Users\\runner\\Temp\\icons",
+        "D:\\a\\OpenRisk\\OpenRisk\\src-tauri",
+        path.win32,
+      ),
+    /same drive/,
+  );
+});
 function fixture(t) {
   const root = mkdtempSync(path.join(tmpdir(), "openrisk-release-test-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -181,13 +204,46 @@ test("wrapper passes identical package identity to Tauri and action artifact dis
   const actionConfig = JSON.parse(readFileSync(actionConfigPath, "utf8"));
   const calls = [];
   let temporaryConfig;
+  let iconsDirectory;
   await main(
     ["--build-config", config, "--", "--target", "aarch64-apple-darwin"],
     async (args, env) => {
       calls.push(args);
+      if (args[0] === "icon") {
+        iconsDirectory = args[args.indexOf("--output") + 1];
+        mkdirSync(iconsDirectory, { recursive: true });
+        for (const name of [
+          "32x32.png",
+          "128x128.png",
+          "128x128@2x.png",
+          "icon.icns",
+          "icon.ico",
+        ]) {
+          writeFileSync(path.join(iconsDirectory, name), "icon fixture");
+        }
+      }
       if (args[0] !== "build") return;
       temporaryConfig = args[args.indexOf("--config") + 1];
       const buildConfig = JSON.parse(readFileSync(temporaryConfig, "utf8"));
+      const repositoryRoot = path.resolve(import.meta.dirname, "..");
+      assert.ok(
+        iconsDirectory.startsWith(
+          path.join(repositoryRoot, ".release") + path.sep,
+        ),
+        "generated icons must stay on the checkout's drive",
+      );
+      for (const icon of buildConfig.bundle.icon) {
+        assert.equal(
+          path.isAbsolute(icon),
+          false,
+          "bundle icon paths must be relative",
+        );
+        assert.equal(icon.includes("\\"), false);
+        assert.ok(
+          existsSync(path.resolve(repositoryRoot, "src-tauri", icon)),
+          "the bundler must resolve every generated icon from src-tauri",
+        );
+      }
       for (const key of ["productName", "identifier", "mainBinaryName"])
         assert.equal(buildConfig[key], actionConfig[key]);
       assert.equal(

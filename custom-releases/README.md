@@ -74,7 +74,9 @@ to stop releasing it. A README file at this level is ignored.
 
 All releases remain drafts unless **every** variant/platform build succeeds.
 If a build fails, rerun failed jobs in the same workflow run to reuse its
-version and commit. Starting a new run bumps the version again. Publication
+version and commit for transient failures. If the fix changes code, merge it
+and start a new release with a higher version: reruns still build the old
+commit. Starting a new run bumps the version again. Publication
 uses separate API calls, so a publication-stage failure can leave some variants
 published; rerun the failed publishing jobs. Publishing requires the existing
 workflow token permissions and permission to push the version commit to main.

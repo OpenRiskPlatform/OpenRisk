@@ -36,3 +36,15 @@ jobs:
         run: node --test scripts/release-plan.test.mjs
       - name: Validate committed variants
         run: node scripts/release-plan.mjs
+
+  validate-windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.2
+      - name: Test Windows build configuration and icon paths
+        run: node --test scripts/release-plan.test.mjs
+      - name: Validate committed variants
+        run: node scripts/release-plan.mjs
